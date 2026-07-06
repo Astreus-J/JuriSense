@@ -171,7 +171,7 @@ O JuriSense é uma plataforma web e mobile que centraliza todas as operações j
 
 #### Camada de API
 
-- **API Gateway:** GCP.
+- **Reverse Proxy:** Nginx (na VPS).
 - **Backend:** Python, FastAPI.
 - **WebSocket:** Para notificações em tempo real.
 
@@ -189,17 +189,18 @@ O JuriSense é uma plataforma web e mobile que centraliza todas as operações j
 
 #### Camada de Dados
 
-- **PostgreSQL 15:** Dados estruturados.
-- **MongoDB 6:** Documentos e conteúdo gerado por IA.
-- **Redis 7:** Cache e filas.
-- **Elasticsearch 8:** Busca full-text.
+- **PostgreSQL 15 (externo):** Dados estruturados em banco gerenciado fora da VPS.
+- **Redis 7 (na VPS):** Cache e filas.
+- **Sistema de Arquivos da VPS:** Documentos organizados em diretórios por empresa (organização).
 
 #### Infraestrutura
 
-- **Cloud:** AWS (EKS, RDS, S3, CloudFront).
+- **Hospedagem:** VPS única com Docker Compose (frontend, backend, workers, Redis, Nginx).
+- **Externos:** Banco de dados gerenciado (PostgreSQL) e APIs de IA (OpenAI/Anthropic).
+- **Armazenamento de Documentos:** Diretórios por empresa no filesystem da VPS.
 - **CI/CD:** GitHub Actions.
 - **Monitoring:** Prometheus + Grafana.
-- **Logs:** ELK Stack (Elasticsearch, Logstash, Kibana).
+- **Logs:** Logs estruturados centralizados na VPS.
 
 ---
 
@@ -269,7 +270,7 @@ O JuriSense é uma plataforma web e mobile que centraliza todas as operações j
 - IA de última geração (GPT-4, Claude 3.5).
 - Backend assíncrono em Python/FastAPI (performance superior).
 - Jurimetria com análise individual de juízes.
-- Pricing agressivo (freemium + pay-per-use).
+- Pricing agressivo (todas as funcionalidades em todos os planos + pay-per-use para excedentes).
 - Interface moderna e intuitiva (React).
 - Mobile-first com 100% das funcionalidades.
 
@@ -427,12 +428,12 @@ O JuriSense é uma plataforma web e mobile que centraliza todas as operações j
 
 #### A10 - Serviços de Armazenamento
 
-**Descrição:** AWS S3, Google Drive, Dropbox.
+**Descrição:** Sistema de arquivos da VPS (diretórios por empresa), com backup externo.
 
 **Interações:**
 
-- Armazenar documentos.
-- Backups automáticos.
+- Armazenar documentos em diretórios isolados por empresa.
+- Backups automáticos para destino externo.
 - Sincronização de arquivos.
 
 ---
@@ -664,8 +665,8 @@ O JuriSense é uma plataforma web e mobile que centraliza todas as operações j
 
 - Criptografia AES-256 em repouso.
 - TLS 1.3 em trânsito.
-- Armazenamento em AWS S3 ou similar.
-- Redundância geográfica.
+- Armazenamento no filesystem da VPS, em diretórios isolados por empresa (ex.: `/dados/empresas/{organizacao_id}/`).
+- Backup externo criptografado.
 
 **RF33 - Organização Hierárquica**
 
@@ -1412,7 +1413,7 @@ O JuriSense é uma plataforma web e mobile que centraliza todas as operações j
 **RNF07 - Criptografia de Dados**
 
 - AES-256 para dados em repouso.
-- Chaves gerenciadas por AWS KMS.
+- Chaves gerenciadas em cofre de segredos na VPS (ex.: Vault ou variáveis protegidas).
 - Rotação de chaves anual.
 - Backup de chaves em local seguro.
 
@@ -1439,7 +1440,7 @@ O JuriSense é uma plataforma web e mobile que centraliza todas as operações j
 
 **RNF11 - Web Application Firewall**
 
-- AWS WAF ou CloudFlare WAF.
+- CloudFlare WAF (proxy) + regras no Nginx e fail2ban na VPS.
 - Bloqueio de IPs suspeitos.
 - Proteção contra bots maliciosos.
 - Logs de tentativas de ataque.
@@ -1461,23 +1462,23 @@ O JuriSense é uma plataforma web e mobile que centraliza todas as operações j
 - Deployment independente por serviço.
 - Falha isolada (não cascata).
 
-**RNF14 - Auto-Scaling Horizontal**
+**RNF14 - Escalabilidade na VPS**
 
-- Scaling baseado em CPU (> 70%).
-- Scaling baseado em requisições (> 1000 req/min).
-- Mínimo 2 instâncias por serviço.
-- Máximo 20 instâncias.
+- Escala vertical da VPS (CPU/RAM) conforme demanda.
+- Escala horizontal de containers (réplicas via Docker Compose) dentro da VPS.
+- Monitoramento de CPU (> 70%) e requisições como gatilho de upgrade.
+- Migração futura para múltiplas VPS quando necessário.
 
 **RNF15 - Load Balancing**
 
-- Application Load Balancer (ALB).
+- Nginx como reverse proxy e balanceador entre réplicas de containers.
 - Algoritmo: least connections.
 - Health checks a cada 30 segundos.
-- Failover automático.
+- Failover automático entre réplicas.
 
 **RNF16 - CDN para Assets Estáticos**
 
-- CloudFront ou CloudFlare.
+- CloudFlare (proxy/CDN) na frente da VPS.
 - Cache de imagens, CSS, JS.
 - TTL configurável (1 dia padrão).
 - Invalidação sob demanda.
@@ -1677,10 +1678,10 @@ O JuriSense é uma plataforma web e mobile que centraliza todas as operações j
 
 - Por arquivo: 100 MB.
 - Por organização, conforme plano:
-  - Free: 5 GB total.
-  - Professional: 50 GB.
-  - Business: 200 GB.
-  - Enterprise: ilimitado.
+  - Plano 1 (Autônomo): 15 GB total.
+  - Plano 2 (Escritório): 75 GB.
+  - Plano 3 (Escritório Plus): 300 GB.
+  - Plano 4 (Enterprise): sob consulta.
 
 **RN14 - Formatos Aceitos**
 
@@ -1855,9 +1856,9 @@ O JuriSense é uma plataforma web e mobile que centraliza todas as operações j
 
 ### SE05 - Armazenamento
 
-- **Sistemas:** AWS S3, Google Drive, Dropbox.
-- **Interação:** Armazenamento e backup de documentos.
-- **Método:** APIs REST com autenticação.
+- **Sistemas:** Filesystem da VPS (diretórios por empresa); destino externo apenas para backup.
+- **Interação:** Armazenamento local de documentos e backup criptografado externo.
+- **Método:** Acesso direto ao filesystem pelo backend; rotinas de backup agendadas.
 
 ---
 
@@ -1865,20 +1866,21 @@ O JuriSense é uma plataforma web e mobile que centraliza todas as operações j
 
 ### Visão Geral
 
-- **Modelo:** Arquitetura de Hexagonal.
+- **Modelo:** Arquitetura Hexagonal.
 
-- **Cloud:** AWS (EKS para orquestração de contêineres).
-- **Escalabilidade:** Auto-scaling horizontal.
-- **Segurança:** Criptografia end-to-end, WAF, autenticação robusta.
+- **Hospedagem:** VPS única com Docker Compose (frontend, backend, workers, Redis, Nginx); banco de dados e IA externos.
+- **Escalabilidade:** Escala vertical da VPS + réplicas de containers.
+- **Segurança:** Criptografia end-to-end, WAF (CloudFlare/Nginx), autenticação robusta.
 
 ### Componentes
 
-- **Frontend:** Next.js + React + TypeScript (web), React Native (mobile).
-- **Backend:** Python/FastAPI (auth, process, AI, document, etc.).
-- **API Gateway:** Kong ou AWS API Gateway.
-- **Banco de Dados:** PostgreSQL (estruturado), MongoDB (não estruturado), Redis (cache), Elasticsearch (busca).
-- **Infraestrutura:** AWS EKS, RDS, S3, CloudFront.
-- **Monitoramento:** Prometheus + Grafana, ELK Stack para logs.
+- **Frontend:** Next.js + React + TypeScript (web), React Native (mobile) — hospedado na VPS.
+- **Backend:** Python/FastAPI (auth, process, AI, document, etc.) — hospedado na VPS.
+- **Reverse Proxy:** Nginx na VPS (TLS, roteamento, load balancing).
+- **Banco de Dados:** PostgreSQL gerenciado externo (estruturado), Redis na VPS (cache e filas).
+- **Armazenamento de Documentos:** Filesystem da VPS com diretórios isolados por empresa.
+- **Serviços Externos:** Banco PostgreSQL gerenciado e APIs de IA (OpenAI/Anthropic).
+- **Monitoramento:** Prometheus + Grafana na VPS.
 
 ---
 
@@ -1900,20 +1902,18 @@ O JuriSense é uma plataforma web e mobile que centraliza todas as operações j
 
 ### Banco de Dados
 
-- **PostgreSQL 15:** Dados estruturados.
-- **MongoDB 6:** Documentos e IA.
-- **Redis 7:** Cache e filas.
-- **Elasticsearch 8:** Busca full-text.
+- **PostgreSQL 15 (externo):** Dados estruturados em banco gerenciado fora da VPS.
+- **Redis 7 (na VPS):** Cache e filas.
 
 ### Infraestrutura
 
-- **AWS EKS:** Orquestração de contêineres.
-- **AWS RDS:** Banco de dados gerenciado.
-- **AWS S3:** Armazenamento de arquivos.
-- **CloudFront:** CDN para assets.
-- **GitHub Actions:** CI/CD.
+- **VPS:** Hospedagem de frontend, backend, workers, Redis e Nginx (Docker Compose).
+- **PostgreSQL gerenciado externo:** Banco de dados fora da VPS.
+- **Filesystem da VPS:** Armazenamento de documentos em diretórios por empresa.
+- **CloudFlare:** CDN/proxy e WAF na frente da VPS.
+- **GitHub Actions:** CI/CD com deploy na VPS.
 - **Prometheus + Grafana:** Monitoramento.
-- **ELK Stack:** Logs centralizados.
+- **Logs estruturados:** Centralizados na VPS.
 
 ---
 
@@ -1946,7 +1946,7 @@ O JuriSense é uma plataforma web e mobile que centraliza todas as operações j
 
 - **Criptografia:** AES-256 (repouso), TLS 1.3 (trânsito).
 - **Autenticação:** JWT, 2FA, SSO (SAML 2.0).
-- **WAF:** AWS WAF para proteção contra ataques.
+- **WAF:** CloudFlare WAF + regras Nginx/fail2ban na VPS.
 - **Logs:** Imutáveis, retidos por 5 anos.
 
 ### LGPD
@@ -1962,12 +1962,19 @@ O JuriSense é uma plataforma web e mobile que centraliza todas as operações j
 ## Modelo de Negócio
 
 ### Modelo de Receita
-TODO: Ajeita os planos para ficar apenas um plano com tudo
-- **Freemium:** Plano gratuito por 1 ano (5 GB, 10 processos).
-- **Professional:** R$ 200/mês/usuário (50 GB, 100 processos).
-- **Business:** R$ 400/mês/usuário (200 GB, 500 processos).
-- **Enterprise:** Preço sob consulta (ilimitado).
-- **Pay-per-use:** Geração de petições avulsas (R$ 10/petição).
+
+Todos os planos incluem **100% das funcionalidades** da plataforma. A diferença entre eles está apenas nos **limites de quantidade e uso** (usuários, processos ativos, armazenamento e gerações de IA). Limites definidos com base na média de mercado de ~250 processos por advogado e nos planos praticados por concorrentes (Astrea, ADVBOX).
+
+| Plano | Público | Usuários | Processos ativos | Armazenamento | Gerações de IA/mês | Preço |
+|---|---|---|---|---|---|---|
+| **Plano 1 - Autônomo** | Advogados autônomos | 1 | 250 | 15 GB | 50 | R$ 189/mês |
+| **Plano 2 - Escritório** | Pequenos escritórios (2-5 advogados) | até 5 | 1.250 | 75 GB | 250 | R$ 499/mês |
+| **Plano 3 - Escritório Plus** | Médios escritórios (6-20 advogados) | até 20 | 5.000 | 300 GB | 1.000 | R$ 1.490/mês |
+| **Plano 4 - Enterprise** | Grandes escritórios e departamentos jurídicos | 20+ | ilimitado | sob consulta | sob consulta | Preço sob consulta |
+
+- **Excedentes (pay-per-use):** uso acima dos limites cobrado por consumo, ex.: pacote adicional de processos ativos e geração de petição avulsa.
+- **Upgrade:** mudança de plano a qualquer momento, com cobrança proporcional.
+- **Contratação anual:** desconto sobre o valor mensal (a definir, mercado pratica ~15-17%).
 
 ### Estratégia de Crescimento
 
@@ -1975,6 +1982,34 @@ TODO: Ajeita os planos para ficar apenas um plano com tudo
 - Parcerias com OABs estaduais.
 - Webinars e trials gratuitos.
 - Expansão para América Latina (2027).
+
+---
+
+## Estrutura do Repositório
+
+- **`frontend/`** — Aplicação web em Next.js 16 + React 19 + TypeScript + Tailwind CSS v4, contendo a **landing page** do JuriSense (hero, funcionalidades, planos, FAQ e contato). Inclui `Dockerfile` multi-stage otimizado (build standalone + runtime distroless, sem shell e não-root).
+- **`backend/`** — API em Python/FastAPI (a implementar).
+- **`docs/`** — Documentação de arquitetura (`IMPLEMENTACAO_ARQUITETURA/`) e diagramas PlantUML (`diagramas/`).
+- **`JuriSense_frontend/`** — Protótipo legado em Vite + React (substituído pelo `frontend/` em Next.js; mantido como referência de componentes e assets).
+
+### Comandos do Frontend
+
+```bash
+cd frontend
+
+# Desenvolvimento (http://localhost:3000)
+npm run dev
+
+# Build de producao (output standalone)
+npm run build
+
+# Lint
+npm run lint
+
+# Build da imagem Docker otimizada
+docker build -t jurisense-frontend .
+docker run -p 3000:3000 jurisense-frontend
+```
 
 ---
 
