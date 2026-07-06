@@ -1992,6 +1992,27 @@ Todos os planos incluem **100% das funcionalidades** da plataforma. A diferença
 - **`docs/`** — Documentação de arquitetura (`IMPLEMENTACAO_ARQUITETURA/`) e diagramas PlantUML (`diagramas/`).
 - **`JuriSense_frontend/`** — Protótipo legado em Vite + React (substituído pelo `frontend/` em Next.js; mantido como referência de componentes e assets).
 
+### Ambiente de Desenvolvimento (Docker Compose)
+
+O `docker-compose.yml` na raiz sobe o ambiente completo de desenvolvimento com hot reload:
+**frontend** (Next.js, porta 3000), **backend** (FastAPI, porta 8000), **db** (PostgreSQL 15, porta 5432)
+e **redis** (porta 6379), além de um volume `documents_data` montado em `/dados/empresas`
+simulando o armazenamento de documentos por empresa da VPS.
+
+```bash
+# Subir todo o ambiente (build + hot reload nos dois apps)
+docker compose up -d
+
+# Logs
+docker compose logs -f backend
+docker compose logs -f frontend
+
+# Derrubar (adicione -v para limpar os volumes)
+docker compose down
+```
+
+> Em produção o banco é PostgreSQL gerenciado externo; o Postgres do compose existe apenas para desenvolvimento.
+
 ### Comandos do Frontend
 
 ```bash

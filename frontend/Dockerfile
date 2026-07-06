@@ -1,3 +1,11 @@
+# ---- Etapa 0: desenvolvimento (hot reload via docker compose) ----
+FROM node:24-alpine AS dev
+WORKDIR /app
+ENV NEXT_TELEMETRY_DISABLED=1
+EXPOSE 3000
+# Código montado como volume pelo compose; instala deps no volume de node_modules
+CMD ["sh", "-c", "npm install --no-audit --no-fund && npm run dev"]
+
 # ---- Etapa 1: dependências ----
 FROM node:24-alpine AS deps
 WORKDIR /app

@@ -1,3 +1,12 @@
+# ---- Etapa 0: desenvolvimento (hot reload via docker compose) ----
+FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim AS dev
+WORKDIR /app
+ENV UV_LINK_MODE=copy \
+    UV_PYTHON_DOWNLOADS=0
+EXPOSE 8000
+# Código montado como volume pelo compose; uv sync roda no volume do .venv
+CMD ["sh", "-c", "uv sync --frozen && uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"]
+
 # ---- Etapa 1: build das dependências com uv ----
 FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim AS builder
 WORKDIR /app
