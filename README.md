@@ -1988,7 +1988,7 @@ Todos os planos incluem **100% das funcionalidades** da plataforma. A diferença
 ## Estrutura do Repositório
 
 - **`frontend/`** — Aplicação web em Next.js 16 + React 19 + TypeScript + Tailwind CSS v4, contendo a **landing page** do JuriSense (hero, funcionalidades, planos, FAQ e contato). Inclui `Dockerfile` multi-stage otimizado (build standalone + runtime distroless, sem shell e não-root).
-- **`backend/`** — API em Python/FastAPI (a implementar).
+- **`backend/`** — API em Python 3.13 + FastAPI, gerenciada com uv (lint com ruff, testes com pytest). Inclui `Dockerfile` multi-stage otimizado (build com uv + runtime slim não-root).
 - **`docs/`** — Documentação de arquitetura (`IMPLEMENTACAO_ARQUITETURA/`) e diagramas PlantUML (`diagramas/`).
 - **`JuriSense_frontend/`** — Protótipo legado em Vite + React (substituído pelo `frontend/` em Next.js; mantido como referência de componentes e assets).
 
@@ -2009,6 +2009,26 @@ npm run lint
 # Build da imagem Docker otimizada
 docker build -t jurisense-frontend .
 docker run -p 3000:3000 jurisense-frontend
+```
+
+### Comandos do Backend
+
+```bash
+cd backend
+
+# Instalar dependencias (cria .venv)
+uv sync
+
+# Desenvolvimento (http://localhost:8000, docs em /api/docs)
+uv run uvicorn app.main:app --reload
+
+# Testes e lint
+uv run pytest
+uv run ruff check .
+
+# Build da imagem Docker otimizada
+docker build -t jurisense-backend .
+docker run -p 8000:8000 --env-file .env jurisense-backend
 ```
 
 ---

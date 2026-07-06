@@ -9,7 +9,7 @@ JuriSense (also referred to as "SchemaJud" in the README) is a Brazilian legal-t
 ## Repository Structure
 
 - `frontend/` — Next.js 16 + React 19 + TypeScript + Tailwind CSS v4 app containing the landing page. Landing content data lives in `src/lib/landing-data.ts` (features, the 4 pricing plans, FAQ, contact) and section components in `src/components/landing/`. `next.config.ts` uses `output: "standalone"`; the multi-stage `Dockerfile` builds on node:24-alpine and runs on a distroless Node 24 image as non-root (`docker build -t jurisense-frontend .`). Commands: `npm run dev` / `npm run build` / `npm run lint`.
-- `backend/` — empty; planned Python/FastAPI API.
+- `backend/` — Python 3.13 + FastAPI API managed with uv. Layout: `app/main.py` (`create_app` + lifespan), `app/core/config.py` (pydantic-settings, reads `.env`), `app/api/router.py` aggregates route modules under the `/api` prefix (`/api/health`, docs at `/api/docs`). Tests use pytest + httpx `ASGITransport`. Commands: `uv sync`, `uv run uvicorn app.main:app --reload`, `uv run pytest`, `uv run ruff check .`. Multi-stage `Dockerfile` (uv builder → `python:3.13-slim` non-root runtime, `docker build -t jurisense-backend .`).
 - `JuriSense_frontend/` — legacy Vite + React prototype, superseded by `frontend/`; kept as a reference for components and image assets (`public/img/`).
 - `README.md` — Full product specification: functional requirements (125 RFs across 15 modules), non-functional requirements, business rules, use cases, actors, data model, pricing plans, market analysis, and business model.
 - `docs/IMPLEMENTACAO_ARQUITETURA/` — Architecture documents, indexed by `00_INDICE.md`:
