@@ -1,0 +1,512 @@
+classDiagram
+    %% ========== MÓDULO DE AUTENTICAÇÃO ==========
+    class Usuario {
+        -int id
+        -string nome
+        -string email
+        -string senhaHash
+        -boolean autenticacao2FA
+        -DateTime ultimoAcesso
+        -Perfil perfil
+        -Escritorio escritorio
+        +autenticar(email, senha) bool
+        +ativar2FA() void
+        +validarToken2FA(token) bool
+        +alterarSenha(novaSenha) void
+        +temPermissao(modulo, acao) bool
+        +registrarAcesso() void
+    }
+    
+    class Perfil {
+        -int id
+        -string nome
+        -string descricao
+        -List~Permissao~ permissoes
+        +adicionarPermissao(permissao) void
+        +removerPermissao(permissao) void
+        +verificarPermissao(modulo, acao) bool
+    }
+    
+    class Permissao {
+        -int id
+        -string modulo
+        -string acao
+        -boolean permitido
+        +validar() bool
+    }
+    
+    class Escritorio {
+        -int id
+        -string razaoSocial
+        -string cnpj
+        -List~Usuario~ usuarios
+        +adicionarUsuario(usuario) void
+        +listarUsuarios() List~Usuario~
+    }
+    
+    class SessaoService {
+        +criarSessao(usuario) string
+        +validarSessao(token) bool
+        +renovarSessao(token) string
+        +encerrarSessao(token) void
+    }
+    
+    class Autenticacao2FAService {
+        +gerarToken(usuario) string
+        +validarToken(usuario, token) bool
+        +enviarTokenPorEmail(usuario) void
+        +enviarTokenPorSMS(usuario) void
+    }
+    
+    %% ========== MÓDULO DE PROCESSOS ==========
+    class Processo {
+        -int id
+        -string numeroProcesso
+        -string numeroCNJ
+        -Tribunal tribunal
+        -Usuario responsavel
+        -Cliente cliente
+        -string status
+        -decimal valorCausa
+        -Date dataDistribuicao
+        -List~Movimentacao~ movimentacoes
+        -List~Prazo~ prazos
+        -List~Documento~ documentos
+        +atualizarStatus(novoStatus) void
+        +adicionarMovimentacao(mov) void
+        +calcularProximoPrazo() Prazo
+        +sincronizarComTribunal() void
+        +gerarRelatorio() Relatorio
+    }
+    
+    class Tribunal {
+        -int id
+        -string nome
+        -string sigla
+        -string urlConsulta
+        -boolean suportaAPI
+        +consultarProcesso(numero) ProcessoDTO
+        +listarMovimentacoes(numero) List~MovimentacaoDTO~
+    }
+    
+    class Movimentacao {
+        -int id
+        -Date dataMovimentacao
+        -string tipo
+        -string descricao
+        -boolean geraPrazo
+        +processarMovimentacao() void
+        +verificarGeraPrazo() bool
+    }
+    
+    class Prazo {
+        -int id
+        -Date dataPrazo
+        -Date dataPrazoFatal
+        -string descricao
+        -string status
+        -Usuario responsavel
+        +calcularDiasRestantes() int
+        +marcarComoCumprido() void
+        +prorrogar(dias) void
+        +gerarNotificacoes() List~Notificacao~
+    }
+    
+    class Parte {
+        -int id
+        -string nome
+        -string cpfCnpj
+        -string qualificacao
+        -boolean poloAtivo
+        +validarDocumento() bool
+    }
+    
+    class Cliente {
+        -int id
+        -string nome
+        -string cpfCnpj
+        -string email
+        -List~Processo~ processos
+        -List~Contrato~ contratos
+        +adicionarProcesso(processo) void
+        +gerarRelatorioFinanceiro() Relatorio
+    }
+    
+    %% ========== MÓDULO DE DOCUMENTOS ==========
+    class Documento {
+        -int id
+        -string titulo
+        -string caminhoArquivo
+        -string hashArquivo
+        -TipoDocumento tipo
+        -boolean assinadoDigitalmente
+        -boolean ocrProcessado
+        -string conteudoExtraido
+        -List~VersaoDocumento~ versoes
+        +upload(arquivo) void
+        +versionar(motivo) VersaoDocumento
+        +assinarDigitalmente(certificado) void
+        +extrairTextoOCR() string
+        +gerarHash() string
+        +validarIntegridade() bool
+    }
+    
+    class VersaoDocumento {
+        -int id
+        -int versao
+        -Usuario usuario
+        -string motivo
+        -DateTime criadoEm
+        +restaurarVersao() void
+    }
+    
+    class TipoDocumento {
+        -int id
+        -string nome
+        -string categoria
+        -boolean requerAssinatura
+    }
+    
+    class AssinaturaDigital {
+        -int id
+        -string certificadoHash
+        -DateTime assinadoEm
+        -boolean valida
+        +validarCertificado() bool
+        +verificarIntegridade() bool
+    }
+    
+    class OCRService {
+        +processarDocumento(documento) OCRResultado
+        +extrairTexto(arquivo) string
+        +extrairMetadados(arquivo) Map
+        +reconhecerEntidades(texto) List~Entidade~
+    }
+    
+    %% ========== MÓDULO DE INTELIGÊNCIA ARTIFICIAL ==========
+    class PeticaoIA {
+        -int id
+        -string tipopeticao
+        -string promptUsuario
+        -string conteudoGerado
+        -float confiancaScore
+        -ModeloIA modelo
+        +gerar(processo, tipo) string
+        +revisar(texto) string
+        +aprovar() void
+        +salvarComoDocumento() Documento
+    }
+    
+    class Templatepeticao {
+        -int id
+        -string nome
+        -string tipoPeticao
+        -string estruturaJSON
+        -string promptBase
+        +renderizar(dados) string
+        +validarEstrutura() bool
+    }
+    
+    class ModeloIA {
+        -int id
+        -string nome
+        -string versao
+        -string provider
+        -string endpoint
+        +executar(prompt, parametros) string
+        +treinar(dataset) void
+        +avaliar() float
+    }
+    
+    class AnaliseIAService {
+        +analisarDocumento(documento) AnaliseIA
+        +extrairEntidades(texto) List~Entidade~
+        +classificarDocumento(documento) string
+        +resumirTexto(texto) string
+        +compararDocumentos(doc1, doc2) float
+    }
+    
+    class Jurimetria {
+        -int id
+        -float probabilidadeExito
+        -float tempoEstimadoMeses
+        -decimal valorEstimado
+        -Map fatoresConsiderados
+        -ModeloML modelo
+        +calcularProbabilidade(processo) float
+        +preverDuracao(processo) float
+        +identificarPrecedentes(processo) List~Processo~
+        +gerarRelatorioJurimetrico() Relatorio
+    }
+    
+    class ModeloML {
+        -int id
+        -string nome
+        -string tipoAnalise
+        -float acuracia
+        -DateTime treinadoEm
+        +prever(features) float
+        +retreinar(dataset) void
+        +avaliarAcuracia() float
+    }
+    
+    %% ========== MÓDULO DE NOTIFICAÇÕES ==========
+    class Notificacao {
+        -int id
+        -Usuario destinatario
+        -string tipo
+        -string titulo
+        -string mensagem
+        -boolean lida
+        -DateTime enviadoEm
+        +enviar() void
+        +marcarComoLida() void
+        +reenviar() void
+    }
+    
+    class NotificacaoService {
+        +enviarEmail(destinatario, assunto, corpo) void
+        +enviarSMS(telefone, mensagem) void
+        +enviarPush(usuario, titulo, corpo) void
+        +enviarWhatsApp(telefone, mensagem) void
+        +agendarNotificacao(notificacao, data) void
+    }
+    
+    class TemplateNotificacao {
+        -int id
+        -string nome
+        -string templateHTML
+        -string templateTexto
+        +renderizar(dados) string
+        +validar() bool
+    }
+    
+    %% ========== MÓDULO FINANCEIRO ==========
+    class Fatura {
+        -int id
+        -string numeroFatura
+        -Cliente cliente
+        -Date dataEmissao
+        -Date dataVencimento
+        -decimal valorTotal
+        -string status
+        -List~ItemFatura~ itens
+        +adicionarItem(item) void
+        +calcularTotal() decimal
+        +emitir() void
+        +registrarPagamento(valor, data) void
+        +gerarPDF() byte[]
+    }
+    
+    class ItemFatura {
+        -int id
+        -string descricao
+        -decimal quantidade
+        -decimal valorUnitario
+        -decimal valorTotal
+        +calcularValor() decimal
+    }
+    
+    class Honorario {
+        -int id
+        -string tipo
+        -decimal valorContratado
+        -decimal valorExito
+        -decimal percentualExito
+        +calcularValorTotal(valorCausa) decimal
+    }
+    
+    class Contrato {
+        -int id
+        -string numeroContrato
+        -Cliente cliente
+        -Date dataInicio
+        -Date dataFim
+        -decimal valorMensal
+        +renovar(meses) void
+        +rescindir(motivo) void
+        +validarVigencia() bool
+    }
+    
+    %% ========== MÓDULO DE TIMESHEET ==========
+    class Timesheet {
+        -int id
+        -Usuario usuario
+        -Processo processo
+        -DateTime dataInicio
+        -DateTime dataFim
+        -int duracaoMinutos
+        -boolean faturavel
+        -boolean aprovado
+        +iniciarTimer() void
+        +pausarTimer() void
+        +finalizarTimer() void
+        +calcularDuracao() int
+        +gerarItemFatura() ItemFatura
+    }
+    
+    class TimesheetService {
+        +registrarTempo(usuario, processo, minutos) Timesheet
+        +gerarRelatorioHoras(periodo) Relatorio
+        +calcularValorFaturavel(usuario, periodo) decimal
+        +aprovarTimesheet(timesheet) void
+    }
+    
+    %% ========== MÓDULO DE INTEGRAÇÕES ==========
+    class SincronizacaoTribunal {
+        -int id
+        -Processo processo
+        -DateTime ultimaSincronizacao
+        -string status
+        -int movimentacoesNovas
+        +executarSincronizacao() void
+        +processarMovimentacoes(dados) void
+        +agendarProximaSincronizacao() void
+    }
+    
+    class ScraperService {
+        +consultarProcesso(tribunal, numero) ProcessoDTO
+        +obterMovimentacoes(tribunal, numero) List~MovimentacaoDTO~
+        +downloadarDocumento(url) byte[]
+        +validarCaptcha(imagem) string
+    }
+    
+    class WebhookService {
+        +registrarWebhook(url, evento) Webhook
+        +dispararWebhook(evento, dados) void
+        +validarAssinatura(payload, signature) bool
+    }
+    
+    class APIService {
+        +autenticar(apiKey) Usuario
+        +validarPermissao(usuario, recurso) bool
+        +registrarChamada(endpoint, usuario) void
+    }
+    
+    %% ========== MÓDULO DE BUSINESS INTELLIGENCE ==========
+    class Dashboard {
+        -int id
+        -Usuario usuario
+        -string nome
+        -List~Widget~ widgets
+        +adicionarWidget(widget) void
+        +atualizarDados() void
+        +exportarPDF() byte[]
+    }
+    
+    class Widget {
+        -int id
+        -string tipo
+        -string titulo
+        -Map configuracao
+        +renderizar() object
+        +atualizarDados() void
+    }
+    
+    class Relatorio {
+        -int id
+        -string nome
+        -string tipo
+        -Map parametros
+        -DateTime geradoEm
+        +gerar() byte[]
+        +exportarExcel() byte[]
+        +exportarPDF() byte[]
+        +agendar(periodicidade) void
+    }
+    
+    class DashboardEngine {
+        +calcularMetricas(periodo) Map
+        +gerarGrafico(tipo, dados) object
+        +executarQuery(sql) Dataset
+        +aplicarFiltros(dados, filtros) Dataset
+    }
+    
+    %% ========== CLASSES UTILITÁRIAS ==========
+    class LogService {
+        +registrarAcesso(usuario, acao) void
+        +registrarErro(excecao, contexto) void
+        +registrarAuditoria(entidade, acao, usuario) void
+    }
+    
+    class EmailService {
+        +enviar(destinatario, assunto, corpo) void
+        +enviarComAnexo(destinatario, assunto, corpo, anexos) void
+        +validarEmail(email) bool
+    }
+    
+    class StorageService {
+        +upload(arquivo, caminho) string
+        +download(caminho) byte[]
+        +deletar(caminho) void
+        +gerarUrlAssinada(caminho) string
+    }
+    
+    class CryptoService {
+        +hashSenha(senha) string
+        +validarSenha(senha, hash) bool
+        +criptografar(dados) string
+        +descriptografar(dados) string
+        +gerarToken() string
+    }
+    
+    class ValidacaoService {
+        +validarCPF(cpf) bool
+        +validarCNPJ(cnpj) bool
+        +validarEmail(email) bool
+        +validarTelefone(telefone) bool
+        +validarNumeroCNJ(numero) bool
+    }
+    
+    %% ========== RELACIONAMENTOS ==========
+    Usuario "1" --> "1" Perfil : possui
+    Usuario "1" --> "*" Processo : responsavel
+    Usuario "1" --> "*" Timesheet : registra
+    Usuario "*" --> "1" Escritorio : pertence
+    
+    Perfil "1" --> "*" Permissao : possui
+    
+    Processo "1" --> "*" Movimentacao : contem
+    Processo "1" --> "*" Prazo : gera
+    Processo "1" --> "*" Documento : possui
+    Processo "*" --> "1" Tribunal : tramita
+    Processo "*" --> "1" Cliente : pertence
+    Processo "1" --> "*" Parte : envolve
+    Processo "1" --> "0..1" Jurimetria : analisa
+    
+    Documento "1" --> "*" VersaoDocumento : versiona
+    Documento "*" --> "1" TipoDocumento : classifica
+    Documento "1" --> "0..1" AssinaturaDigital : assina
+    
+    Prazo "1" --> "*" Notificacao : gera
+    
+    Cliente "1" --> "*" Fatura : recebe
+    Cliente "1" --> "*" Contrato : assina
+    
+    Fatura "1" --> "*" ItemFatura : contem
+    
+    Timesheet "*" --> "1" Usuario : pertence
+    Timesheet "*" --> "0..1" Processo : vincula
+    
+    PeticaoIA "*" --> "1" ModeloIA : usa
+    PeticaoIA "*" --> "1" TemplatePeticao : baseado
+    
+    Jurimetria "*" --> "1" ModeloML : processado
+    
+    Dashboard "1" --> "*" Widget : contem
+    
+    SincronizacaoTribunal "*" --> "1" Processo : atualiza
+    
+    %% ========== DEPENDÊNCIAS DE SERVIÇOS ==========
+    Processo ..> SincronizacaoTribunal : sincroniza
+    Processo ..> ScraperService : consulta
+    Documento ..> OCRService : processa
+    Documento ..> StorageService : armazena
+    Usuario ..> Autenticacao2FAService : autentica
+    Usuario ..> SessaoService : sessiona
+    Notificacao ..> NotificacaoService : envia
+    Prazo ..> NotificacaoService : notifica
+    Timesheet ..> TimesheetService : gerencia
+    Dashboard ..> DashboardEngine : renderiza
+    PeticaoIA ..> AnaliseIAService : analisa
+    Jurimetria ..> ModeloML : prediz

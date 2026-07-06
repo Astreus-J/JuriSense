@@ -1,0 +1,75 @@
+sequenceDiagram
+    participant U as 👤 Usuário
+    participant F as 🖥️ Frontend
+    participant API as 🔌 API Gateway
+    participant AUTH as 🔐 AuthService
+    participant DB as 💾 Database
+    participant EMAIL as 📧 EmailService
+    participant SESS as 🎫 SessaoService
+    participant LOG as 📝 LogService
+    
+    U->>F: Insere email e senha
+    F->>API: POST /auth/login
+    API->>AUTH: validarCredenciais(email, senha)
+    AUTH->>DB: SELECT * FROM usuario WHERE email = ?
+    DB-->>AUTH: Dados do usuário
+    
+    alt Credenciais inválidas
+        AUTH-->>API: Erro: Credenciais inválidas
+        API-->>F: 401 Unauthorized
+        F-->>U: "Email ou senha incorretos"
+    end
+    
+    AUTH->>AUTH: validarSenha(senha, hash)
+    
+    alt Senha correta
+        AUTH->>DB: Verificar se 2FA está ativo
+        DB-->>AUTH: autenticacao_2fa = true
+        
+        alt 2FA Ativo
+            AUTH->>AUTH: gerarToken2FA()
+            AUTH->>DB: INSERT INTO token_2fa
+            DB-->>AUTH: Token salvo
+            AUTH->>EMAIL: enviarTokenPorEmail(usuario, token)
+            EMAIL-->>U: 📧 Email com código 2FA
+            AUTH-->>API: {requires2FA: true, sessionTemp: "temp_token"}
+            API-->>F: 200 OK - Requer 2FA
+            F-->>U: "Digite o código enviado por email"
+            
+            U->>F: Insere código 2FA
+            F->>API: POST /auth/verify-2fa {tempToken, code}
+            API->>AUTH: validarToken2FA(tempToken, code)
+            AUTH->>DB: SELECT * FROM token_2fa WHERE token = ? AND usado = false
+            DB-->>AUTH: Token válido
+            
+            alt Token inválido ou expirado
+                AUTH-->>API: Erro: Token inválido
+                API-->>F: 401 Unauthorized
+                F-->>U: "Código inválido ou expirado"
+            end
+            
+            AUTH->>DB: UPDATE token_2fa SET usado = true
+            AUTH->>SESS: criarSessao(usuario)
+            SESS->>DB: INSERT INTO sessao
+            DB-->>SESS: Sessão criada
+            SESS-->>AUTH: sessionToken
+            AUTH->>LOG: registrarAcesso(usuario, "LOGIN_2FA_SUCESSO")
+            LOG->>DB: INSERT INTO log_acesso
+            AUTH-->>API: {token: sessionToken, usuario: {...}}
+            API-->>F: 200 OK - Autenticado
+            F-->>U: ✅ Redirecionamento para dashboard
+            
+        else 2FA Inativo
+            AUTH->>SESS: criarSessao(usuario)
+            SESS->>DB: INSERT INTO sessao
+            DB-->>SESS: Sessão criada
+            SESS-->>AUTH: sessionToken
+            AUTH->>LOG: registrarAcesso(usuario, "LOGIN_SUCESSO")
+            LOG->>DB: INSERT INTO log_acesso
+            AUTH-->>API: {token: sessionToken, usuario: {...}}
+            API-->>F: 200 OK - Autenticado
+            F-->>U: ✅ Redirecionamento para dashboard
+        end
+    end
+    
+    Note over U,LOG: Após login bem-sucedido,<br/>o token é armazenado no frontend<br/>e usado em todas as requisições

@@ -1,0 +1,233 @@
+graph TB
+    %% ========== CAMADA DE APRESENTAÇÃO ==========
+    subgraph APRESENTACAO["🖥️ CAMADA DE APRESENTAÇÃO"]
+        WEB[Web App<br/>React/Vue]
+        MOBILE[Mobile App<br/>iOS/Android]
+        API_GATEWAY[API Gateway<br/>REST/GraphQL]
+    end
+    
+    %% ========== MÓDULOS CORE ==========
+    subgraph CORE["⚙️ MÓDULOS CORE"]
+        direction TB
+        
+        subgraph AUTH["🔐 Autenticação & Autorização"]
+            AUTH_SRV[AuthService]
+            SESSION[Sessões]
+            TWO_FA[2FA]
+            RBAC[Controle de Acesso]
+        end
+        
+        subgraph PROCESSO["⚖️ Gestão de Processos"]
+            PROC_SRV[ProcessoService]
+            MOVIM[Movimentações]
+            PARTES[Partes/Clientes]
+            STATUS[Status/Workflow]
+        end
+        
+        subgraph DOCS["📄 Gestão Documental"]
+            DOC_SRV[DocumentoService]
+            VERSAO[Versionamento]
+            ASSINATURA[Assinatura Digital]
+            PASTA[Organização]
+        end
+        
+        subgraph PRAZO["⏰ Prazos & Notificações"]
+            PRAZO_SRV[PrazoService]
+            NOTIF[Notificações]
+            LEMBRETE[Lembretes]
+            CALENDARIO[Calendário]
+        end
+    end
+    
+    %% ========== MÓDULOS DE INTELIGÊNCIA ==========
+    subgraph INTELIGENCIA["🤖 INTELIGÊNCIA ARTIFICIAL"]
+        direction TB
+        
+        subgraph IA["🧠 IA Generativa"]
+            LLM[LLM Engine]
+            PETICAO[Geração de Petições]
+            RESUMO[Sumarização]
+            CHAT_BOT[Assistente Virtual]
+        end
+        
+        subgraph ML["📊 Machine Learning"]
+            JURIMETRIA[Jurimetria]
+            PREDICAO[Predição de Resultados]
+            CLUSTERING[Agrupamento de Casos]
+            ANOMALIA[Detecção de Anomalias]
+        end
+        
+        subgraph OCR_MODULE["👁️ Processamento de Imagens"]
+            OCR[OCR Engine]
+            NER[Extração de Entidades]
+            CLASSIF[Classificação Doc.]
+        end
+    end
+    
+    %% ========== MÓDULOS DE INTEGRAÇÃO ==========
+    subgraph INTEGRACAO["🔗 INTEGRAÇÕES EXTERNAS"]
+        direction TB
+        
+        subgraph TRIBUNAIS["⚖️ Tribunais"]
+            SYNC[Sincronizador]
+            SCRAPER[Web Scraper]
+            API_TJ[APIs Tribunais]
+            CAPTCHA[Resolver Captcha]
+        end
+        
+        subgraph EXTERNAL["🌐 Serviços Externos"]
+            EMAIL[Email/SMTP]
+            SMS[SMS Gateway]
+            WHATSAPP[WhatsApp API]
+            PAYMENT[Gateway Pagamento]
+        end
+        
+        subgraph WEBHOOK_MODULE["🔔 Webhooks"]
+            WEBHOOK[Webhook Manager]
+            EVENTOS[Event Bus]
+        end
+    end
+    
+    %% ========== MÓDULOS FINANCEIROS ==========
+    subgraph FINANCEIRO["💰 GESTÃO FINANCEIRA"]
+        direction TB
+        
+        subgraph BILLING["💳 Faturamento"]
+            FATURA[Faturas]
+            HONORARIO[Honorários]
+            PAGAMENTO[Pagamentos]
+        end
+        
+        subgraph TIMESHEET_MODULE["⏱️ Timesheet"]
+            TIMER[Timer]
+            APROVACAO[Aprovação]
+            RELATORIO_HORAS[Relatório Horas]
+        end
+        
+        subgraph CONTRATO_MODULE["📋 Contratos"]
+            CONTRATO[Contratos]
+            CLAUSULAS[Cláusulas]
+            VIGENCIA[Controle Vigência]
+        end
+    end
+    
+    %% ========== MÓDULOS DE ANÁLISE ==========
+    subgraph ANALYTICS["📈 BUSINESS INTELLIGENCE"]
+        direction TB
+        
+        subgraph DASHBOARD_MODULE["📊 Dashboards"]
+            DASH[Dashboard Engine]
+            WIDGET[Widgets]
+            KPI[KPIs]
+        end
+        
+        subgraph REPORT["📑 Relatórios"]
+            REL_GEN[Gerador Relatórios]
+            EXPORT[Exportação]
+            AGENDAMENTO[Agendamento]
+        end
+        
+        subgraph ANALYTICS_MODULE["🔍 Análises"]
+            METRICAS[Métricas]
+            GRAFICOS[Gráficos]
+            ESTATISTICAS[Estatísticas]
+        end
+    end
+    
+    %% ========== CAMADA DE DADOS ==========
+    subgraph DADOS["💾 CAMADA DE DADOS"]
+        direction LR
+        
+        DB[(Banco Principal<br/>PostgreSQL)]
+        CACHE[(Cache<br/>Redis)]
+        STORAGE[("Armazenamento<br/>S3/MinIO")]
+        SEARCH[(Busca<br/>Elasticsearch)]
+        QUEUE[("Filas<br/>RabbitMQ")]
+    end
+    
+    %% ========== SERVIÇOS AUXILIARES ==========
+    subgraph AUXILIARES["🛠️ SERVIÇOS AUXILIARES"]
+        direction TB
+        LOG[Logs & Auditoria]
+        BACKUP[Backup]
+        MONITOR[Monitoramento]
+        SECURITY[Segurança]
+    end
+    
+    %% ========== RELACIONAMENTOS ==========
+    
+    %% Apresentação -> Core
+    WEB --> API_GATEWAY
+    MOBILE --> API_GATEWAY
+    API_GATEWAY --> AUTH
+    API_GATEWAY --> PROCESSO
+    API_GATEWAY --> DOCS
+    API_GATEWAY --> PRAZO
+    
+    %% Core -> Inteligência
+    PROCESSO --> JURIMETRIA
+    PROCESSO --> PETICAO
+    DOCS --> OCR_MODULE
+    DOCS --> CLASSIF
+    
+    %% Core -> Integração
+    PROCESSO --> SYNC
+    PRAZO --> EMAIL
+    PRAZO --> SMS
+    PRAZO --> WHATSAPP
+    
+    %% Core -> Financeiro
+    PROCESSO --> HONORARIO
+    PROCESSO --> TIMESHEET_MODULE
+    TIMESHEET_MODULE --> FATURA
+    
+    %% Core -> Analytics
+    PROCESSO --> DASHBOARD_MODULE
+    PROCESSO --> REPORT
+    PRAZO --> ANALYTICS_MODULE
+    
+    %% Inteligência -> Dados
+    IA --> DB
+    ML --> DB
+    OCR_MODULE --> STORAGE
+    
+    %% Integração -> Dados
+    SYNC --> DB
+    WEBHOOK --> QUEUE
+    TRIBUNAIS --> CACHE
+    
+    %% Financeiro -> Dados
+    BILLING --> DB
+    TIMESHEET_MODULE --> DB
+    
+    %% Analytics -> Dados
+    DASHBOARD_MODULE --> DB
+    REPORT --> DB
+    ANALYTICS_MODULE --> SEARCH
+    
+    %% Todos módulos -> Auxiliares
+    AUTH -.-> LOG
+    PROCESSO -.-> LOG
+    DOCS -.-> BACKUP
+    DB -.-> BACKUP
+    API_GATEWAY -.-> MONITOR
+    API_GATEWAY -.-> SECURITY
+    
+    %% Fluxos especiais
+    SYNC -.->|"Webhook"| PROCESSO
+    PETICAO -.->|"Cria"| DOCS
+    TIMER -.->|"Gera"| FATURA
+    PRAZO -.->|"Dispara"| EVENTOS
+    
+    style AUTH fill:#e1f5ff
+    style PROCESSO fill:#fff4e1
+    style DOCS fill:#e8f5e9
+    style PRAZO fill:#fff3e0
+    style IA fill:#f3e5f5
+    style ML fill:#e8eaf6
+    style OCR_MODULE fill:#fce4ec
+    style TRIBUNAIS fill:#e0f2f1
+    style BILLING fill:#fffde7
+    style DASHBOARD_MODULE fill:#e3f2fd
+    style DADOS fill:#f5f5f5
+    style AUXILIARES fill:#eceff1

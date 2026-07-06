@@ -1,0 +1,92 @@
+sequenceDiagram
+    participant U as 👤 Advogado
+    participant F as 🖥️ Frontend
+    participant API as 🔌 API Gateway
+    participant IA as 🤖 IAService
+    participant DB as 💾 Database
+    participant LLM as 🧠 LLM Engine (GPT-4)
+    participant TEMPLATE as 📄 TemplateService
+    participant DOC as 📝 DocumentoService
+    participant STORAGE as 💾 Storage (S3)
+    participant NOTIF as 🔔 NotificacaoService
+    
+    U->>F: Seleciona processo e tipo de petição
+    F->>F: Exibir formulário com campos específicos
+    U->>F: Preenche dados (pedidos, fundamentos, etc)
+    F->>API: POST /ia/gerar-peticao
+    
+    API->>IA: gerarPeticao(processoId, tipoPeticao, dados)
+    IA->>DB: SELECT * FROM processo WHERE id = ?
+    DB-->>IA: Dados completos do processo
+    
+    IA->>DB: SELECT * FROM parte WHERE processo_id = ?
+    DB-->>IA: Partes (autor, réu, advogados)
+    
+    IA->>DB: SELECT * FROM movimentacao WHERE processo_id = ?
+    DB-->>IA: Histórico de movimentações
+    
+    IA->>DB: SELECT * FROM documento WHERE processo_id = ?
+    DB-->>IA: Documentos relacionados
+    
+    %% Buscar template adequado
+    IA->>TEMPLATE: buscarTemplate(tipoPeticao)
+    TEMPLATE->>DB: SELECT * FROM template_peticao WHERE tipo = ?
+    DB-->>TEMPLATE: Template estruturado
+    TEMPLATE-->>IA: {estrutura, promptBase}
+    
+    %% Montar contexto para LLM
+    IA->>IA: montarContexto(processo, partes, movimentacoes, template)
+    IA->>IA: construirPrompt(contexto, dadosUsuario, promptBase)
+    
+    Note over IA: Prompt inclui:<br/>- Dados do processo<br/>- Partes envolvidas<br/>- Jurisprudência relevante<br/>- Estrutura da petição
+    
+    %% Enviar para LLM
+    IA->>LLM: POST /completions {prompt, temperature: 0.7}
+    
+    Note over LLM: LLM processa e gera<br/>petição completa seguindo<br/>estrutura jurídica formal
+    
+    LLM-->>IA: Petição gerada (texto completo)
+    
+    %% Pós-processamento
+    IA->>IA: validarEstrutura(peticaoGerada)
+    IA->>IA: formatarPeticao(texto)
+    IA->>IA: calcularConfiancaScore()
+    
+    %% Salvar rascunho
+    IA->>DB: INSERT INTO peticao_ia
+    DB-->>IA: peticaoId gerado
+    
+    IA-->>API: {peticaoId, conteudo, confianca: 0.92}
+    API-->>F: 200 OK - Petição gerada
+    
+    F->>F: Renderizar editor com petição gerada
+    F-->>U: 📄 Exibir petição para revisão
+    
+    U->>F: Revisa, edita e aprova
+    F->>API: POST /ia/aprovar-peticao/{peticaoId}
+    
+    API->>IA: aprovarPeticao(peticaoId, conteudoFinal)
+    IA->>DB: UPDATE peticao_ia SET status = 'APROVADO'
+    
+    %% Gerar documento final
+    IA->>DOC: criarDocumento(peticaoId, conteudoFinal)
+    DOC->>DOC: gerarPDF(conteudo)
+    DOC->>STORAGE: upload(arquivo, caminho)
+    STORAGE-->>DOC: URL do arquivo
+    
+    DOC->>DOC: calcularHash(arquivo)
+    DOC->>DB: INSERT INTO documento
+    DB-->>DOC: documentoId
+    
+    DOC-->>IA: {documentoId, url}
+    
+    %% Notificar criação
+    IA->>NOTIF: notificarPeticaoGerada(usuario, documento)
+    NOTIF->>DB: INSERT INTO notificacao
+    NOTIF->>NOTIF: enviarEmail(usuario, "Petição pronta")
+    
+    IA-->>API: {documentoId, mensagem: "Petição aprovada e salva"}
+    API-->>F: 200 OK
+    F-->>U: ✅ "Petição salva com sucesso"
+    
+    Note over U,STORAGE: Documento pode ser assinado<br/>digitalmente e protocolado<br/>via integração com tribunais

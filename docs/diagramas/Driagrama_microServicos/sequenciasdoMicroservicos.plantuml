@@ -1,0 +1,47 @@
+sequenceDiagram
+    participant U as Usuário<br>(Web / Mobile / Portal Cliente)
+    participant FE as Frontend<br>(React / React Native)
+    participant AG as API Gateway<br>(Kong ou AWS API Gateway)
+    participant AS as Auth Service
+    participant SVC as Qualquer Microserviço<br>(Process, AI, Document,<br>Calendar, Financial, etc.)
+    participant DB as Bancos de Dados<br>(PostgreSQL / MongoDB / Redis / ES)
+    participant IS as Integration Service<br>(quando necessário)
+    participant EXT as Sistemas Externos<br>(Tribunais, OpenAI, Stripe, WhatsApp, etc.)
+    participant NS as Notification Service<br>(fila + multi-canal)
+
+    %% 1. Toda requisição começa assim
+    U->>FE: Ação do usuário (click, submit, etc.)
+    FE->>AG: HTTP Request + JWT no header Authorization
+    AG->>AS: Valida JWT + permissões granulares (RF01, RF03, RF05)
+    AS-->>AG: 200 OK + claims do usuário (id, org, perfil, permissões)
+    alt Token inválido/expirado
+        AS-->>AG: 401 Unauthorized
+        AG-->>FE: 401 → redireciona para login
+    end
+
+    %% 2. Roteamento para o serviço correto
+    AG->>SVC: Forward da requisição (REST interno ou gRPC)
+    SVC->>DB: Lê / grava dados (PostgreSQL, MongoDB, Elasticsearch)
+    DB-->>SVC: Dados retornados ou confirmação
+
+    %% 3. Quando precisa de mundo externo (muito comum)
+    opt Integração externa necessária
+        SVC->>IS: Solicita operação externa (ex: consultar tribunal, gerar IA, cobrar PIX)
+        IS->>EXT: Chama API externa (PJe, OpenAI, PagSeguro, etc.)
+        EXT-->>IS: Resposta síncrona ou erro
+        IS-->>SVC: Resultado processado
+    end
+
+    %% 4. Persistência final e eventos
+    SVC->>DB: Salva estado final / versão / auditoria (RF06)
+    SVC->>NS: Publica evento na fila (Redis Stream / Kafka simulado)
+    NS-->>NS: Processa fila de forma assíncrona
+    NS->>EXT: Envia notificações (e-mail, WhatsApp, push, SMS)
+
+    %% 5. Resposta ao usuário
+    SVC-->>AG: 200/201 + payload
+    AG-->>FE: Resposta final (JSON)
+    FE-->>U: Atualiza interface em tempo real
+
+    %% Notificações chegam depois (assíncrono)
+    Note over NS,U: Notificações chegam segundos/minutos depois<br>(push, e-mail, WhatsApp, inbox interno)

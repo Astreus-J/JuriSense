@@ -1,0 +1,274 @@
+graph TB
+    %% ========== CAMADA DE CLIENTE ==========
+    subgraph CLIENT["👥 CAMADA DE CLIENTE"]
+        direction TB
+        WEB_APP["🖥️ Web App<br/>(React + TypeScript)"]
+        MOBILE_IOS["📱 Mobile iOS<br/>(React Native)"]
+        MOBILE_ANDROID["📱 Mobile Android<br/>(React Native)"]
+        DESKTOP["💻 Desktop App<br/>(Electron)"]
+    end
+    
+    %% ========== CAMADA DE GATEWAY ==========
+    subgraph GATEWAY["🚪 API GATEWAY"]
+        direction TB
+        NGINX["NGINX<br/>Load Balancer"]
+        KONG["Kong Gateway<br/>Rate Limiting, Auth"]
+        GRAPHQL["GraphQL Server<br/>(Apollo)"]
+        REST["REST API<br/>(Express/Fastify)"]
+    end
+    
+    %% ========== CAMADA DE SERVIÇOS ==========
+    subgraph MICROSERVICES["⚙️ MICROSERVIÇOS"]
+        direction TB
+        
+        subgraph AUTH_SERVICE["🔐 Auth Service"]
+            AUTH_API["API"]
+            AUTH_LOGIC["Business Logic"]
+        end
+        
+        subgraph PROCESSO_SERVICE["⚖️ Processo Service"]
+            PROC_API["API"]
+            PROC_LOGIC["Business Logic"]
+        end
+        
+        subgraph DOC_SERVICE["📄 Documento Service"]
+            DOC_API["API"]
+            DOC_LOGIC["Business Logic"]
+        end
+        
+        subgraph PRAZO_SERVICE["⏰ Prazo Service"]
+            PRAZO_API["API"]
+            PRAZO_LOGIC["Business Logic"]
+        end
+        
+        subgraph IA_SERVICE["🤖 IA Service"]
+            IA_API["API"]
+            IA_LOGIC["LLM Integration"]
+        end
+        
+        subgraph ML_SERVICE["📊 ML Service"]
+            ML_API["API"]
+            ML_MODELS["Models Engine"]
+        end
+        
+        subgraph NOTIF_SERVICE["🔔 Notificação Service"]
+            NOTIF_API["API"]
+            NOTIF_WORKER["Background Workers"]
+        end
+        
+        subgraph FIN_SERVICE["💰 Financeiro Service"]
+            FIN_API["API"]
+            FIN_LOGIC["Business Logic"]
+        end
+    end
+    
+    %% ========== WORKERS E JOBS ==========
+    subgraph WORKERS["⚡ WORKERS & BACKGROUND JOBS"]
+        direction TB
+        SYNC_WORKER["🔄 Sincronizador<br/>Tribunais"]
+        OCR_WORKER["👁️ OCR Processor"]
+        EMAIL_WORKER["📧 Email Sender"]
+        PRAZO_CHECKER["⏰ Prazo Checker"]
+        FATURA_GENERATOR["💰 Gerador Faturas"]
+        BACKUP_WORKER["💾 Backup Worker"]
+    end
+    
+    %% ========== INTEGRAÇÕES EXTERNAS ==========
+    subgraph EXTERNAL["🌐 INTEGRAÇÕES EXTERNAS"]
+        direction TB
+        TRIBUNAL_API["⚖️ APIs Tribunais<br/>(TJ, STF, STJ)"]
+        SCRAPER["🕷️ Web Scraper<br/>(Puppeteer)"]
+        LLM_PROVIDER["🧠 LLM Providers<br/>(OpenAI, Anthropic)"]
+        EMAIL_PROVIDER["📧 Email Provider<br/>(SendGrid)"]
+        SMS_PROVIDER["📱 SMS Gateway<br/>(Twilio)"]
+        WHATSAPP_API["💬 WhatsApp Business<br/>API"]
+        PAYMENT_GATEWAY["💳 Payment Gateway<br/>(Stripe, PagSeguro)"]
+        CLOUD_STORAGE["☁️ Cloud Storage<br/>(AWS S3)"]
+        CERT_PROVIDER["🔐 Certificadora<br/>(ICP-Brasil)"]
+    end
+    
+    %% ========== CAMADA DE DADOS ==========
+    subgraph DATA_LAYER["💾 CAMADA DE DADOS"]
+        direction TB
+        
+        subgraph DATABASES["Databases"]
+            POSTGRES[("PostgreSQL<br/>Dados Principais")]
+            POSTGRES_REPLICA[("PostgreSQL<br/>Read Replica")]
+            MONGO[("MongoDB<br/>Logs & Analytics")]
+        end
+        
+        subgraph CACHE_STORAGE["Cache & Storage"]
+            REDIS[("Redis<br/>Cache & Sessions")]
+            ELASTICSEARCH[("Elasticsearch<br/>Full-Text Search")]
+            S3_LOCAL[("MinIO<br/>Object Storage")]
+        end
+        
+        subgraph QUEUES["Filas & Mensageria"]
+            RABBITMQ[("RabbitMQ<br/>Message Broker")]
+            KAFKA[("Kafka<br/>Event Streaming")]
+        end
+    end
+    
+    %% ========== OBSERVABILIDADE ==========
+    subgraph OBSERVABILITY["📊 OBSERVABILIDADE"]
+        direction TB
+        PROMETHEUS["Prometheus<br/>Métricas"]
+        GRAFANA["Grafana<br/>Dashboards"]
+        ELASTIC_APM["Elastic APM<br/>Tracing"]
+        SENTRY["Sentry<br/>Error Tracking"]
+        DATADOG["Datadog<br/>Monitoring"]
+    end
+    
+    %% ========== INFRAESTRUTURA ==========
+    subgraph INFRA["🏗️ INFRAESTRUTURA"]
+        direction TB
+        KUBERNETES["Kubernetes<br/>Orquestração"]
+        DOCKER["Docker<br/>Containerização"]
+        TERRAFORM["Terraform<br/>IaC"]
+        GITHUB_ACTIONS["GitHub Actions<br/>CI/CD"]
+    end
+    
+    %% ========== SEGURANÇA ==========
+    subgraph SECURITY["🔒 SEGURANÇA"]
+        direction TB
+        WAF["WAF<br/>Cloudflare"]
+        VAULT["HashiCorp Vault<br/>Secrets Management"]
+        SSL["SSL/TLS<br/>Let's Encrypt"]
+    end
+    
+    %% ========== RELACIONAMENTOS ==========
+    
+    %% Cliente -> Gateway
+    WEB_APP --> NGINX
+    MOBILE_IOS --> NGINX
+    MOBILE_ANDROID --> NGINX
+    DESKTOP --> NGINX
+    
+    %% Gateway -> Serviços
+    NGINX --> KONG
+    KONG --> GRAPHQL
+    KONG --> REST
+    
+    GRAPHQL --> AUTH_SERVICE
+    GRAPHQL --> PROCESSO_SERVICE
+    GRAPHQL --> DOC_SERVICE
+    GRAPHQL --> PRAZO_SERVICE
+    GRAPHQL --> IA_SERVICE
+    GRAPHQL --> ML_SERVICE
+    GRAPHQL --> NOTIF_SERVICE
+    GRAPHQL --> FIN_SERVICE
+    
+    REST --> AUTH_SERVICE
+    REST --> PROCESSO_SERVICE
+    REST --> DOC_SERVICE
+    
+    %% Serviços -> Dados
+    AUTH_SERVICE --> POSTGRES
+    AUTH_SERVICE --> REDIS
+    
+    PROCESSO_SERVICE --> POSTGRES
+    PROCESSO_SERVICE --> ELASTICSEARCH
+    PROCESSO_SERVICE --> REDIS
+    
+    DOC_SERVICE --> POSTGRES
+    DOC_SERVICE --> S3_LOCAL
+    DOC_SERVICE --> ELASTICSEARCH
+    
+    PRAZO_SERVICE --> POSTGRES
+    PRAZO_SERVICE --> REDIS
+    
+    IA_SERVICE --> POSTGRES
+    IA_SERVICE --> MONGO
+    
+    ML_SERVICE --> POSTGRES
+    ML_SERVICE --> MONGO
+    
+    NOTIF_SERVICE --> POSTGRES
+    NOTIF_SERVICE --> REDIS
+    NOTIF_SERVICE --> RABBITMQ
+    
+    FIN_SERVICE --> POSTGRES
+    FIN_SERVICE --> REDIS
+    
+    %% Serviços -> Filas
+    PROCESSO_SERVICE --> RABBITMQ
+    DOC_SERVICE --> RABBITMQ
+    PRAZO_SERVICE --> RABBITMQ
+    
+    %% Workers -> Filas
+    RABBITMQ --> SYNC_WORKER
+    RABBITMQ --> OCR_WORKER
+    RABBITMQ --> EMAIL_WORKER
+    RABBITMQ --> PRAZO_CHECKER
+    RABBITMQ --> FATURA_GENERATOR
+    
+    %% Workers -> Dados
+    SYNC_WORKER --> POSTGRES
+    OCR_WORKER --> POSTGRES
+    OCR_WORKER --> S3_LOCAL
+    EMAIL_WORKER --> MONGO
+    PRAZO_CHECKER --> POSTGRES
+    FATURA_GENERATOR --> POSTGRES
+    
+    %% Workers -> Integrações
+    SYNC_WORKER --> TRIBUNAL_API
+    SYNC_WORKER --> SCRAPER
+    OCR_WORKER --> LLM_PROVIDER
+    EMAIL_WORKER --> EMAIL_PROVIDER
+    NOTIF_SERVICE --> SMS_PROVIDER
+    NOTIF_SERVICE --> WHATSAPP_API
+    IA_SERVICE --> LLM_PROVIDER
+    DOC_SERVICE --> CLOUD_STORAGE
+    DOC_SERVICE --> CERT_PROVIDER
+    FIN_SERVICE --> PAYMENT_GATEWAY
+    
+    %% Observabilidade
+    AUTH_SERVICE -.-> PROMETHEUS
+    PROCESSO_SERVICE -.-> PROMETHEUS
+    DOC_SERVICE -.-> PROMETHEUS
+    PRAZO_SERVICE -.-> PROMETHEUS
+    
+    PROMETHEUS -.-> GRAFANA
+    
+    AUTH_SERVICE -.-> ELASTIC_APM
+    PROCESSO_SERVICE -.-> ELASTIC_APM
+    
+    AUTH_SERVICE -.-> SENTRY
+    PROCESSO_SERVICE -.-> SENTRY
+    DOC_SERVICE -.-> SENTRY
+    
+    %% Segurança
+    NGINX -.-> WAF
+    KONG -.-> VAULT
+    NGINX -.-> SSL
+    
+    %% Infraestrutura
+    MICROSERVICES -.-> KUBERNETES
+    WORKERS -.-> KUBERNETES
+    KUBERNETES -.-> DOCKER
+    
+    %% Backup
+    BACKUP_WORKER --> POSTGRES
+    BACKUP_WORKER --> MONGO
+    BACKUP_WORKER --> CLOUD_STORAGE
+    
+    %% Eventos
+    PROCESSO_SERVICE --> KAFKA
+    DOC_SERVICE --> KAFKA
+    PRAZO_SERVICE --> KAFKA
+    KAFKA --> ML_SERVICE
+    
+    %% Leitura otimizada
+    POSTGRES --> POSTGRES_REPLICA
+    ML_SERVICE --> POSTGRES_REPLICA
+    
+    %% Estilos
+    style CLIENT fill:#e3f2fd
+    style GATEWAY fill:#fff3e0
+    style MICROSERVICES fill:#f3e5f5
+    style WORKERS fill:#e8f5e9
+    style EXTERNAL fill:#fce4ec
+    style DATA_LAYER fill:#f5f5f5
+    style OBSERVABILITY fill:#e0f2f1
+    style INFRA fill:#fff9c4
+    style SECURITY fill:#ffebee

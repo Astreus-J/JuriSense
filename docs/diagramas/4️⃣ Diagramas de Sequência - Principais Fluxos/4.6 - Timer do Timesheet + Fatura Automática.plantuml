@@ -1,0 +1,199 @@
+sequenceDiagram
+    participant A as 👤 Advogado
+    participant F as 🖥️ Frontend
+    participant API as 🔌 API Gateway
+    participant TIME as ⏱️ TimesheetService
+    participant DB as 💾 Database
+    participant FAT as 💰 FaturaService
+    participant CONT as 📋 ContratoService
+    participant EMAIL as 📧 EmailService
+    participant PDF as 📄 PDFService
+    
+    Note over A,DB: FASE 1: Registro de Tempo (Timer)
+    
+    A->>F: Inicia timer para tarefa
+    F->>API: POST /timesheet/iniciar
+    API->>TIME: iniciarTimer(usuarioId, processoId, descricao)
+    
+    TIME->>DB: INSERT INTO timesheet (data_inicio = NOW())
+    DB-->>TIME: timesheetId gerado
+    
+    TIME-->>API: {timesheetId, dataInicio}
+    API-->>F: 201 Created
+    F->>F: Iniciar cronômetro visual
+    F-->>A: ⏱️ Timer iniciado (00:00:00)
+    
+    Note over F: Cronômetro rodando<br/>localmente no frontend
+    
+    A->>F: Pausar timer
+    F->>API: PUT /timesheet/{id}/pausar
+    API->>TIME: pausarTimer(timesheetId)
+    TIME->>DB: UPDATE timesheet SET data_fim = NOW()
+    TIME->>TIME: calcularDuracao()
+    TIME->>DB: UPDATE timesheet SET duracao_minutos = ?
+    TIME-->>API: Timer pausado (45 minutos)
+    API-->>F: 200 OK
+    F-->>A: ⏸️ Timer pausado (00:45:00)
+    
+    A->>F: Retomar timer
+    F->>API: PUT /timesheet/{id}/retomar
+    API->>TIME: retomarTimer(timesheetId)
+    TIME->>DB: INSERT INTO timesheet (novo registro)
+    TIME-->>API: Novo timesheetId
+    API-->>F: 200 OK
+    F-->>A: ▶️ Timer retomado
+    
+    A->>F: Finalizar timer
+    F->>API: PUT /timesheet/{id}/finalizar
+    API->>TIME: finalizarTimer(timesheetId, observacoes)
+    
+    TIME->>DB: UPDATE timesheet SET data_fim = NOW()
+    TIME->>TIME: calcularDuracaoTotal()
+    TIME->>DB: SELECT valor_hora FROM usuario WHERE id = ?
+    DB-->>TIME: valor_hora = R$ 200
+    
+    TIME->>TIME: calcularValor(duracao, valorHora)
+    TIME->>DB: UPDATE timesheet SET valor_calculado = ?
+    
+    TIME-->>API: Timer finalizado (2h 15min - R$ 450)
+    API-->>F: 200 OK
+    F-->>A: ✅ Tempo registrado: 2h 15min (R$ 450,00)
+    
+    Note over A,DB: FASE 2: Aprovação de Horas
+    
+    A->>F: Submeter horas para aprovação
+    F->>API: POST /timesheet/{id}/submeter
+    API->>TIME: submeterParaAprovacao(timesheetId)
+    TIME->>DB: UPDATE timesheet SET status = 'AGUARDANDO_APROVACAO'
+    
+    TIME->>DB: SELECT responsavel FROM processo WHERE id = ?
+    DB-->>TIME: responsavelId (sócio)
+    
+    TIME->>EMAIL: notificarAprovacaoPendente(responsavel, timesheet)
+    EMAIL-->>TIME: Email enviado
+    
+    TIME-->>API: Submetido para aprovação
+    API-->>F: 200 OK
+    F-->>A: 📤 Horas submetidas para aprovação
+    
+    %% Aprovação pelo sócio
+    participant S as 👨‍💼 Sócio
+    
+    EMAIL->>S: 📧 "Timesheet aguardando aprovação"
+    S->>F: Acessa painel de aprovações
+    F->>API: GET /timesheet/pendentes
+    API->>TIME: listarTimesheetsPendentes(usuarioId)
+    TIME->>DB: SELECT * FROM timesheet WHERE status = 'AGUARDANDO_APROVACAO'
+    DB-->>TIME: Lista de timesheets
+    TIME-->>API: Lista
+    API-->>F: 200 OK
+    F-->>S: 📋 Lista de horas para aprovar
+    
+    S->>F: Aprovar timesheet
+    F->>API: POST /timesheet/{id}/aprovar
+    API->>TIME: aprovarTimesheet(timesheetId, aprovadorId)
+    
+    TIME->>DB: UPDATE timesheet SET aprovado = true, aprovado_por = ?, aprovado_em = NOW()
+    TIME->>DB: INSERT INTO aprovacao_timesheet
+    
+    TIME->>EMAIL: notificarTimesheetAprovado(advogado)
+    
+    TIME-->>API: Timesheet aprovado
+    API-->>F: 200 OK
+    F-->>S: ✅ Timesheet aprovado
+    
+    Note over A,PDF: FASE 3: Geração Automática de Fatura (Mensal)
+    
+    Note over FAT: Job agendado executa<br/>todo dia 1º do mês
+    
+    FAT->>DB: SELECT * FROM cliente WHERE ativo = true
+    DB-->>FAT: Lista de clientes ativos
+    
+    loop Para cada cliente
+        FAT->>CONT: buscarContratoVigente(clienteId)
+        CONT->>DB: SELECT * FROM contrato WHERE cliente_id = ? AND ativo = true
+        DB-->>CONT: Contrato ativo
+        CONT-->>FAT: {contratoId, valorMensal, tipo}
+        
+        FAT->>TIME: buscarHorasFaturaveis(clienteId, mesAnterior)
+        TIME->>DB: SELECT * FROM timesheet WHERE aprovado = true AND faturado = false
+        DB-->>TIME: Lista de timesheets aprovados
+        TIME-->>FAT: Lista de horas (Total: 15h 30min)
+        
+        FAT->>DB: INSERT INTO fatura (data_emissao, data_vencimento)
+        DB-->>FAT: faturaId gerado
+        
+        %% Adicionar itens da fatura
+        loop Para cada timesheet
+            FAT->>DB: INSERT INTO item_fatura
+            FAT->>DB: UPDATE timesheet SET faturado = true
+        end
+        
+        %% Adicionar mensalidade (se houver)
+        alt Contrato com mensalidade
+            FAT->>DB: INSERT INTO item_fatura (tipo='MENSALIDADE')
+        end
+        
+        %% Adicionar despesas
+        FAT->>DB: SELECT * FROM despesa WHERE processo_id IN (...)
+        DB-->>FAT: Despesas do período
+        
+        loop Para cada despesa
+            FAT->>DB: INSERT INTO item_fatura (tipo='DESPESA')
+        end
+        
+        FAT->>FAT: calcularTotais()
+        FAT->>DB: UPDATE fatura SET valor_total = ?
+        
+        %% Gerar PDF
+        FAT->>PDF: gerarFaturaPDF(faturaId)
+        PDF->>DB: SELECT fatura com itens
+        DB-->>PDF: Dados completos
+        PDF->>PDF: renderizarPDF(template, dados)
+        PDF->>PDF: adicionarCodigoBarras()
+        PDF-->>FAT: arquivoPDF (bytes)
+        
+        FAT->>DB: UPDATE fatura SET url_pdf = ?
+        
+        %% Enviar por email
+        FAT->>EMAIL: enviarFatura(cliente, arquivoPDF)
+        EMAIL->>EMAIL: preparar email com template
+        EMAIL->>EMAIL: anexar PDF
+        EMAIL-->>FAT: Email enviado
+        
+        FAT->>DB: INSERT INTO notificacao (tipo='FATURA_GERADA')
+    end
+    
+    FAT->>EMAIL: enviarResumoFaturamento(admin)
+    EMAIL-->>FAT: Resumo enviado
+    
+    Note over A,PDF: Cliente recebe fatura por email<br/>automaticamente
+    
+    Note over A,PDF: FASE 4: Registro de Pagamento
+    
+    participant C as 💳 Cliente
+    
+    C->>F: Acessa portal do cliente
+    F->>API: GET /faturas/minhas
+    API->>FAT: listarFaturasCliente(clienteId)
+    FAT->>DB: SELECT * FROM fatura WHERE cliente_id = ?
+    DB-->>FAT: Lista de faturas
+    FAT-->>API: Lista
+    API-->>F: 200 OK
+    F-->>C: 📄 Lista de faturas
+    
+    C->>F: Registra pagamento
+    F->>API: POST /faturas/{id}/pagamento
+    API->>FAT: registrarPagamento(faturaId, dados)
+    
+    FAT->>DB: INSERT INTO pagamento
+    FAT->>DB: UPDATE fatura SET valor_pago += ?, status = 'PAGO'
+    
+    FAT->>EMAIL: enviarComprovanteRecebimento(cliente)
+    FAT->>EMAIL: notificarRecebimento(escritorio)
+    
+    FAT-->>API: Pagamento registrado
+    API-->>F: 200 OK
+    F-->>C: ✅ Pagamento confirmado
+    
+    Note over A,PDF: Sistema permite integração<br/>com gateways de pagamento<br/>para automação completa

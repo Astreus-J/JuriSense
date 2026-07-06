@@ -1,0 +1,155 @@
+sequenceDiagram
+    participant U as 👤 Usuário
+    participant F as 🖥️ Frontend
+    participant API as 🔌 API Gateway
+    participant DOC as 📄 DocumentoService
+    participant STORAGE as 💾 Storage (S3)
+    participant OCR as 👁️ OCRService
+    participant IA as 🤖 IAService
+    participant DB as 💾 Database
+    participant SIGN as ✍️ AssinaturaService
+    participant CERT as 🔐 Certificadora (ICP)
+    
+    %% ========== FASE 1: UPLOAD ==========
+    Note over U,DB: FASE 1: Upload de Documento
+    
+    U->>F: Seleciona arquivo (PDF/Imagem)
+    F->>F: Validar tamanho e tipo
+    F->>API: POST /documentos/upload (multipart/form-data)
+    
+    API->>DOC: uploadDocumento(arquivo, processoId, tipoDoc)
+    DOC->>DOC: validarArquivo(arquivo)
+    
+    alt Arquivo inválido
+        DOC-->>API: Erro: Arquivo inválido
+        API-->>F: 400 Bad Request
+        F-->>U: ❌ "Arquivo inválido"
+    end
+    
+    DOC->>DOC: gerarHash(arquivo)
+    DOC->>DB: Verificar se hash já existe (duplicata)
+    
+    alt Documento duplicado
+        DB-->>DOC: Hash encontrado
+        DOC-->>API: Erro: Documento já existe
+        API-->>F: 409 Conflict
+        F-->>U: ⚠️ "Documento já cadastrado"
+    end
+    
+    DOC->>STORAGE: upload(arquivo, /processos/{id}/docs/)
+    STORAGE-->>DOC: {url, caminhoArquivo}
+    
+    DOC->>DB: INSERT INTO documento
+    DB-->>DOC: documentoId gerado
+    
+    %% ========== FASE 2: OCR ==========
+    Note over U,DB: FASE 2: Processamento OCR (Assíncrono)
+    
+    DOC->>OCR: processarDocumento(documentoId)
+    OCR->>STORAGE: download(caminhoArquivo)
+    STORAGE-->>OCR: arquivo (bytes)
+    
+    OCR->>OCR: detectarTipoDocumento(arquivo)
+    
+    alt Documento é PDF com texto
+        OCR->>OCR: extrairTextoPDF(arquivo)
+    else Documento é imagem/PDF escaneado
+        OCR->>OCR: processarOCR(imagem)
+        Note over OCR: Tesseract ou<br/>Google Cloud Vision
+    end
+    
+    OCR->>OCR: extrairMetadados(texto)
+    OCR->>OCR: calcularConfianca()
+    
+    OCR->>DB: INSERT INTO ocr_resultado
+    OCR->>DB: UPDATE documento SET conteudo_extraido = ?, ocr_processado = true
+    
+    %% Análise de IA opcional
+    OCR->>IA: analisarDocumento(texto)
+    IA->>IA: extrairEntidades(texto)
+    IA->>IA: classificarDocumento(texto)
+    IA->>DB: UPDATE documento SET classificacao_ia = ?
+    
+    OCR-->>DOC: OCR concluído
+    DOC->>API: Webhook: documento processado
+    API->>F: WebSocket: atualizar status
+    F-->>U: 🔍 "OCR concluído - Texto extraído"
+    
+    %% ========== FASE 3: EDIÇÃO E VERSIONAMENTO ==========
+    Note over U,DB: FASE 3: Edição com Versionamento
+    
+    U->>F: Editar documento
+    F->>API: PUT /documentos/{id}/editar
+    API->>DOC: editarDocumento(documentoId, novoConteudo)
+    
+    DOC->>DB: SELECT versao atual FROM documento
+    DB-->>DOC: versão atual = 1
+    
+    DOC->>STORAGE: upload(novoArquivo, versao_2)
+    STORAGE-->>DOC: novo caminho
+    
+    DOC->>DB: INSERT INTO versao_documento (versao=2)
+    DOC->>DB: UPDATE documento SET caminho = novo, versao = 2
+    
+    DOC-->>API: Documento atualizado (v2)
+    API-->>F: 200 OK
+    F-->>U: ✅ "Documento atualizado (versão 2)"
+    
+    %% ========== FASE 4: ASSINATURA DIGITAL ==========
+    Note over U,CERT: FASE 4: Assinatura Digital
+    
+    U->>F: Clicar em "Assinar Digitalmente"
+    F->>API: POST /documentos/{id}/assinar
+    
+    API->>SIGN: assinarDocumento(documentoId, usuarioId)
+    SIGN->>DB: SELECT * FROM documento WHERE id = ?
+    DB-->>SIGN: Dados do documento
+    
+    SIGN->>STORAGE: download(caminhoArquivo)
+    STORAGE-->>SIGN: arquivo original
+    
+    SIGN->>SIGN: calcularHashDocumento(arquivo)
+    
+    %% Integração com certificadora
+    SIGN->>CERT: POST /assinar {hash, certificado}
+    CERT->>CERT: Validar certificado digital
+    CERT->>CERT: Assinar hash com chave privada
+    CERT-->>SIGN: {assinatura, timestamp, cadeiaCertificados}
+    
+    SIGN->>SIGN: incorporarAssinaturaNoPDF(arquivo, assinatura)
+    SIGN->>STORAGE: upload(arquivoAssinado, /assinado/)
+    STORAGE-->>SIGN: novo caminho
+    
+    SIGN->>DB: INSERT INTO assinatura_digital
+    SIGN->>DB: UPDATE documento SET assinado_digitalmente = true
+    
+    SIGN-->>API: Documento assinado com sucesso
+    API-->>F: 200 OK
+    F-->>U: ✅ "Documento assinado digitalmente"
+    
+    %% ========== FASE 5: VALIDAÇÃO ==========
+    Note over U,CERT: FASE 5: Validação de Assinatura
+    
+    U->>F: Validar assinatura
+    F->>API: GET /documentos/{id}/validar-assinatura
+    
+    API->>SIGN: validarAssinatura(documentoId)
+    SIGN->>DB: SELECT * FROM assinatura_digital WHERE documento_id = ?
+    DB-->>SIGN: Dados da assinatura
+    
+    SIGN->>STORAGE: download(arquivoAssinado)
+    STORAGE-->>SIGN: arquivo
+    
+    SIGN->>SIGN: extrairAssinaturaDoPDF(arquivo)
+    SIGN->>CERT: POST /validar {assinatura, hash}
+    CERT->>CERT: Verificar cadeia de certificados
+    CERT->>CERT: Validar timestamp
+    CERT->>CERT: Verificar integridade
+    CERT-->>SIGN: {valida: true, informacoes: {...}}
+    
+    SIGN->>DB: UPDATE assinatura_digital SET valida = true
+    SIGN-->>API: Assinatura válida
+    API-->>F: 200 OK {valida: true}
+    F-->>U: ✅ "Assinatura válida - ICP-Brasil"
+    
+    Note over U,CERT: Documento assinado pode ser<br/>usado como prova em juízo

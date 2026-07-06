@@ -1,0 +1,159 @@
+sequenceDiagram
+    participant CRON as ⏰ Cron Job
+    participant PRAZO as ⏱️ PrazoService
+    participant DB as 💾 Database
+    participant NOTIF as 🔔 NotificacaoService
+    participant TEMPLATE as 📄 TemplateService
+    participant EMAIL as 📧 EmailService
+    participant SMS as 📱 SMSService
+    participant PUSH as 🔔 PushService
+    participant WHATSAPP as 💬 WhatsAppService
+    participant U as 👤 Usuário
+    
+    Note over CRON,DB: Job executa a cada hora<br/>verificando prazos próximos
+    
+    CRON->>PRAZO: verificarPrazosProximos()
+    PRAZO->>DB: SELECT * FROM prazo WHERE status = 'PENDENTE'<br/>AND data_prazo BETWEEN NOW() AND NOW() + 7 days
+    DB-->>PRAZO: Lista de prazos próximos
+    
+    loop Para cada prazo
+        PRAZO->>PRAZO: calcularDiasRestantes(prazo)
+        PRAZO->>DB: SELECT * FROM lembrete WHERE prazo_id = ?
+        DB-->>PRAZO: Configurações de lembrete
+        
+        Note over PRAZO: Verificar se deve notificar:<br/>- 7 dias antes<br/>- 3 dias antes<br/>- 1 dia antes<br/>- No dia (manhã e tarde)
+        
+        alt Deve notificar hoje
+            PRAZO->>DB: Verificar se já notificou hoje
+            DB-->>PRAZO: Última notificação
+            
+            alt Ainda não notificou
+                PRAZO->>DB: SELECT * FROM processo WHERE id = ?
+                DB-->>PRAZO: Dados do processo
+                
+                PRAZO->>DB: SELECT * FROM usuario WHERE id = ?
+                DB-->>PRAZO: Dados do responsável
+                
+                %% Determinar urgência
+                PRAZO->>PRAZO: determinarUrgencia(diasRestantes)
+                
+                Note over PRAZO: Urgências:<br/>- CRITICA: 0-1 dias<br/>- ALTA: 2-3 dias<br/>- MEDIA: 4-7 dias<br/>- BAIXA: 8+ dias
+                
+                %% Buscar template adequado
+                PRAZO->>TEMPLATE: buscarTemplate("PRAZO_PROXIMO", urgencia)
+                TEMPLATE->>DB: SELECT * FROM template_notificacao<br/>WHERE tipo = ? AND prioridade = ?
+                DB-->>TEMPLATE: Template personalizado
+                TEMPLATE-->>PRAZO: {templateHTML, templateTexto}
+                
+                %% Renderizar template com dados
+                PRAZO->>TEMPLATE: renderizar(template, {prazo, processo, usuario})
+                TEMPLATE->>TEMPLATE: substituirVariaveis()
+                TEMPLATE-->>PRAZO: {html, texto} renderizados
+                
+                %% Criar notificação
+                PRAZO->>NOTIF: criarNotificacao(usuario, prazo, conteudo)
+                NOTIF->>DB: INSERT INTO notificacao
+                DB-->>NOTIF: notificacaoId
+                
+                %% Enviar por múltiplos canais
+                par Envio paralelo por múltiplos canais
+                    %% Email
+                    NOTIF->>EMAIL: enviarEmail(usuario.email, assunto, html)
+                    EMAIL->>EMAIL: Conectar SMTP
+                    EMAIL->>EMAIL: Preparar email
+                    EMAIL->>EMAIL: Anexar ICS (calendário)
+                    EMAIL->>U: 📧 Email de prazo
+                    EMAIL-->>NOTIF: Email enviado
+                    
+                and SMS
+                    alt Urgência CRITICA ou ALTA
+                        NOTIF->>SMS: enviarSMS(usuario.telefone, texto)
+                        SMS->>SMS: Conectar gateway SMS
+                        SMS->>U: 📱 SMS de prazo
+                        SMS-->>NOTIF: SMS enviado
+                    end
+                    
+                and Push Notification
+                    NOTIF->>PUSH: enviarPush(usuario.id, titulo, corpo)
+                    PUSH->>PUSH: Buscar tokens FCM
+                    PUSH->>U: 🔔 Notificação push
+                    PUSH-->>NOTIF: Push enviado
+                    
+                and WhatsApp
+                    alt Preferência do usuário = WhatsApp
+                        NOTIF->>WHATSAPP: enviarMensagem(telefone, mensagem)
+                        WHATSAPP->>WHATSAPP: Conectar API WhatsApp Business
+                        WHATSAPP->>U: 💬 Mensagem WhatsApp
+                        WHATSAPP-->>NOTIF: WhatsApp enviado
+                    end
+                end
+                
+                %% Registrar envios
+                NOTIF->>DB: UPDATE notificacao SET enviado_em = NOW()
+                NOTIF->>DB: INSERT INTO log_notificacao (canais enviados)
+                
+                %% Atualizar lembrete
+                NOTIF->>DB: UPDATE lembrete SET enviado = true
+                
+                NOTIF-->>PRAZO: Notificação enviada com sucesso
+            end
+        end
+    end
+    
+    Note over U: Usuário recebe notificação<br/>em múltiplos canais
+    
+    U->>U: 📱 Visualiza notificação
+    U->>U: Clica na notificação
+    
+    alt Mobile App
+        U->>PUSH: Abrir app no prazo
+        PUSH->>NOTIF: Registrar abertura
+        NOTIF->>DB: UPDATE notificacao SET lida = true, lida_em = NOW()
+    else Web App
+        U->>EMAIL: Clica no link do email
+        EMAIL->>NOTIF: GET /notificacoes/{id}/marcar-lida
+        NOTIF->>DB: UPDATE notificacao SET lida = true
+    end
+    
+    Note over CRON,U: ESCALAÇÃO DE URGÊNCIA
+    
+    CRON->>PRAZO: verificarPrazosVencidos()
+    PRAZO->>DB: SELECT * FROM prazo<br/>WHERE status = 'PENDENTE'<br/>AND data_prazo < NOW()
+    DB-->>PRAZO: Prazos vencidos
+    
+    alt Existem prazos vencidos
+        loop Para cada prazo vencido
+            PRAZO->>DB: UPDATE prazo SET status = 'VENCIDO'
+            
+            %% Notificação de urgência máxima
+            PRAZO->>NOTIF: notificarPrazoVencido(prazo)
+            NOTIF->>EMAIL: enviarEmailUrgente(responsavel + supervisor)
+            NOTIF->>SMS: enviarSMSUrgente(responsavel)
+            NOTIF->>PUSH: enviarPushUrgente(responsavel)
+            
+            %% Se não marcou como cumprido em 2h
+            PRAZO->>DB: SELECT * FROM prazo WHERE vencido_em < NOW() - 2 hours
+            DB-->>PRAZO: Prazos críticos
+            
+            alt Prazo crítico não cumprido
+                PRAZO->>NOTIF: escalarParaSocio(prazo)
+                NOTIF->>EMAIL: notificarSocio(prazo, responsavel)
+                NOTIF->>SMS: alertarSocio(prazo)
+            end
+        end
+    end
+    
+    Note over U: MARCAR PRAZO COMO CUMPRIDO
+    
+    U->>PUSH: Marca prazo como cumprido
+    PUSH->>PRAZO: cumprirPrazo(prazoId, observacoes)
+    PRAZO->>DB: UPDATE prazo SET status = 'CUMPRIDO', cumprido_em = NOW()
+    PRAZO->>DB: INSERT INTO historico_prazo
+    
+    PRAZO->>NOTIF: confirmarCumprimento(usuario, prazo)
+    NOTIF->>EMAIL: enviarConfirmacao(usuario)
+    
+    PRAZO-->>PUSH: Prazo marcado como cumprido
+    PUSH-->>U: ✅ "Prazo cumprido com sucesso"
+    
+    Note over CRON,U: Sistema garante que nenhum<br/>prazo importante seja perdido

@@ -1,0 +1,700 @@
+erDiagram
+
+    %% ========== AUTENTICAÇÃO & USUÁRIOS ==========
+    ESCRITORIO ||--o{ USUARIO : emprega
+    PERFIL ||--o{ USUARIO : define
+    PERFIL ||--o{ PERMISSAO : possui
+
+    USUARIO ||--o{ SESSAO : gera
+    USUARIO ||--o{ TOKEN_2FA : possui
+    USUARIO ||--o{ LOG_ACESSO : registra
+    USUARIO ||--o{ API_KEY : possui
+
+    %% ========== PROCESSOS ==========
+    TRIBUNAL ||--o{ PROCESSO : tramita
+    CLIENTE ||--o{ PROCESSO : possui
+    USUARIO ||--o{ PROCESSO : responsavel
+
+    PROCESSO ||--o{ PARTE : envolve
+    TIPO_PARTE ||--o{ PARTE : classifica
+
+    PROCESSO ||--o{ MOVIMENTACAO : possui
+    PROCESSO ||--o{ ANDAMENTO : registra
+    PROCESSO ||--o{ PRAZO : gera
+    PROCESSO ||--o{ DOCUMENTO : contem
+    PROCESSO ||--o{ AUDIENCIA : agenda
+    PROCESSO ||--o{ PEDIDO : possui
+    PROCESSO ||--o{ HISTORICO_STATUS : historico
+
+    %% ========== DOCUMENTOS ==========
+    TIPO_DOCUMENTO ||--o{ DOCUMENTO : classifica
+    DOCUMENTO ||--o{ VERSAO_DOCUMENTO : versiona
+    DOCUMENTO ||--o{ ASSINATURA_DIGITAL : assina
+    DOCUMENTO ||--o{ OCR_RESULTADO : processa
+    DOCUMENTO ||--o{ TAG_DOCUMENTO : categoriza
+    PASTA ||--o{ DOCUMENTO : organiza
+
+    %% ========== PRAZOS & NOTIFICAÇÕES ==========
+    USUARIO ||--o{ PRAZO : atribuido
+    MOVIMENTACAO ||--o{ PRAZO : origem
+
+    PRAZO ||--o{ NOTIFICACAO : gera
+    TEMPLATE_NOTIFICACAO ||--o{ NOTIFICACAO : base
+    USUARIO ||--o{ NOTIFICACAO : recebe
+
+    PRAZO ||--o{ LEMBRETE : agenda
+
+    %% ========== IA ==========
+    PROCESSO ||--o{ PETICAO_IA : gera
+    USUARIO ||--o{ PETICAO_IA : cria
+    TEMPLATE_PETICAO ||--o{ PETICAO_IA : modelo
+    MODELO_IA ||--o{ PETICAO_IA : gerado_por
+
+    DOCUMENTO ||--o{ ANALISE_IA : analisa
+    PROCESSO ||--o{ JURIMETRIA : calcula
+    MODELO_ML ||--o{ JURIMETRIA : processa
+    JURIMETRIA ||--o{ METRICA_JURIMETRIA : detalha
+
+    %% ========== FINANCEIRO ==========
+    PROCESSO ||--o{ HONORARIO : possui
+    CLIENTE ||--o{ CONTRATO : assina
+    CONTRATO ||--o{ FATURA : gera
+    FATURA ||--o{ ITEM_FATURA : contem
+    FATURA ||--o{ PAGAMENTO : recebe
+    TIMESHEET ||--o{ ITEM_FATURA : vincula
+    PROCESSO ||--o{ DESPESA : possui
+
+    %% ========== TIMESHEET ==========
+    USUARIO ||--o{ TIMESHEET : registra
+    PROCESSO ||--o{ TIMESHEET : relacionado
+    TAREFA ||--o{ TIMESHEET : referencia
+    TIMESHEET ||--o{ APROVACAO_TIMESHEET : aprovacoes
+    USUARIO ||--o{ APROVACAO_TIMESHEET : aprova
+
+    %% ========== JURIMETRIA & BI ==========
+    TRIBUNAL ||--o{ ESTATISTICA_TRIBUNAL : estatisticas
+    DASHBOARD ||--o{ WIDGET : possui
+    USUARIO ||--o{ RELATORIO : gera
+    RELATORIO ||--o{ DATASET : usa
+
+    %% ========== INTEGRAÇÕES ==========
+    PROCESSO ||--o{ SINCRONIZACAO_TRIBUNAL : sincroniza
+    TRIBUNAL ||--o{ SINCRONIZACAO_TRIBUNAL : consultado
+    WEBHOOK ||--o{ LOG_WEBHOOK : registra
+    INTEGRACAO_EXTERNA ||--o{ LOG_INTEGRACAO : monitora
+
+    %% ========== CLIENTES & PARTES ==========
+    CLIENTE ||--o{ PARTE : representa
+    USUARIO ||--o{ CLIENTE : gerencia
+
+    %% ========== AUDIÊNCIAS ==========
+    USUARIO ||--o{ AUDIENCIA : responsavel
+    AUDIENCIA ||--o{ PARTICIPANTE : envolve
+    AUDIENCIA ||--o{ ATA_AUDIENCIA : gera
+
+    %% ========== COMPROMISSOS ==========
+    USUARIO ||--o{ COMPROMISSO : agenda
+
+
+    
+    %% ========== ENTIDADES PRINCIPAIS ==========
+    
+    USUARIO {
+        int id PK
+        string nome
+        string email UK
+        string senha_hash
+        string telefone
+        boolean ativo
+        boolean autenticacao_2fa
+        datetime ultimo_acesso
+        int escritorio_id FK
+        int perfil_id FK
+        datetime criado_em
+        datetime atualizado_em
+    }
+    
+    PERFIL {
+        int id PK
+        string nome
+        string descricao
+        boolean ativo
+    }
+    
+    PERMISSAO {
+        int id PK
+        int perfil_id FK
+        string modulo
+        string acao
+        boolean permitido
+    }
+    
+    ESCRITORIO {
+        int id PK
+        string razao_social
+        string cnpj UK
+        string endereco
+        string telefone
+        string logo_url
+        boolean ativo
+        datetime criado_em
+    }
+    
+    PROCESSO {
+        int id PK
+        string numero_processo UK
+        string numero_cnj
+        int tribunal_id FK
+        int responsavel_id FK
+        int cliente_id FK
+        string status
+        string tipo_acao
+        string comarca
+        string vara
+        decimal valor_causa
+        date data_distribuicao
+        date data_ultima_movimentacao
+        text observacoes
+        boolean sincronizacao_ativa
+        datetime proximo_sincronizacao
+        datetime criado_em
+        datetime atualizado_em
+    }
+    
+    TRIBUNAL {
+        int id PK
+        string nome
+        string sigla UK
+        string tipo
+        string url_consulta
+        boolean suporta_api
+        string endpoint_api
+        boolean ativo
+    }
+    
+    PARTE {
+        int id PK
+        int processo_id FK
+        int cliente_id FK
+        int tipo_parte_id FK
+        string nome
+        string cpf_cnpj
+        string qualificacao
+        boolean polo_ativo
+    }
+    
+    CLIENTE {
+        int id PK
+        string nome
+        string cpf_cnpj UK
+        string email
+        string telefone
+        string endereco
+        int responsavel_id FK
+        boolean ativo
+        datetime criado_em
+    }
+    
+    DOCUMENTO {
+        int id PK
+        int processo_id FK
+        int tipo_documento_id FK
+        int usuario_id FK
+        string titulo
+        string nome_arquivo
+        string caminho_arquivo
+        string hash_arquivo
+        int tamanho_bytes
+        string mime_type
+        boolean assinado_digitalmente
+        boolean ocr_processado
+        text conteudo_extraido
+        datetime data_upload
+        datetime criado_em
+    }
+    
+    VERSAO_DOCUMENTO {
+        int id PK
+        int documento_id FK
+        int versao
+        int usuario_id FK
+        string caminho_arquivo
+        text motivo_alteracao
+        datetime criado_em
+    }
+    
+    TIPO_DOCUMENTO {
+        int id PK
+        string nome
+        string categoria
+        boolean requer_assinatura
+        boolean ativo
+    }
+    
+    MOVIMENTACAO {
+        int id PK
+        int processo_id FK
+        date data_movimentacao
+        string tipo
+        text descricao
+        string origem
+        boolean gera_prazo
+        datetime sincronizado_em
+        datetime criado_em
+    }
+    
+    PRAZO {
+        int id PK
+        int processo_id FK
+        int responsavel_id FK
+        int movimentacao_id FK
+        string descricao
+        date data_prazo
+        date data_prazo_fatal
+        int dias_antecedencia
+        string status
+        string prioridade
+        datetime cumprido_em
+        datetime criado_em
+    }
+    
+    NOTIFICACAO {
+        int id PK
+        int usuario_id FK
+        int prazo_id FK
+        int template_id FK
+        string tipo
+        string titulo
+        text mensagem
+        boolean lida
+        datetime enviado_em
+        datetime lida_em
+        string canal
+    }
+    
+    TEMPLATE_NOTIFICACAO {
+        int id PK
+        string nome
+        string tipo
+        text template_html
+        text template_texto
+        boolean ativo
+    }
+    
+    PETICAO_IA {
+        int id PK
+        int processo_id FK
+        int usuario_id FK
+        int template_id FK
+        int modelo_ia_id FK
+        string tipo_peticao
+        text prompt_usuario
+        text conteudo_gerado
+        float confianca_score
+        string status
+        datetime gerado_em
+        datetime aprovado_em
+    }
+    
+    TEMPLATE_PETICAO {
+        int id PK
+        string nome
+        string tipo_peticao
+        text estrutura_json
+        text prompt_base
+        boolean ativo
+    }
+    
+    MODELO_IA {
+        int id PK
+        string nome
+        string versao
+        string provider
+        string endpoint
+        json parametros
+        boolean ativo
+    }
+    
+    JURIMETRIA {
+        int id PK
+        int processo_id FK
+        int modelo_ml_id FK
+        float probabilidade_exito
+        float tempo_estimado_meses
+        float valor_estimado
+        json fatores_considerados
+        datetime calculado_em
+    }
+    
+    MODELO_ML {
+        int id PK
+        string nome
+        string versao
+        string tipo_analise
+        float acuracia
+        datetime treinado_em
+        boolean ativo
+    }
+    
+    TIMESHEET {
+        int id PK
+        int usuario_id FK
+        int processo_id FK
+        int tarefa_id FK
+        datetime data_inicio
+        datetime data_fim
+        int duracao_minutos
+        text descricao
+        boolean faturavel
+        boolean aprovado
+        int aprovado_por FK
+        decimal valor_hora
+        datetime criado_em
+    }
+    
+    FATURA {
+        int id PK
+        int cliente_id FK
+        int contrato_id FK
+        string numero_fatura UK
+        date data_emissao
+        date data_vencimento
+        decimal valor_total
+        decimal valor_pago
+        string status
+        text observacoes
+        datetime criado_em
+    }
+    
+    ITEM_FATURA {
+        int id PK
+        int fatura_id FK
+        int timesheet_id FK
+        string descricao
+        decimal quantidade
+        decimal valor_unitario
+        decimal valor_total
+        string tipo
+    }
+    
+    HONORARIO {
+        int id PK
+        int processo_id FK
+        string tipo
+        decimal valor_contratado
+        decimal valor_exito
+        decimal percentual_exito
+        string status_pagamento
+        datetime criado_em
+    }
+    
+    CONTRATO {
+        int id PK
+        int cliente_id FK
+        string numero_contrato UK
+        string tipo
+        date data_inicio
+        date data_fim
+        decimal valor_mensal
+        text clausulas
+        boolean ativo
+        datetime criado_em
+    }
+    
+    DASHBOARD {
+        int id PK
+        int usuario_id FK
+        string nome
+        json configuracao
+        boolean padrao
+        datetime criado_em
+    }
+    
+    WIDGET {
+        int id PK
+        int dashboard_id FK
+        string tipo_widget
+        string titulo
+        json configuracao
+        int posicao_x
+        int posicao_y
+        int largura
+        int altura
+    }
+    
+    RELATORIO {
+        int id PK
+        int usuario_id FK
+        string nome
+        string tipo
+        json parametros
+        string formato_saida
+        datetime gerado_em
+        string url_arquivo
+    }
+    
+    SINCRONIZACAO_TRIBUNAL {
+        int id PK
+        int processo_id FK
+        int tribunal_id FK
+        datetime ultima_sincronizacao
+        string status
+        int movimentacoes_novas
+        text erro_mensagem
+        datetime proxima_tentativa
+    }
+    
+    OCR_RESULTADO {
+        int id PK
+        int documento_id FK
+        text conteudo_extraido
+        float confianca_media
+        string engine_usado
+        json metadados
+        datetime processado_em
+    }
+    
+    ASSINATURA_DIGITAL {
+        int id PK
+        int documento_id FK
+        int usuario_id FK
+        string certificado_hash
+        datetime assinado_em
+        boolean valida
+        string provedor
+    }
+    
+    LOG_ACESSO {
+        int id PK
+        int usuario_id FK
+        string ip
+        string user_agent
+        string acao
+        datetime data_hora
+    }
+    
+    SESSAO {
+        int id PK
+        int usuario_id FK
+        string token UK
+        datetime expira_em
+        string ip
+        datetime criado_em
+    }
+    
+    TOKEN_2FA {
+        int id PK
+        int usuario_id FK
+        string token
+        datetime expira_em
+        boolean usado
+        datetime criado_em
+    }
+    
+    AUDIENCIA {
+        int id PK
+        int processo_id FK
+        int responsavel_id FK
+        string tipo
+        datetime data_hora
+        string local
+        string link_virtual
+        string status
+        text observacoes
+        datetime criado_em
+    }
+    
+    PARTICIPANTE {
+        int id PK
+        int audiencia_id FK
+        string nome
+        string tipo
+        boolean confirmado
+    }
+    
+    ATA_AUDIENCIA {
+        int id PK
+        int audiencia_id FK
+        text conteudo
+        int elaborado_por FK
+        datetime criado_em
+    }
+    
+    WEBHOOK {
+        int id PK
+        string nome
+        string url
+        string tipo_evento
+        boolean ativo
+        string secret_key
+    }
+    
+    LOG_WEBHOOK {
+        int id PK
+        int webhook_id FK
+        json payload
+        int status_code
+        text resposta
+        datetime enviado_em
+    }
+    
+    API_KEY {
+        int id PK
+        int usuario_id FK
+        string chave UK
+        string nome
+        datetime expira_em
+        boolean ativa
+        datetime criado_em
+    }
+    
+    INTEGRACAO_EXTERNA {
+        int id PK
+        string nome
+        string tipo
+        string endpoint
+        json credenciais
+        boolean ativa
+    }
+    
+    LOG_INTEGRACAO {
+        int id PK
+        int integracao_id FK
+        string operacao
+        json request
+        json response
+        int status_code
+        datetime executado_em
+    }
+    
+    TAREFA {
+        int id PK
+        int processo_id FK
+        int responsavel_id FK
+        string titulo
+        text descricao
+        date data_vencimento
+        string prioridade
+        string status
+        datetime criado_em
+    }
+    
+    HISTORICO_STATUS {
+        int id PK
+        int processo_id FK
+        int usuario_id FK
+        string status_anterior
+        string status_novo
+        text motivo
+        datetime alterado_em
+    }
+    
+    METRICA_JURIMETRIA {
+        int id PK
+        int jurimetria_id FK
+        string metrica
+        float valor
+        string unidade
+    }
+    
+    ESTATISTICA_TRIBUNAL {
+        int id PK
+        int tribunal_id FK
+        string tipo_estatistica
+        float valor
+        int ano
+        int mes
+    }
+    
+    DATASET {
+        int id PK
+        int relatorio_id FK
+        string nome
+        json dados
+        datetime gerado_em
+    }
+    
+    TIPO_PARTE {
+        int id PK
+        string nome
+        string descricao
+    }
+    
+    LEMBRETE {
+        int id PK
+        int prazo_id FK
+        int dias_antes
+        boolean enviado
+        datetime enviado_em
+    }
+    
+    TAG_DOCUMENTO {
+        int id PK
+        int documento_id FK
+        string tag
+    }
+    
+    PASTA {
+        int id PK
+        string nome
+        int pasta_pai_id FK
+        int usuario_id FK
+        datetime criado_em
+    }
+    
+    ANDAMENTO {
+        int id PK
+        int processo_id FK
+        text descricao
+        int usuario_id FK
+        datetime criado_em
+    }
+    
+    PEDIDO {
+        int id PK
+        int processo_id FK
+        text descricao
+        string status
+        datetime criado_em
+    }
+    
+    DESPESA {
+        int id PK
+        int processo_id FK
+        string descricao
+        decimal valor
+        date data
+        string categoria
+        datetime criado_em
+    }
+    
+    PAGAMENTO {
+        int id PK
+        int fatura_id FK
+        decimal valor
+        date data_pagamento
+        string forma_pagamento
+        text observacoes
+        datetime criado_em
+    }
+    
+    APROVACAO_TIMESHEET {
+        int id PK
+        int timesheet_id FK
+        int aprovador_id FK
+        boolean aprovado
+        text motivo_rejeicao
+        datetime aprovado_em
+    }
+    
+    COMPROMISSO {
+        int id PK
+        int usuario_id FK
+        string titulo
+        text descricao
+        datetime data_hora
+        string tipo
+        boolean concluido
+        datetime criado_em
+    }
+

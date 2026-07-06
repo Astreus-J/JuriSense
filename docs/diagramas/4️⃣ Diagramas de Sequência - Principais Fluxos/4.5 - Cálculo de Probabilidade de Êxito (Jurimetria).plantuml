@@ -1,0 +1,126 @@
+sequenceDiagram
+    participant U as 👤 Advogado
+    participant F as 🖥️ Frontend
+    participant API as 🔌 API Gateway
+    participant JURI as 📊 JurimetriaService
+    participant DB as 💾 Database
+    participant ML as 🤖 Modelo ML
+    participant IA as 🧠 IAService
+    participant SEARCH as 🔍 Elasticsearch
+    participant EXTERN as 🌐 APIs Externas (CNJ)
+    
+    Note over U,EXTERN: FASE 1: Inicialização da Análise
+    
+    U->>F: Solicita análise de jurimetria do processo
+    F->>API: POST /jurimetria/analisar/{processoId}
+    API->>JURI: calcularJurimetria(processoId)
+    
+    %% Coleta de dados do processo
+    JURI->>DB: SELECT * FROM processo WHERE id = ?
+    DB-->>JURI: Dados completos do processo
+    
+    JURI->>DB: SELECT * FROM parte WHERE processo_id = ?
+    DB-->>JURI: Partes envolvidas
+    
+    JURI->>DB: SELECT * FROM movimentacao WHERE processo_id = ?
+    DB-->>JURI: Histórico de movimentações
+    
+    JURI->>DB: SELECT * FROM tribunal WHERE id = ?
+    DB-->>JURI: Dados do tribunal
+    
+    Note over JURI,DB: FASE 2: Coleta de Dados Estatísticos
+    
+    %% Buscar estatísticas do tribunal
+    JURI->>DB: SELECT * FROM estatistica_tribunal WHERE tribunal_id = ?
+    DB-->>JURI: Taxa de êxito, tempo médio, etc
+    
+    %% Buscar processos similares
+    JURI->>SEARCH: Buscar processos similares (tipo_acao, comarca, juiz)
+    SEARCH-->>JURI: Lista de processos similares
+    
+    JURI->>DB: SELECT desfecho FROM processo WHERE id IN (...)
+    DB-->>JURI: Desfechos de casos similares
+    
+    %% Consultar APIs externas (CNJ)
+    JURI->>EXTERN: GET /estatisticas/tribunal/{sigla}
+    EXTERN-->>JURI: Dados oficiais CNJ
+    
+    Note over JURI,ML: FASE 3: Extração de Features
+    
+    JURI->>JURI: extrairFeatures(processo)
+    
+    Note over JURI: Features extraídas:<br/>- Tipo de ação<br/>- Comarca<br/>- Juiz responsável<br/>- Valor da causa<br/>- Tempo de tramitação<br/>- Quantidade de recursos<br/>- Perfil das partes<br/>- Complexidade
+    
+    JURI->>IA: analisarArgumentosJuridicos(processo)
+    IA->>IA: extrairFundamentosLegais()
+    IA->>IA: analisarJurisprudencia()
+    IA-->>JURI: {fundamentacao_score: 0.85}
+    
+    Note over JURI,ML: FASE 4: Predição com ML
+    
+    JURI->>ML: prever(features)
+    
+    Note over ML: Modelo treinado com:<br/>- 100k+ processos históricos<br/>- Random Forest / XGBoost<br/>- Acurácia: 87%
+    
+    ML->>ML: preprocessar(features)
+    ML->>ML: normalizar(dados)
+    ML->>ML: executarModelo()
+    ML->>ML: calcularProbabilidades()
+    ML-->>JURI: {probabilidade_exito: 0.78, confianca: 0.92}
+    
+    Note over JURI: FASE 5: Análise de Cenários
+    
+    JURI->>JURI: calcularTempoEstimado(processosSimilares)
+    JURI->>JURI: estimarCustos(tipo, valor_causa)
+    JURI->>JURI: analisarRiscos(probabilidade)
+    JURI->>JURI: calcularValorEsperado(prob, valor_causa)
+    
+    %% Análise de sensibilidade
+    JURI->>ML: prever(features_otimistas)
+    ML-->>JURI: {prob: 0.85}
+    
+    JURI->>ML: prever(features_pessimistas)
+    ML-->>JURI: {prob: 0.65}
+    
+    Note over JURI: FASE 6: Geração de Insights com IA
+    
+    JURI->>IA: gerarInsights(processo, predicao, historico)
+    IA->>IA: analisarFatoresPositivos()
+    IA->>IA: analisarFatoresNegativos()
+    IA->>IA: sugerirEstrategias()
+    IA->>IA: identificarPrecedentes()
+    IA-->>JURI: relatório_insights (texto)
+    
+    Note over JURI,DB: FASE 7: Persistência dos Resultados
+    
+    JURI->>DB: INSERT INTO jurimetria
+    DB-->>JURI: jurimetriaId
+    
+    JURI->>DB: INSERT INTO metrica_jurimetria (múltiplas métricas)
+    
+    %% Construir resposta final
+    JURI->>JURI: construirRelatorio()
+    
+    JURI-->>API: Relatório completo de jurimetria
+    API-->>F: 200 OK - Análise concluída
+    
+    F->>F: Renderizar dashboard de jurimetria
+    F-->>U: 📊 Exibir análise completa
+    
+    Note over U: Dashboard exibe:<br/>- Probabilidade de êxito: 78%<br/>- Tempo estimado: 18-24 meses<br/>- Valor esperado: R$ 85.000<br/>- Cenário otimista: 85% (12 meses)<br/>- Cenário pessimista: 65% (30 meses)<br/>- Fatores de risco<br/>- Estratégias recomendadas<br/>- Precedentes relevantes
+    
+    U->>F: Solicitar detalhamento de fator específico
+    F->>API: GET /jurimetria/{id}/fator/{nome}
+    API->>JURI: detalharFator(jurimetriaId, fator)
+    
+    JURI->>DB: SELECT * FROM metrica_jurimetria WHERE jurimetria_id = ?
+    DB-->>JURI: Métricas detalhadas
+    
+    JURI->>IA: explicarFator(fator, contexto)
+    IA-->>JURI: Explicação detalhada
+    
+    JURI-->>API: Detalhamento do fator
+    API-->>F: 200 OK
+    F-->>U: 📋 Explicação detalhada
+    
+    Note over U,EXTERN: Análise pode ser atualizada<br/>periodicamente conforme<br/>o processo evolui

@@ -1,0 +1,252 @@
+graph TB
+    subgraph Atores_Primarios["👥 ATORES PRIMÁRIOS"]
+        A1[👤 Administrador]
+        A2[👨‍⚖️ Advogado Sênior]
+        A3[👨‍💼 Advogado Júnior]
+        A4[📚 Estagiário]
+        A5[👥 Cliente]
+    end
+    
+    subgraph Atores_Sistemas["🖥️ SISTEMAS EXTERNOS"]
+        S1[🤖 Sistema de IA]
+        S2[⚖️ Tribunais APIs]
+        S3[💳 Sistema Pagamento]
+        S4[📧 Comunicação]
+    end
+    
+    subgraph UC_Autenticacao["🔐 AUTENTICAÇÃO E USUÁRIOS"]
+        UC01[UC01: Login com 2FA]
+        UC02[UC02: Recuperar Senha]
+        UC03[UC03: Gerenciar Usuários]
+        UC04[UC04: Configurar Permissões]
+        UC05[UC05: Visualizar Logs Auditoria]
+    end
+    
+    subgraph UC_Processos["📂 GESTÃO DE PROCESSOS"]
+        UC06[UC06: Cadastrar Processo]
+        UC07[UC07: Buscar em Tribunais]
+        UC08[UC08: Atualizar Movimentações]
+        UC09[UC09: Visualizar Timeline]
+        UC10[UC10: Filtrar Processos]
+        UC11[UC11: Adicionar Anotações]
+        UC12[UC12: Anexar Documentos]
+    end
+    
+    subgraph UC_IA["🤖 INTELIGÊNCIA ARTIFICIAL"]
+        UC13[UC13: Gerar Petição Automática]
+        UC14[UC14: Redação Assistida]
+        UC15[UC15: Gerar Contrato]
+        UC16[UC16: Resumir Documento]
+        UC17[UC17: Analisar Documento]
+        UC18[UC18: Usar Chatbot Jurídico]
+        UC19[UC19: Traduzir/Simplificar]
+    end
+    
+    subgraph UC_Jurimetria["📊 JURIMETRIA E ANALYTICS"]
+        UC20[UC20: Analisar Estatísticas]
+        UC21[UC21: Calcular Probabilidade Êxito]
+        UC22[UC22: Consultar Tempo Tramitação]
+        UC23[UC23: Identificar Teses Vencedoras]
+        UC24[UC24: Analisar Perfil Magistrado]
+        UC25[UC25: Comparar Performance]
+        UC26[UC26: Exportar Relatórios Jurimetria]
+    end
+    
+    subgraph UC_Documental["📄 GESTÃO DOCUMENTAL"]
+        UC27[UC27: Armazenar Documentos]
+        UC28[UC28: Controlar Versões]
+        UC29[UC29: Assinar Digitalmente]
+        UC30[UC30: Aplicar OCR]
+        UC31[UC31: Buscar Documentos]
+        UC32[UC32: Usar Templates]
+        UC33[UC33: Compartilhar Documento]
+    end
+    
+    subgraph UC_Prazos["📅 PRAZOS E AGENDA"]
+        UC34[UC34: Calcular Prazos]
+        UC35[UC35: Gerenciar Compromissos]
+        UC36[UC36: Visualizar Calendário]
+        UC37[UC37: Sincronizar Google/Outlook]
+        UC38[UC38: Receber Alertas]
+        UC39[UC39: Consultar Agenda Equipe]
+    end
+    
+    subgraph UC_BI["📈 BUSINESS INTELLIGENCE"]
+        UC40[UC40: Visualizar Dashboard KPIs]
+        UC41[UC41: Personalizar Dashboard]
+        UC42[UC42: Gerar Relatórios]
+        UC43[UC43: Criar Query Customizada]
+        UC44[UC44: Exportar Relatório]
+        UC45[UC45: Analisar Carteira Processos]
+        UC46[UC46: Fazer Benchmarking]
+    end
+    
+    subgraph UC_Timesheet["⏱️ TIMESHEET E PRODUTIVIDADE"]
+        UC47[UC47: Registrar Horas]
+        UC48[UC48: Vincular Tempo Processo]
+        UC49[UC49: Calcular Honorários]
+        UC50[UC50: Visualizar Gamificação]
+        UC51[UC51: Definir Metas]
+        UC52[UC52: Analisar Ociosidade]
+    end
+    
+    subgraph UC_Financeiro["💰 FINANCEIRO"]
+        UC53[UC53: Controlar Custos]
+        UC54[UC54: Gerenciar Honorários]
+        UC55[UC55: Analisar ROI]
+        UC56[UC56: Projetar Fluxo Caixa]
+        UC57[UC57: Provisionar Passivos]
+        UC58[UC58: Emitir Nota Fiscal]
+        UC59[UC59: Processar Pagamento]
+    end
+    
+    subgraph UC_Portal["🌐 PORTAL DO CLIENTE"]
+        UC60[UC60: Visualizar Processos Cliente]
+        UC61[UC61: Acompanhar Movimentações]
+        UC62[UC62: Baixar Documentos Autorizados]
+        UC63[UC63: Conversar com Advogado]
+        UC64[UC64: Pagar Honorários Online]
+        UC65[UC65: Solicitar Serviços]
+    end
+    
+    subgraph UC_Pesquisa["🔍 PESQUISA JURÍDICA"]
+        UC66[UC66: Buscar Jurisprudência]
+        UC67[UC67: Pesquisa Semântica]
+        UC68[UC68: Salvar Favoritos]
+        UC69[UC69: Exportar para Petição]
+        UC70[UC70: Criar Alertas Jurisprudência]
+    end
+    
+    subgraph UC_Mobile["📱 MOBILE"]
+        UC71[UC71: Acessar App Mobile]
+        UC72[UC72: Trabalhar Offline]
+        UC73[UC73: Ditar por Voz]
+        UC74[UC74: Digitalizar Documentos]
+        UC75[UC75: Assinar Biometricamente]
+    end
+    
+    subgraph UC_Compliance["🔒 COMPLIANCE E LGPD"]
+        UC76[UC76: Aceitar Termo Consentimento]
+        UC77[UC77: Solicitar Dados Pessoais]
+        UC78[UC78: Solicitar Exclusão Dados]
+        UC79[UC79: Visualizar Política Privacidade]
+    end
+    
+    %% Administrador
+    A1 --> UC01
+    A1 --> UC03
+    A1 --> UC04
+    A1 --> UC05
+    A1 --> UC41
+    A1 --> UC51
+    A1 --> UC52
+    A1 --> UC57
+    
+    %% Advogado Sênior
+    A2 --> UC01
+    A2 --> UC06
+    A2 --> UC07
+    A2 --> UC13
+    A2 --> UC15
+    A2 --> UC20
+    A2 --> UC21
+    A2 --> UC24
+    A2 --> UC29
+    A2 --> UC34
+    A2 --> UC40
+    A2 --> UC47
+    A2 --> UC54
+    A2 --> UC55
+    A2 --> UC66
+    A2 --> UC71
+    
+    %% Advogado Júnior
+    A3 --> UC01
+    A3 --> UC06
+    A3 --> UC09
+    A3 --> UC10
+    A3 --> UC11
+    A3 --> UC13
+    A3 --> UC14
+    A3 --> UC16
+    A3 --> UC18
+    A3 --> UC27
+    A3 --> UC32
+    A3 --> UC35
+    A3 --> UC36
+    A3 --> UC47
+    A3 --> UC66
+    A3 --> UC67
+    
+    %% Estagiário
+    A4 --> UC01
+    A4 --> UC09
+    A4 --> UC10
+    A4 --> UC11
+    A4 --> UC16
+    A4 --> UC31
+    A4 --> UC36
+    A4 --> UC66
+    A4 --> UC68
+    
+    %% Cliente
+    A5 --> UC01
+    A5 --> UC60
+    A5 --> UC61
+    A5 --> UC62
+    A5 --> UC63
+    A5 --> UC64
+    A5 --> UC65
+    A5 --> UC76
+    A5 --> UC77
+    A5 --> UC78
+    
+    %% Sistemas Externos - IA
+    UC13 -.->|usa| S1
+    UC14 -.->|usa| S1
+    UC15 -.->|usa| S1
+    UC16 -.->|usa| S1
+    UC17 -.->|usa| S1
+    UC18 -.->|usa| S1
+    UC19 -.->|usa| S1
+    UC21 -.->|usa| S1
+    
+    %% Sistemas Externos - Tribunais
+    UC07 -.->|consulta| S2
+    UC08 -.->|sincroniza| S2
+    UC06 -.->|valida| S2
+    
+    %% Sistemas Externos - Pagamento
+    UC59 -.->|processa| S3
+    UC64 -.->|processa| S3
+    UC58 -.->|integra| S3
+    
+    %% Sistemas Externos - Comunicação
+    UC38 -.->|envia| S4
+    UC63 -.->|envia| S4
+    
+    %% Relacionamentos include
+    UC06 -.->|include| UC07
+    UC06 -.->|include| UC08
+    UC13 -.->|include| UC32
+    UC34 -.->|include| UC35
+    UC47 -.->|include| UC48
+    UC54 -.->|include| UC49
+    UC64 -.->|include| UC59
+    
+    %% Relacionamentos extend
+    UC29 -.->|extend| UC27
+    UC33 -.->|extend| UC27
+    UC30 -.->|extend| UC74
+    UC72 -.->|extend| UC71
+    
+    style A1 fill:#4A90E2,stroke:#2E5C8A,stroke-width:3px,color:#fff
+    style A2 fill:#50C878,stroke:#2E7D4E,stroke-width:3px,color:#fff
+    style A3 fill:#FFB347,stroke:#E8923F,stroke-width:3px,color:#fff
+    style A4 fill:#9B59B6,stroke:#7D3C98,stroke-width:3px,color:#fff
+    style A5 fill:#E74C3C,stroke:#C0392B,stroke-width:3px,color:#fff
+    
+    style S1 fill:#34495E,stroke:#2C3E50,stroke-width:2px,color:#fff
+    style S2 fill:#34495E,stroke:#2C3E50,stroke-width:2px,color:#fff
+    style S3 fill:#34495E,stroke:#2C3E50,stroke-width:2px,color:#fff
+    style S4 fill:#34495E,stroke:#2C3E50,stroke-width:2px,color:#fff

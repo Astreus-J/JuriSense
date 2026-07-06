@@ -1,0 +1,54 @@
+graph TD
+    subgraph "Camada de Apresentação"
+        FE[Frontend Web/React] --> AG[API Gateway]
+        FM[Frontend Mobile/React Native] --> AG
+        PC[Portal do Cliente] --> AG
+    end
+
+    subgraph "Camada de Negócio (Microserviços)"
+        AG --> AS[Auth Service]
+        AG --> PS[Process Service]
+        AG --> AIS[AI Service]
+        AG --> DS[Document Service]
+        AG --> ANS[Analytics Service]
+        AG --> IS[Integration Service]
+        AG --> NS[Notification Service]
+        AG --> CS[Calendar Service]
+        AG --> FS[Financial Service]
+    end
+
+    subgraph "Camada de Dados"
+        AS --> DB[PostgreSQL - Usuários/Autenticação]
+        PS --> DB
+        PS --> MDB[MongoDB - Processos/Documentos]
+        AIS --> MDB
+        DS --> MDB
+        DS --> ES[Elasticsearch - Busca]
+        ANS --> RDB[Redis - Cache/Filas]
+        ANS --> DB
+        IS --> RDB
+        NS --> RDB
+        CS --> DB
+        FS --> DB
+    end
+
+    subgraph "Sistemas Externos"
+        IS --> T[Tribunais APIs - PJe, e-SAJ]
+        IS --> IA[IA APIs - OpenAI, Anthropic]
+        IS --> PG[Pagamentos - Stripe, PagSeguro]
+        IS --> COM[Comunicação - WhatsApp, SendGrid]
+        IS --> ST[Armazenamento - AWS S3]
+    end
+
+    AG -. WebSocket .-> NS[Notificações em Tempo Real]
+    PS -. Integra .-> IS
+    AIS -. Chama .-> IS
+    DS -. Armazena .-> ST
+    NS -. Envia .-> COM
+    CS -. Sincroniza .-> COM
+    FS -. Processa .-> PG
+    ANS -. Analisa .-> PS
+    ANS -. Analisa .-> FS
+
+    classDef external fill:#f9f,stroke:#333,stroke-width:2px;
+    class T,IA,PG,COM,ST external;

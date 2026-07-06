@@ -1,0 +1,100 @@
+sequenceDiagram
+    participant U as 👤 Usuário
+    participant F as 🖥️ Frontend
+    participant API as 🔌 API Gateway
+    participant PROC as ⚖️ ProcessoService
+    participant DB as 💾 Database
+    participant SCRAPER as 🕷️ ScraperService
+    participant TRIBUNAL as ⚖️ API Tribunal
+    participant SYNC as 🔄 SyncService
+    participant QUEUE as 📬 Queue
+    participant NOTIF as 🔔 NotificacaoService
+    
+    U->>F: Insere número do processo
+    F->>API: POST /processos {numeroProcesso}
+    API->>PROC: cadastrarProcesso(numeroProcesso)
+    
+    PROC->>PROC: validarNumeroCNJ(numeroProcesso)
+    
+    alt Número inválido
+        PROC-->>API: Erro: Número CNJ inválido
+        API-->>F: 400 Bad Request
+        F-->>U: ❌ "Número de processo inválido"
+    end
+    
+    PROC->>DB: Verificar se processo já existe
+    DB-->>PROC: Processo não encontrado
+    
+    PROC->>DB: Identificar tribunal pelo número CNJ
+    DB-->>PROC: Tribunal identificado (TJ-SP)
+    
+    %% Tentativa de consulta via API oficial
+    PROC->>TRIBUNAL: GET /consulta-processo/{numero}
+    
+    alt API Disponível
+        TRIBUNAL-->>PROC: Dados do processo (JSON)
+        PROC->>PROC: parseProcessoData(response)
+    else API Indisponível/Sem Suporte
+        PROC->>SCRAPER: consultarProcesso(tribunal, numero)
+        SCRAPER->>SCRAPER: acessarSiteTribunal(url)
+        SCRAPER->>SCRAPER: resolverCaptcha()
+        SCRAPER->>SCRAPER: extrairDadosProcesso()
+        SCRAPER-->>PROC: Dados do processo (parsed)
+    end
+    
+    %% Salvar processo
+    PROC->>DB: INSERT INTO processo
+    DB-->>PROC: Processo ID gerado
+    
+    PROC->>DB: INSERT INTO partes (autor, réu, etc)
+    PROC->>DB: INSERT INTO movimentacoes iniciais
+    PROC->>DB: INSERT INTO prazos detectados
+    
+    %% Configurar sincronização automática
+    PROC->>SYNC: configurarSincronizacaoAutomatica(processo)
+    SYNC->>DB: INSERT INTO sincronizacao_tribunal
+    SYNC->>QUEUE: Agendar job de sincronização diária
+    QUEUE-->>SYNC: Job agendado
+    
+    %% Notificar responsável
+    PROC->>NOTIF: notificarNovoProcesso(responsavel, processo)
+    NOTIF->>DB: INSERT INTO notificacao
+    NOTIF->>NOTIF: enviarEmail(responsavel)
+    
+    PROC-->>API: {processoId, mensagem: "Processo cadastrado"}
+    API-->>F: 201 Created
+    F-->>U: ✅ "Processo cadastrado e sincronização ativada"
+    
+    %% Sincronização automática periódica (Job assíncrono)
+    Note over QUEUE,DB: Job de sincronização executa diariamente
+    
+    QUEUE->>SYNC: Executar sincronização agendada
+    SYNC->>DB: SELECT processos com sincronizacao_ativa = true
+    DB-->>SYNC: Lista de processos
+    
+    loop Para cada processo
+        SYNC->>TRIBUNAL: Consultar novas movimentações
+        
+        alt Novas movimentações encontradas
+            TRIBUNAL-->>SYNC: Lista de movimentações
+            SYNC->>DB: INSERT INTO movimentacao (novas)
+            
+            SYNC->>PROC: analisarMovimentacoes(novas)
+            PROC->>PROC: detectarPrazos(movimentacoes)
+            
+            alt Prazo detectado
+                PROC->>DB: INSERT INTO prazo
+                PROC->>NOTIF: notificarNovoPrazo(responsavel, prazo)
+                NOTIF->>DB: INSERT INTO notificacao
+                NOTIF->>NOTIF: enviarEmail + SMS
+            end
+            
+            SYNC->>DB: UPDATE sincronizacao_tribunal
+        else Sem novas movimentações
+            SYNC->>DB: UPDATE ultima_sincronizacao
+        end
+    end
+    
+    SYNC->>QUEUE: Reagendar próxima execução (+24h)
+    
+    Note over U,NOTIF: Sistema sincroniza automaticamente<br/>e notifica sobre novidades
