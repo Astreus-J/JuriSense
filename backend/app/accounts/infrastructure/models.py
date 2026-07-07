@@ -4,7 +4,7 @@ from datetime import datetime
 from sqlalchemy import DateTime, ForeignKey, Index, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.accounts.domain.constants import Perfil, StatusUsuario
+from app.accounts.domain.constants import Perfil, Plano, StatusUsuario
 from app.core.db import Base
 
 
@@ -21,6 +21,14 @@ class Organizacao(Base):
     cidade: Mapped[str | None] = mapped_column(String(100), default=None)
     estado: Mapped[str | None] = mapped_column(String(2), default=None)
     cep: Mapped[str | None] = mapped_column(String(9), default=None)
+
+    # Plano comercial e limites derivados dele na criação (None = ilimitado).
+    # Espelha o protótipo Django (plan + user_limit etc.); vira Assinatura na Sprint 4.
+    plano: Mapped[str] = mapped_column(String(20), default=Plano.AUTONOMO.value)
+    limite_usuarios: Mapped[int | None] = mapped_column(default=1)
+    limite_processos: Mapped[int | None] = mapped_column(default=250)
+    limite_armazenamento_gb: Mapped[int | None] = mapped_column(default=15)
+    limite_geracoes_ia_mes: Mapped[int | None] = mapped_column(default=50)
 
     ativo: Mapped[bool] = mapped_column(default=True)
     criado_em: Mapped[datetime] = mapped_column(

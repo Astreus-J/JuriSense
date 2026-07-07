@@ -36,3 +36,23 @@ class UsuarioInativoError(AccountsError):
 class RefreshTokenInvalidoError(AccountsError):
     def __init__(self) -> None:
         super().__init__("Sessão inválida ou expirada")
+
+
+class CpfJaCadastradoError(AccountsError):
+    def __init__(self) -> None:
+        super().__init__("CPF já cadastrado")
+
+
+class OabJaCadastradaError(AccountsError):
+    def __init__(self) -> None:
+        super().__init__("OAB já cadastrada")
+
+
+class LimiteUsuariosAtingidoError(AccountsError):
+    def __init__(self, plano: str, limite: int) -> None:
+        super().__init__(
+            f"Limite de {limite} usuário(s) ativo(s) do plano '{plano}' atingido; "
+            "faça upgrade de plano para adicionar mais usuários"
+        )
+        self.plano = plano
+        self.limite = limite

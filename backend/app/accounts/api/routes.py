@@ -37,6 +37,7 @@ async def register(body: RegisterRequest, session: SessionDep) -> UsuarioRespons
             uf_oab=body.uf_oab,
             cpf=body.cpf,
             telefone=body.telefone,
+            plano=body.plano,
         )
     except SenhaFracaError as exc:
         raise HTTPException(

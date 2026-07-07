@@ -4,6 +4,7 @@ from typing import Annotated, Any
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from app.accounts.domain.constants import Perfil
 from app.accounts.infrastructure.models import Usuario
 from app.accounts.infrastructure.repositories import UsuarioRepository
 from app.accounts.infrastructure.token_store import TokenStore
@@ -46,3 +47,15 @@ async def get_current_user(payload: AccessPayload, session: SessionDep) -> Usuar
 
 
 CurrentUser = Annotated[Usuario, Depends(get_current_user)]
+
+
+async def get_current_admin(usuario: CurrentUser) -> Usuario:
+    if usuario.perfil != Perfil.ADMINISTRADOR.value:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Apenas administradores podem executar esta ação",
+        )
+    return usuario
+
+
+CurrentAdmin = Annotated[Usuario, Depends(get_current_admin)]

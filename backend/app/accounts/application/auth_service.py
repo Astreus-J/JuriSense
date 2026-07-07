@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 import redis.asyncio as aioredis
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.accounts.domain.constants import Perfil
+from app.accounts.domain.constants import LIMITES_POR_PLANO, Perfil, Plano
 from app.accounts.domain.errors import (
     ContaBloqueadaError,
     CredenciaisInvalidasError,
@@ -70,8 +70,9 @@ async def registrar_organizacao(
     uf_oab: str | None = None,
     cpf: str | None = None,
     telefone: str | None = None,
+    plano: Plano = Plano.AUTONOMO,
 ) -> Usuario:
-    """Cria a organização e seu primeiro usuário (administrador)."""
+    """Cria a organização (com os limites do plano escolhido) e seu admin."""
     email = _normalizar_email(email)
     validar_forca_senha(senha)
 
@@ -79,7 +80,15 @@ async def registrar_organizacao(
     if await usuarios.get_by_email(email) is not None:
         raise EmailJaCadastradoError()
 
-    organizacao = Organizacao(nome=organizacao_nome)
+    limites = LIMITES_POR_PLANO[plano]
+    organizacao = Organizacao(
+        nome=organizacao_nome,
+        plano=plano.value,
+        limite_usuarios=limites.usuarios,
+        limite_processos=limites.processos_ativos,
+        limite_armazenamento_gb=limites.armazenamento_gb,
+        limite_geracoes_ia_mes=limites.geracoes_ia_mes,
+    )
     OrganizacaoRepository(session).add(organizacao)
 
     admin = Usuario(

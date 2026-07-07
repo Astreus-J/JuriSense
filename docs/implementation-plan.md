@@ -61,6 +61,8 @@ backend/tests/accounts/      # testes por sprint
 **Objetivo:** admin gerencia a equipe; fluxo de recuperação de senha completo. Cobre RF02 e RF04.
 
 > Encaminhamentos da auditoria S1 (`docs/auditorias/sprint-01.md`): revogação global de sessões por usuário (MED-001, entra na 2.4) e resposta genérica no registro contra enumeração de e-mails (MED-002, entra na 2.5).
+>
+> Antecipado da 2.1/4.3 (espelhando o protótipo Django — TR-006): `POST /api/users` já existe — só admin autenticado cria usuários, sempre na própria organização, respeitando o limite de usuários do plano (org carrega `plano` + limites derivados; a Sprint 4 evolui isso para Assinatura). Restam na 2.1: listar/editar/desativar.
 
 | # | Tarefa | Critérios de aceite | Pontos |
 |---|--------|---------------------|:------:|
