@@ -18,6 +18,13 @@ Decisões de arquitetura e escopo que tinham alternativas reais, registradas na 
 - **Alternativas:** papéis fixos hardcoded (mais simples, mas RF03 exige customização); ABAC/policy engine (Casbin/OPA) — poder que ainda não precisamos.
 - **Sacrifício:** consulta de permissão vira acesso a dado (mitigado com cache); migração futura para permissão por-processo (RF05 completo) exigirá extensão do modelo.
 
+## TR-006 — Mapeamento Accounts espelha o protótipo Django (JuriSense_backend)
+
+- **Fase:** implementação (Sprint 1, 2026-07-07)
+- **Decisão:** alinhar o schema ao protótipo Django: organização com CNPJ/contato/endereço; usuário com CPF, OAB+UF, telefone, `status` (ativo/inativo/bloqueado/pendente), campos 2FA e `ultimo_acesso`, índices (email,status) e (organizacao_id,perfil); permissões **por usuário**×módulo×ação CRUD com `concedido_por` (`permissoes_modulo`), em vez do modelo por perfil planejado no TR-002.
+- **Alternativas:** manter o modelo perfil→módulo do plano original (menos linhas, mas RF05 pede granularidade por usuário e o admin customiza por pessoa); groups/permissions genéricos do Django (acoplado ao framework, não portável).
+- **Sacrifício / adaptações:** seeds por perfil (Sprint 3) precisarão materializar permissões por usuário na criação; duas divergências conscientes do Django: lockout de login fica no Redis (não nas colunas `attempts_login`/`blocked_ate`) e `ativo` é propriedade derivada de `status` (evita dois campos divergirem). Convite, token de recuperação e log de auditoria do Django entram nas Sprints 2 e 5.
+
 ## TR-003 — Planos/assinaturas sem gateway de pagamento na fase 1
 
 - **Fase:** plano (Sprint 4)

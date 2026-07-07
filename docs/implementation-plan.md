@@ -79,7 +79,7 @@ backend/tests/accounts/      # testes por sprint
 
 | # | Tarefa | Critérios de aceite | Pontos |
 |---|--------|---------------------|:------:|
-| 3.1 | Modelo de permissões: perfil → módulo → ação (CRUD) | Seeds dos 5 perfis (Administrador, Adv. Sênior, Adv. Júnior, Estagiário, Cliente) conforme atores A01–A05 do README | 5 |
+| 3.1 | Seeds de permissões por perfil sobre a tabela `permissoes_modulo` (usuário × módulo × ação, criada na S1 espelhando o Django — TR-006) | Criar usuário com um dos 5 perfis (atores A01–A05 do README) materializa suas permissões padrão | 5 |
 | 3.2 | Dependências de autorização FastAPI | `require_permission("modulo", "acao")` como dependência; negação → 403 com log; deny-by-default | 3 |
 | 3.3 | Customização de permissões pelo admin (RF03) | Admin edita permissões de perfis não-admin da própria org; não pode remover o próprio acesso de admin | 3 |
 | 3.4 | Endpoints de consulta | `GET /api/permissions/me` para o frontend montar a UI | 2 |

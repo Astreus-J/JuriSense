@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 import redis.asyncio as aioredis
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.accounts.domain.constants import Perfil
 from app.accounts.domain.errors import (
     ContaBloqueadaError,
     CredenciaisInvalidasError,
@@ -66,6 +67,9 @@ async def registrar_organizacao(
     email: str,
     senha: str,
     oab: str | None = None,
+    uf_oab: str | None = None,
+    cpf: str | None = None,
+    telefone: str | None = None,
 ) -> Usuario:
     """Cria a organização e seu primeiro usuário (administrador)."""
     email = _normalizar_email(email)
@@ -84,7 +88,10 @@ async def registrar_organizacao(
         email=email,
         senha_hash=security.hash_password(senha),
         oab=oab,
-        perfil="administrador",
+        uf_oab=uf_oab,
+        cpf=cpf,
+        telefone=telefone,
+        perfil=Perfil.ADMINISTRADOR.value,
     )
     usuarios.add(admin)
     await session.commit()
@@ -136,6 +143,7 @@ async def login(
         raise UsuarioInativoError()
 
     await lockout.reset(email)
+    usuario.ultimo_acesso = datetime.now(UTC)
     AcessoRepository(session).add(
         Acesso(usuario_id=usuario.id, email=email, ip=ip, user_agent=user_agent, sucesso=True)
     )
