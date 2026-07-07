@@ -12,6 +12,9 @@ class Settings(BaseSettings):
 
     # Banco de dados gerenciado externo (PostgreSQL)
     database_url: str = "postgresql+asyncpg://jurisense:jurisense@localhost:5432/jurisense"
+    database_echo: bool = False
+    database_pool_size: int = 5
+    database_max_overflow: int = 10
 
     # Redis na VPS (cache e filas)
     redis_url: str = "redis://localhost:6379/0"

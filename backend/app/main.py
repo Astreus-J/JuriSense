@@ -6,13 +6,15 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.router import api_router
 from app.core.config import get_settings
+from app.core.db import get_engine
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
-    # Startup: conexões (banco, Redis) serão inicializadas aqui
+    # Startup: o engine é criado sob demanda a partir de DATABASE_URL
     yield
-    # Shutdown: liberação de recursos
+    # Shutdown: encerra as conexões do pool
+    await get_engine().dispose()
 
 
 def create_app() -> FastAPI:
