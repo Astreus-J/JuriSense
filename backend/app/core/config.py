@@ -1,6 +1,9 @@
 from functools import lru_cache
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_DEV_JWT_SECRET = "dev-only-insecure-secret-with-32-bytes-min"  # noqa: S105 — apenas desenvolvimento
 
 
 class Settings(BaseSettings):
@@ -24,6 +27,27 @@ class Settings(BaseSettings):
 
     # CORS: origens permitidas (frontend)
     cors_origins: list[str] = ["http://localhost:3000"]
+
+    # Autenticação (JWT)
+    jwt_secret_key: str = _DEV_JWT_SECRET
+    jwt_algorithm: str = "HS256"
+    access_token_expire_minutes: int = 15
+    refresh_token_expire_days: int = 7
+
+    # Bloqueio de login (RF01: 5 tentativas falhas)
+    login_max_attempts: int = 5
+    login_lockout_minutes: int = 15
+
+    @model_validator(mode="after")
+    def _exige_segredo_em_producao(self) -> "Settings":
+        if self.environment == "production" and (
+            self.jwt_secret_key == _DEV_JWT_SECRET or len(self.jwt_secret_key) < 32
+        ):
+            raise ValueError(
+                "JWT_SECRET_KEY precisa ser definido em produção com ao menos "
+                "32 caracteres (gere com: openssl rand -hex 32)"
+            )
+        return self
 
 
 @lru_cache
