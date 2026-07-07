@@ -56,6 +56,8 @@ backend/tests/accounts/      # testes por sprint
 
 **Total: 21 pontos** · Dependências: 1.1 → 1.2 → (1.4, 1.5); 1.3 → (1.4, 1.5); 1.5 → 1.6.
 
+> **TODO (1.8) — Paridade do sistema de usuários com o protótipo Django (`/home/santos/Astreus_dev/JuriSense_backend`, TR-006):** implementar tudo o que falta para o contexto Accounts ficar praticamente igual ao `apps/accounts` do Django. Já espelhado: schema (org/usuário/permissões/plano+limites), registro de org+admin, criação de usuário por admin com limite do plano. Falta espelhar: listagem/edição/desativação de usuários (`UserModel` + views de CRUD), convites (`Invite`: token, expiração, aceite, reenvio), recuperação de senha (`TokenRecuperationModel`), log de auditoria (`LogAuditoriaModel`: ação, recurso, IP, antes/depois), validação de OAB/CPF (`domain/rules.py`), seeds de permissões por perfil (`UserModulePermission`) e middleware multi-tenant (`middleware/multi_tenant.py`). Executar dentro das Sprints 2/3/5 conforme o mapeamento do plano, sem quebrar os endpoints existentes.
+
 ## Sprint 2 — Gestão de usuários e recuperação de senha
 
 **Objetivo:** admin gerencia a equipe; fluxo de recuperação de senha completo. Cobre RF02 e RF04.
