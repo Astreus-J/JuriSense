@@ -4,7 +4,7 @@ from datetime import datetime
 from sqlalchemy import DateTime, ForeignKey, Index, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.accounts.domain.constants import Perfil, Plano, StatusUsuario
+from app.accounts.domain.constants import Perfil, Plano, StatusConvite, StatusUsuario
 from app.core.db import Base
 
 
@@ -130,6 +130,66 @@ class PermissaoModulo(Base):
 
     usuario: Mapped[Usuario] = relationship(foreign_keys=[usuario_id])
     concedido_por: Mapped[Usuario | None] = relationship(foreign_keys=[concedido_por_id])
+
+
+class TokenRecuperacao(Base):
+    """Token de recuperação de senha (RF02) — espelha TokenRecuperationModel do Django.
+
+    Armazena apenas o hash SHA-256; o token em si só existe no link enviado.
+    """
+
+    __tablename__ = "tokens_recuperacao"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    usuario_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("usuarios.id", ondelete="CASCADE"), index=True
+    )
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    usado: Mapped[bool] = mapped_column(default=False)
+    expira_em: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    criado_em: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    usuario: Mapped[Usuario] = relationship()
+
+
+class Convite(Base):
+    """Convite de usuário para a organização — espelha o Invite do Django."""
+
+    __tablename__ = "convites"
+    __table_args__ = (
+        Index("ix_convites_email_organizacao", "email", "organizacao_id"),
+        Index("ix_convites_status_expira_em", "status", "expira_em"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    email: Mapped[str] = mapped_column(String(320))
+    nome_completo: Mapped[str | None] = mapped_column(String(255), default=None)
+    perfil: Mapped[str] = mapped_column(String(30))
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    status: Mapped[str] = mapped_column(String(20), default=StatusConvite.PENDENTE.value)
+
+    organizacao_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizacoes.id"), index=True)
+    convidado_por_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("usuarios.id", ondelete="SET NULL"), default=None
+    )
+    aceito_por_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("usuarios.id", ondelete="SET NULL"), default=None
+    )
+
+    expira_em: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    aceito_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    criado_em: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    atualizado_em: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    organizacao: Mapped[Organizacao] = relationship()
+    convidado_por: Mapped[Usuario | None] = relationship(foreign_keys=[convidado_por_id])
+    aceito_por: Mapped[Usuario | None] = relationship(foreign_keys=[aceito_por_id])
 
 
 class Acesso(Base):

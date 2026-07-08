@@ -48,6 +48,31 @@ class OabJaCadastradaError(AccountsError):
         super().__init__("OAB já cadastrada")
 
 
+class OabInvalidaError(AccountsError):
+    def __init__(self, motivo: str) -> None:
+        super().__init__(f"OAB inválida: {motivo}")
+
+
+class TokenRecuperacaoInvalidoError(AccountsError):
+    def __init__(self) -> None:
+        super().__init__("Token de recuperação inválido ou expirado")
+
+
+class ConviteInvalidoError(AccountsError):
+    def __init__(self) -> None:
+        super().__init__("Convite inválido, expirado ou já utilizado")
+
+
+class UsuarioNaoEncontradoError(AccountsError):
+    def __init__(self) -> None:
+        super().__init__("Usuário não encontrado")
+
+
+class OperacaoNaoPermitidaError(AccountsError):
+    def __init__(self, motivo: str) -> None:
+        super().__init__(motivo)
+
+
 class LimiteUsuariosAtingidoError(AccountsError):
     def __init__(self, plano: str, limite: int) -> None:
         super().__init__(

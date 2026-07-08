@@ -1,6 +1,8 @@
 """Hash de senha (Argon2id) e emissão/validação de JWT."""
 
 import contextlib
+import hashlib
+import secrets
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -40,6 +42,20 @@ def verify_dummy_password(password: str) -> None:
 
 class TokenError(Exception):
     """Token ausente, inválido, expirado ou do tipo errado."""
+
+
+def generate_opaque_token() -> tuple[str, str]:
+    """Gera um token aleatório para links de e-mail.
+
+    Retorna (token, hash): o token vai no link; apenas o hash SHA-256 é
+    persistido, para que um vazamento do banco não exponha tokens válidos.
+    """
+    token = secrets.token_urlsafe(32)
+    return token, hash_opaque_token(token)
+
+
+def hash_opaque_token(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
 
 
 def _create_token(user_id: uuid.UUID, token_type: str, lifetime: timedelta) -> tuple[str, str]:

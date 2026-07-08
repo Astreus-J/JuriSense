@@ -5,10 +5,13 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.accounts.domain.constants import Perfil
+from app.accounts.domain.ports import EmailSender
+from app.accounts.infrastructure.email import ConsoleEmailSender, SMTPEmailSender
 from app.accounts.infrastructure.models import Usuario
 from app.accounts.infrastructure.repositories import UsuarioRepository
 from app.accounts.infrastructure.token_store import TokenStore
 from app.core import security
+from app.core.config import get_settings
 from app.core.db import SessionDep
 from app.core.redis import RedisDep
 
@@ -59,3 +62,12 @@ async def get_current_admin(usuario: CurrentUser) -> Usuario:
 
 
 CurrentAdmin = Annotated[Usuario, Depends(get_current_admin)]
+
+
+def get_email_sender() -> EmailSender:
+    if get_settings().smtp_host:
+        return SMTPEmailSender()
+    return ConsoleEmailSender()
+
+
+EmailDep = Annotated[EmailSender, Depends(get_email_sender)]

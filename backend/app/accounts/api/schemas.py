@@ -3,7 +3,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
-from app.accounts.domain.constants import Perfil, Plano
+from app.accounts.domain.constants import Perfil, Plano, StatusConvite, StatusUsuario
 
 
 class RegisterRequest(BaseModel):
@@ -27,6 +27,57 @@ class CreateUserRequest(BaseModel):
     uf_oab: str | None = Field(default=None, min_length=2, max_length=2)
     cpf: str | None = Field(default=None, max_length=14)
     telefone: str | None = Field(default=None, max_length=20)
+
+
+class UpdateUserRequest(BaseModel):
+    """PATCH parcial: apenas os campos enviados são alterados."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    nome_completo: str | None = Field(default=None, min_length=2, max_length=255)
+    telefone: str | None = Field(default=None, max_length=20)
+    perfil: Perfil | None = None
+    status: StatusUsuario | None = None
+    oab: str | None = Field(default=None, max_length=10)
+    uf_oab: str | None = Field(default=None, min_length=2, max_length=2)
+    cpf: str | None = Field(default=None, max_length=14)
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(min_length=1, max_length=128)
+    nova_senha: str = Field(min_length=1, max_length=128)
+
+
+class InviteRequest(BaseModel):
+    email: EmailStr
+    perfil: Perfil
+    nome_completo: str | None = Field(default=None, min_length=2, max_length=255)
+
+
+class AcceptInviteRequest(BaseModel):
+    token: str = Field(min_length=1, max_length=128)
+    senha: str = Field(min_length=1, max_length=128)
+    nome_completo: str | None = Field(default=None, min_length=2, max_length=255)
+
+
+class ConviteResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    email: EmailStr
+    nome_completo: str | None
+    perfil: str
+    status: StatusConvite
+    expira_em: datetime
+    criado_em: datetime
+
+
+class MessageResponse(BaseModel):
+    detail: str
 
 
 class LoginRequest(BaseModel):

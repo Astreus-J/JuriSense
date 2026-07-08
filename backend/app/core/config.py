@@ -1,9 +1,35 @@
 from functools import lru_cache
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _DEV_JWT_SECRET = "dev-only-insecure-secret-with-32-bytes-min"  # noqa: S105 — apenas desenvolvimento
+
+
+def _normalizar_database_url(url: str) -> str:
+    """Aceita URLs no formato libpq (como provedores gerenciados entregam)
+    e converte para o dialeto asyncpg do SQLAlchemy.
+
+    - postgresql:// → postgresql+asyncpg://
+    - sslmode=... → ssl=... (asyncpg não conhece sslmode)
+    - remove channel_binding (não suportado pelo asyncpg)
+    - endpoints com pooler (PgBouncer, ex.: Neon "-pooler") ganham
+      prepared_statement_cache_size=0, obrigatório em pool transacional
+    """
+    if url.startswith("postgresql://"):
+        url = "postgresql+asyncpg://" + url.removeprefix("postgresql://")
+    if not url.startswith("postgresql+asyncpg://"):
+        return url
+
+    partes = urlsplit(url)
+    query = dict(parse_qsl(partes.query))
+    if "sslmode" in query:
+        query["ssl"] = query.pop("sslmode")
+    query.pop("channel_binding", None)
+    if "-pooler" in (partes.hostname or "") and "prepared_statement_cache_size" not in query:
+        query["prepared_statement_cache_size"] = "0"
+    return urlunsplit(partes._replace(query=urlencode(query)))
 
 
 class Settings(BaseSettings):
@@ -37,6 +63,25 @@ class Settings(BaseSettings):
     # Bloqueio de login (RF01: 5 tentativas falhas)
     login_max_attempts: int = 5
     login_lockout_minutes: int = 15
+
+    # E-mail (SMTP); sem SMTP_HOST configurado, e-mails vão para o log (dev)
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_user: str | None = None
+    smtp_password: str | None = None
+    email_from: str = "JuriSense <no-reply@jurisense.local>"
+
+    # URL base do frontend usada nos links de e-mails
+    frontend_url: str = "http://localhost:3000"
+
+    # Recuperação de senha (RF02) e convites
+    password_reset_expire_minutes: int = 60
+    invite_expire_days: int = 7
+
+    @model_validator(mode="after")
+    def _ajusta_database_url(self) -> "Settings":
+        self.database_url = _normalizar_database_url(self.database_url)
+        return self
 
     @model_validator(mode="after")
     def _exige_segredo_em_producao(self) -> "Settings":

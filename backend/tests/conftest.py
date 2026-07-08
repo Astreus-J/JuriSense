@@ -6,10 +6,21 @@ from fakeredis import FakeAsyncRedis
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
+from app.accounts.api.deps import get_email_sender
 from app.accounts.infrastructure import models  # noqa: F401 — registra as tabelas na Base
 from app.core.db import Base, get_session
 from app.core.redis import get_redis
 from app.main import app
+
+
+class CapturingEmailSender:
+    """Captura e-mails enviados durante os testes."""
+
+    def __init__(self) -> None:
+        self.messages: list[dict[str, str]] = []
+
+    async def send(self, *, to: str, subject: str, body: str) -> None:
+        self.messages.append({"to": to, "subject": subject, "body": body})
 
 
 @pytest.fixture
@@ -31,8 +42,13 @@ async def db_session_factory(db_engine: AsyncEngine) -> async_sessionmaker:
 
 
 @pytest.fixture
+def sent_emails() -> CapturingEmailSender:
+    return CapturingEmailSender()
+
+
+@pytest.fixture
 async def client(
-    db_session_factory: async_sessionmaker,
+    db_session_factory: async_sessionmaker, sent_emails: CapturingEmailSender
 ) -> AsyncIterator[httpx.AsyncClient]:
     async def override_session():
         async with db_session_factory() as session:
@@ -41,6 +57,7 @@ async def client(
     fake_redis = FakeAsyncRedis(decode_responses=True)
     app.dependency_overrides[get_session] = override_session
     app.dependency_overrides[get_redis] = lambda: fake_redis
+    app.dependency_overrides[get_email_sender] = lambda: sent_emails
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as async_client:

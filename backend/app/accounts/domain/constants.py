@@ -45,6 +45,22 @@ LIMITES_POR_PLANO: dict[Plano, LimitesPlano] = {
 }
 
 
+class StatusConvite(StrEnum):
+    PENDENTE = "pendente"
+    ACEITO = "aceito"
+    EXPIRADO = "expirado"
+    CANCELADO = "cancelado"
+
+
+UFS_BRASIL = frozenset(
+    [
+        "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO",
+        "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI",
+        "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO",
+    ]
+)
+
+
 class Modulo(StrEnum):
     PROCESSOS = "processos"
     DOCUMENTOS = "documentos"

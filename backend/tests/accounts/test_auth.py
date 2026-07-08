@@ -28,19 +28,26 @@ async def _login(
 async def test_register_cria_org_e_admin(client: httpx.AsyncClient) -> None:
     response = await _register(client)
 
-    assert response.status_code == 201
-    body = response.json()
-    assert body["email"] == "ana@exemplo.com"
-    assert body["perfil"] == "administrador"
-    assert body["ativo"] is True
-    assert "senha" not in body and "senha_hash" not in body
+    assert response.status_code == 202
+    assert "senha" not in response.text and "senha_hash" not in response.text
+
+    await _login(client)
+    me = await client.get(
+        "/api/auth/me",
+        headers={"Authorization": f"Bearer {(await _login(client)).json()['access_token']}"},
+    )
+    assert me.json()["email"] == "ana@exemplo.com"
+    assert me.json()["perfil"] == "administrador"
+    assert me.json()["ativo"] is True
 
 
-async def test_register_email_duplicado(client: httpx.AsyncClient) -> None:
-    await _register(client)
-    response = await _register(client, organizacao_nome="Outro Escritório")
+async def test_register_email_duplicado_sem_enumeracao(client: httpx.AsyncClient) -> None:
+    """MED-002: resposta idêntica exista o e-mail ou não."""
+    primeira = await _register(client)
+    segunda = await _register(client, organizacao_nome="Outro Escritório")
 
-    assert response.status_code == 409
+    assert primeira.status_code == segunda.status_code == 202
+    assert primeira.json() == segunda.json()
 
 
 async def test_register_email_normalizado(client: httpx.AsyncClient) -> None:
