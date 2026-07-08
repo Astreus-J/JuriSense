@@ -75,6 +75,8 @@ backend/tests/accounts/      # testes por sprint
 | 2.5 | Serviço de e-mail (porta + adaptador console/dev) | Interface no domínio; adaptador SMTP configurável por env | 2 |
 | 2.6 | **Auditoria de segurança S2** | Foco extra: enumeração de usuários, IDOR no CRUD, tokens de reset | 3 |
 
+**Status: ✅ concluída (2026-07-08).** Todas as tarefas entregues + MED-001/MED-002 corrigidos; auditoria em `docs/auditorias/sprint-02.md` (0 críticos/altos — Sprint 3 desbloqueada). Banco passou a ser o PostgreSQL gerenciado externo (Neon) via `DATABASE_URL` no `backend/.env`, com normalização automática do formato libpq→asyncpg.
+
 **Total: 20 pontos** · Dependências: Sprint 1 completa; 2.5 → (2.2, 2.4).
 
 ## Sprint 3 — Permissões e papéis (RBAC)
