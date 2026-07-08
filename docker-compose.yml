@@ -1,8 +1,9 @@
 # Ambiente de DESENVOLVIMENTO do JuriSense.
-# Em produção (VPS) o banco é gerenciado externo; aqui sobe um Postgres local.
+# O banco é o PostgreSQL gerenciado externo (DATABASE_URL em backend/.env);
+# aqui sobem apenas frontend, backend e Redis.
 # Uso: docker compose up -d
-# Variáveis: todos os valores têm default de desenvolvimento; para sobrescrever,
-# copie .env.example para .env na raiz (o compose lê o .env automaticamente).
+# Variáveis: o backend carrega backend/.env (env_file) e o bloco environment
+# sobrepõe apenas o que muda dentro do container (ex.: host do Redis).
 
 services:
   frontend:
@@ -32,39 +33,19 @@ services:
       - ./backend:/app
       - backend_venv:/app/.venv
       - documents_data:/dados/empresas
+    # DATABASE_URL (banco externo) e demais segredos vêm do backend/.env
+    env_file:
+      - ./backend/.env
     environment:
       ENVIRONMENT: ${ENVIRONMENT:-development}
       DEBUG: ${DEBUG:-true}
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-jurisense}:${POSTGRES_PASSWORD:-jurisense}@db:5432/${POSTGRES_DB:-jurisense}
-      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-only-insecure-secret-with-32-bytes-min}
-      DATABASE_ECHO: ${DATABASE_ECHO:-false}
-      DATABASE_POOL_SIZE: ${DATABASE_POOL_SIZE:-5}
-      DATABASE_MAX_OVERFLOW: ${DATABASE_MAX_OVERFLOW:-10}
+      # Dentro do container o Redis é o serviço "redis", não localhost
       REDIS_URL: redis://redis:6379/0
       DOCUMENTS_ROOT: /dados/empresas
       CORS_ORIGINS: '${CORS_ORIGINS:-["http://localhost:3000"]}'
     depends_on:
-      db:
-        condition: service_healthy
       redis:
         condition: service_healthy
-
-  db:
-    image: postgres:15-alpine
-    container_name: jurisense-db
-    ports:
-      - "5432:5432"
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-jurisense}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-jurisense}
-      POSTGRES_DB: ${POSTGRES_DB:-jurisense}
-    volumes:
-      - db_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
 
   redis:
     image: redis:7-alpine
@@ -80,7 +61,6 @@ services:
       retries: 10
 
 volumes:
-  db_data:
   redis_data:
   documents_data:
   frontend_node_modules:
