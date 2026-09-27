@@ -1,6 +1,6 @@
 # Auditoria de Segurança — Sprint 2 (Accounts: gestão de usuários e recuperação de senha)
 
-**Data:** 2026-07-08 · **Escopo:** código novo da Sprint 2 (recuperação de senha, convites, CRUD de usuários, serviço de e-mail, TokenStore com índice por usuário, normalização de DATABASE_URL) · **Método:** skill `security-review` (OWASP) + checklist do ritual de `docs/implementation-plan.md`.
+**Data:** 2026-07-08 · **Escopo:** código novo da Sprint 2 (recuperação de senha, convites, CRUD de usuários, serviço de e-mail, TokenStore com índice por usuário, normalização de DATABASE_URL) · **Método:** skill `security-review` (OWASP) + checklist do ritual de `docs/_legacy/implementation-plan.md`.
 
 ## Resumo
 

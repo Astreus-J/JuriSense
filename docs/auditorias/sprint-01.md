@@ -1,6 +1,6 @@
 # Auditoria de Segurança — Sprint 1 (Accounts: fundação e autenticação)
 
-**Data:** 2026-07-07 · **Escopo:** código novo da Sprint 1 (`app/core/security.py`, `app/core/config.py`, `app/core/redis.py`, `app/accounts/**`, Alembic, docker-compose) · **Método:** skill `security-review` (OWASP) + checklist do ritual definido em `docs/implementation-plan.md`.
+**Data:** 2026-07-07 · **Escopo:** código novo da Sprint 1 (`app/core/security.py`, `app/core/config.py`, `app/core/redis.py`, `app/accounts/**`, Alembic, docker-compose) · **Método:** skill `security-review` (OWASP) + checklist do ritual definido em `docs/_legacy/implementation-plan.md`.
 
 ## Resumo
 
