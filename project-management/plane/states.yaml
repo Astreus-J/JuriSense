@@ -1,0 +1,42 @@
+# Workflow states for the JuriSense Plane project.
+# Semantics (see docs/07-engineering/project-management.md):
+#   Backlog     -> unplanned / not ready
+#   Ready       -> specification complete, available for implementation (Definition of Ready met)
+#   In Progress -> actively being implemented
+#   In Review   -> code review / validation / QA
+#   Blocked     -> cannot proceed due to an unresolved dependency or problem
+#   Done        -> acceptance criteria satisfied (Definition of Done met)
+#   Cancelled   -> intentionally removed from scope
+#
+# `rename_from` tells the bootstrap script to rename an existing state with that name instead of
+# creating a duplicate (Plane ships "Todo" by default; we rename it to "Ready").
+states:
+  - name: Backlog
+    group: backlog
+    color: "#60646C"
+    description: Unplanned, or not yet ready for implementation.
+  - name: Ready
+    group: unstarted
+    color: "#3E63DD"
+    rename_from: Todo
+    description: Specification and acceptance criteria complete; available to start.
+  - name: In Progress
+    group: started
+    color: "#F59E0B"
+    description: Actively being implemented.
+  - name: In Review
+    group: started
+    color: "#0EA5E9"
+    description: In code review, validation, or QA.
+  - name: Blocked
+    group: started
+    color: "#E5484D"
+    description: Cannot proceed due to an unresolved dependency or problem.
+  - name: Done
+    group: completed
+    color: "#46A758"
+    description: Acceptance criteria satisfied and merged.
+  - name: Cancelled
+    group: cancelled
+    color: "#9AA4BC"
+    description: Intentionally removed from scope.

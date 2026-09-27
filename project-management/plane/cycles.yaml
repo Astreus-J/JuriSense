@@ -1,0 +1,36 @@
+# Cycles, derived from docs/09-planning/milestones.md's week numbering (Week 0 = 2026-09-27, the
+# date this plan was written). 1-week cycles through the hackathon push, per the mission's guidance
+# to use a short cadence until the deadline. Post-hackathon cycles (Phase 9-11) are intentionally NOT
+# pre-created here — their dates would be speculative before M4 lands; create them after the
+# hackathon with real velocity data, per milestones.md's own caveat.
+cycles:
+  - key: cycle-0
+    name: "Cycle 0 — Kickoff & Plane Bootstrap"
+    start_date: "2026-09-27"
+    end_date: "2026-10-03"
+    description: "Week 0. This Plane organization task itself, plus Phase 0 readiness (nothing from the implementation backlog is expected to land this week)."
+  - key: cycle-1
+    name: "Cycle 1 — Foundation & Core Platform"
+    start_date: "2026-10-04"
+    end_date: "2026-10-10"
+    description: "Week 1. Targets Milestone M1: EPIC-0 (Foundation) and EPIC-1 (Core Platform) exit criteria."
+  - key: cycle-2
+    name: "Cycle 2 — Supplier & Contract Intelligence (start)"
+    start_date: "2026-10-11"
+    end_date: "2026-10-17"
+    description: "Week 2. EPIC-2 and EPIC-3 in progress, run in parallel per dependencies.md."
+  - key: cycle-3
+    name: "Cycle 3 — Supplier & Contract Intelligence (finish)"
+    start_date: "2026-10-18"
+    end_date: "2026-10-24"
+    description: "Week 3. Targets Milestone M2: EPIC-2 and EPIC-3 exit criteria (may slip to Week 4-5 if not parallelized, per milestones.md)."
+  - key: cycle-4
+    name: "Cycle 4 — Policy Engine & Compliance"
+    start_date: "2026-10-25"
+    end_date: "2026-10-31"
+    description: "Week 4. Targets Milestone M3: EPIC-4 (Policy Engine, including the ADR-004 spike) and EPIC-5 (Compliance)."
+  - key: cycle-5
+    name: "Cycle 5 — Approvals, Evidence, Blockchain & Submission"
+    start_date: "2026-11-01"
+    end_date: "2026-11-07"
+    description: "Week 5. Targets Milestone M4 (EPIC-6, EPIC-7, EPIC-8 — Hackathon Cut complete) and M5 (hackathon submission). Judging opens 2026-11-05 inside this cycle."

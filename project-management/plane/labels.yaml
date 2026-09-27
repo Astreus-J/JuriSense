@@ -1,0 +1,52 @@
+# Label taxonomy for the JuriSense Plane project: category:value, one normalized naming convention.
+# Labels complement modules (WHAT phase/bounded-context) rather than duplicating them (HOW/what kind
+# of work). See docs/07-engineering/project-management.md for usage rules.
+labels:
+  # Work type
+  - { name: "type:feature", color: "#6366F1" }
+  - { name: "type:bug", color: "#6366F1" }
+  - { name: "type:task", color: "#6366F1" }
+  - { name: "type:spike", color: "#6366F1" }
+  - { name: "type:research", color: "#6366F1" }
+  - { name: "type:refactor", color: "#6366F1" }
+  - { name: "type:security", color: "#6366F1" }
+  - { name: "type:documentation", color: "#6366F1" }
+  - { name: "type:test", color: "#6366F1" }
+  - { name: "type:infrastructure", color: "#6366F1" }
+  - { name: "type:design", color: "#6366F1" }
+
+  # Domain / area
+  - { name: "area:backend", color: "#0EA5E9" }
+  - { name: "area:frontend", color: "#0EA5E9" }
+  - { name: "area:ai", color: "#0EA5E9" }
+  - { name: "area:blockchain", color: "#0EA5E9" }
+  - { name: "area:security", color: "#0EA5E9" }
+  - { name: "area:database", color: "#0EA5E9" }
+  - { name: "area:devops", color: "#0EA5E9" }
+  - { name: "area:ux", color: "#0EA5E9" }
+  - { name: "area:api", color: "#0EA5E9" }
+
+  # Product
+  - { name: "product:gate", color: "#8B5CF6" }
+  - { name: "product:platform", color: "#8B5CF6" }
+
+  # Scope
+  - { name: "scope:hackathon", color: "#F59E0B" }
+  - { name: "scope:commercial", color: "#F59E0B" }
+  - { name: "scope:foundation", color: "#F59E0B" }
+  - { name: "scope:enterprise", color: "#F59E0B" }
+  - { name: "scope:international", color: "#F59E0B" }
+
+  # Risk (mirrors docs/09-planning/risks.md)
+  - { name: "risk:high", color: "#E5484D" }
+  - { name: "risk:medium", color: "#F5A524" }
+  - { name: "risk:low", color: "#46A758" }
+
+  # Technical (kept minimal, per instruction not to create dozens of unused technical labels)
+  - { name: "tech:postgresql", color: "#64748B" }
+  - { name: "tech:docker", color: "#64748B" }
+  - { name: "tech:llm", color: "#64748B" }
+  - { name: "tech:rag", color: "#64748B" }
+
+  # Fallback MVP filter (docs/08-hackathon/fallback-mvp.md's 10-item checklist)
+  - { name: "mvp:required", color: "#EC4899" }

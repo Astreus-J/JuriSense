@@ -1,0 +1,51 @@
+# Modules mirror the 12 roadmap phases (docs/09-planning/roadmap.md) plus 4 cross-cutting concerns.
+# `key` is the stable internal identifier used by scripts/plane/issues_data.py to assign issues.
+modules:
+  - key: foundation
+    name: Foundation
+    description: "Phase 0 — restructure the repository into 8 bounded contexts and migrate the existing, audited Accounts code into Identity & Organizations."
+  - key: core-platform
+    name: Core Platform
+    description: "Phase 1 — cross-cutting platform substrate: RBAC enforcement, frontend app shell, object storage adapter, Integrations scaffold."
+  - key: supplier-intelligence
+    name: Supplier Intelligence
+    description: "Phase 2 — supplier registration, external verification (CNPJ, CEIS/CNEP/CEPIM), and normalized profile state."
+  - key: contract-intelligence
+    name: Contract Intelligence
+    description: "Phase 3 — document ingestion, contract versioning, and AI structured extraction with provenance."
+  - key: policy-engine
+    name: Policy Engine
+    description: "Phase 4 — the YAML rule DSL, ADR-004 CEL compilation spike, evaluation-context normalization, and simulation."
+  - key: compliance-engine
+    name: Compliance Engine
+    description: "Phase 5 — ComplianceReview execution and the ADR-010 APPROVE/REVIEW/BLOCK aggregation engine."
+  - key: approvals-decisions
+    name: Approvals & Decisions
+    description: "Phase 6 — approval workflow routing, the ApprovalRequest state machine, and Decision assembly/override."
+  - key: evidence-audit
+    name: Evidence & Audit
+    description: "Phase 7 — EvidencePackage assembly, Merkle root computation, full audit catalog coverage, and the Decision Passport."
+  - key: blockchain-trust-layer
+    name: Blockchain Trust Layer
+    description: "Phase 8 — the ADR-007 AnchoringProvider spike and BlockchainAnchor implementation. Not the Chainlink integration originally assumed — research found Legal Hack 2026's sponsors are ICP, Constellation Network, and Story Protocol; see ADR-007."
+  - key: integrations
+    name: Integrations
+    description: "Phase 9 (post-hackathon) — outbound webhooks, DocuSign, Slack, and ERP connector groundwork."
+  - key: enterprise
+    name: Enterprise
+    description: "Phase 10 (post-hackathon) — payment gateway integration, Row-Level Security hardening, custom roles, SSO."
+  - key: international
+    name: International
+    description: "Phase 11 (post-hackathon) — the Jurisdiction Pack architecture and the first non-Brazil market."
+  - key: frontend
+    name: Frontend
+    description: "Cross-cutting: the Next.js application shell and screens, including the JuriSense Gate landing-page rewrite."
+  - key: security
+    name: Security
+    description: "Cross-cutting: tenant isolation, secure uploads, dependency/secret scanning, rate limiting, AI-specific security guardrails (docs/07-engineering/security.md)."
+  - key: devops-infra
+    name: DevOps & Infrastructure
+    description: "Cross-cutting: Docker Compose, CI/CD, environment/secrets management, staging/production hosting (docs/07-engineering/ci-cd.md, development-workflow.md)."
+  - key: hackathon
+    name: Hackathon
+    description: "Legal Hack 2026 submission-specific work: pitch, demo video, submission plan, and the Hackathon Cut tracking issue (docs/08-hackathon/)."

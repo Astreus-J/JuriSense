@@ -100,6 +100,17 @@ full hosting model.
   and existing reports in [`docs/auditorias/`](docs/auditorias/).
 - See [`docs/07-engineering/development-workflow.md`](docs/07-engineering/development-workflow.md)
   for local DX, seed data, and the sprint workflow.
+- See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the full contribution workflow, including how work is
+  picked up from Plane.
+
+## Project management
+
+Repository documentation (`docs/`) is the source of truth for *what the system is and why*. The
+**JuriSense Plane project** (workspace `astreus-develop`, project `JURI`) is the source of truth for
+*what work is happening*: issues, priorities, cycles, and the Legal Hack 2026 milestone. See
+[`docs/07-engineering/project-management.md`](docs/07-engineering/project-management.md) for the
+workflow, and [`project-management/plane/`](project-management/plane/) for the Plane configuration
+as code (states, labels, modules, cycles) plus the bootstrap script that applies it.
 
 ## Documentation
 

@@ -22,6 +22,15 @@ The reused `Accounts` code still has Portuguese identifiers (`Organizacao`, `Usu
 predate this rule and are kept in their original language as historical record — do not translate
 them retroactively.
 
+## Project management (Plane)
+
+`docs/` is the source of truth for architecture/product/business decisions; **Plane** (workspace
+`astreus-develop`, project `JURI`) is the source of truth for work planning and execution — issues,
+priorities, cycles, the Hackathon Cut. See `docs/07-engineering/project-management.md` for the
+workflow and `project-management/plane/` for the configuration-as-code + `scripts/plane/bootstrap.py`
+that applies it. When picking up implementation work in this repo, check Plane for the relevant
+Ready issue first rather than inventing scope.
+
 ## Documentation
 
 Full product, domain, architecture, business, and planning documentation lives in `docs/`, indexed
