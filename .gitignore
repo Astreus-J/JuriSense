@@ -5,5 +5,8 @@
 __pycache__/
 *.pyc
 
-# Claude Code local state (settings, agent worktrees)
-.claude/
+# Claude Code local state (ephemeral) -- .claude/agents/ (project subagent
+# definitions) and .claude/skills/ are intentionally NOT ignored; they're
+# committed project configuration, not local state.
+.claude/worktrees/
+.claude/settings.local.json
