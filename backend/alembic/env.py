@@ -6,9 +6,14 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
-from app.accounts.infrastructure import models  # noqa: F401 — registra as tabelas na Base
 from app.core.config import get_settings
 from app.core.db import Base
+from app.evidence.infrastructure import (
+    models as evidence_models,  # noqa: F401 — registers tables on Base
+)
+from app.identity.infrastructure import (
+    models as identity_models,  # noqa: F401 — registers tables on Base
+)
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -19,7 +24,7 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# URL do banco sempre via variável de ambiente / .env (nunca hardcoded no alembic.ini)
+# DB URL always via environment variable / .env (never hardcoded in alembic.ini)
 config.set_main_option("sqlalchemy.url", get_settings().database_url)
 
 target_metadata = Base.metadata
