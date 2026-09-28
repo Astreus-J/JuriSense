@@ -24,7 +24,7 @@ in **Week 10** (2026-12-12).
 - **Definition of done**: the exit criteria of Phase 0 **and** Phase 1 in `roadmap.md` are both met
   — renamed Identity & Organizations schema passing all existing tests under new names, `AuditEvent`
   foundation live, RBAC deny-by-default verified, frontend app shell with working invite/login flow,
-  local MinIO reachable.
+  local s3mock reachable.
 - **Why it matters**: this is the milestone that proves the pivot's foundational bet — that the
   audited Accounts code is genuinely reusable, not a rewrite in disguise — actually holds up in
   practice, before any business-domain feature work begins.

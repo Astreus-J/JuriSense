@@ -52,7 +52,7 @@ does not re-litigate them.
 | Docker Compose | Local dev orchestration | Runs frontend, backend, and Redis with hot reload and named volumes shadowing build artifacts; the existing dev workflow. | `docker-compose.yml`, `docs/07-engineering/development-workflow.md` |
 | Single VPS + Docker Compose | Production hosting | Only the database and AI provider APIs are external; frontend, backend, Celery workers, Redis, and Nginx run on one VPS, fronted by Cloudflare (CDN/WAF). | `docs/00-project/overview.md` |
 | Cloudflare R2 (S3-compatible) | Object storage (prod) | Zero-egress-fee S3-compatible storage for contracts/evidence, with per-organization key prefixes and bucket versioning for immutability. | ADR-008 |
-| MinIO (S3-compatible) | Object storage (dev) | Local, S3-API-compatible stand-in for R2 so the storage abstraction is exercised identically in development and production. | ADR-008 |
+| s3mock (S3-compatible) | Object storage (dev) | Local, S3-API-compatible stand-in for R2 so the storage abstraction is exercised identically in development and production. | ADR-008 |
 | GitHub Actions | CI/CD | Consistent with `gh` CLI already used for this project's GitHub workflow; runs lint/test/security/build stages before deployment. | `docs/07-engineering/ci-cd.md` |
 
 ## AI

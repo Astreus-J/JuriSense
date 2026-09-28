@@ -23,7 +23,7 @@ flowchart TB
         WORK["worker container(s)<br/>Celery worker"]
         BEAT["beat container<br/>Celery beat"]
         REDIS[("redis container<br/>:6379")]
-        MINIO[("minio container (dev only)<br/>:9000")]
+        MINIO[("s3mock container (dev only)<br/>:9090")]
     end
 
     NEON[("PostgreSQL (Neon)<br/>external, managed")]
@@ -80,14 +80,14 @@ These were decided before the pivot to JuriSense Gate and remain exactly as they
   from the same `backend` image with a different entrypoint (`containers.md` §3). Needed because the
   pre-pivot product had no async task processing requirement of this shape; JuriSense Gate's AI
   extraction, registry lookups, and blockchain anchoring all require it.
-- **Object storage** (ADR-008): **MinIO** as a new dev-only container (`containers.md` §5) and
+- **Object storage** (ADR-008): **s3mock** as a new dev-only container (`containers.md` §5) and
   **Cloudflare R2** as a new *external* dependency in production — added alongside Neon Postgres and
   the AI provider APIs as the third external service the VPS depends on. This directly supersedes the
   pre-pivot plan of storing documents on the VPS filesystem under `/dados/empresas/{organizacao_id}/`
   with encrypted off-VPS backups (still reflected in the current `documents_data` Docker volume) —
   object storage gets versioning and durability "for free" instead of hand-rolled backup scripting
   (ADR-008's own stated rationale). The `documents_data` volume is not deleted immediately; it is
-  phased out as new uploads move to R2/MinIO (`data-architecture.md` §4.2, `containers.md` §5).
+  phased out as new uploads move to R2/s3mock (`data-architecture.md` §4.2, `containers.md` §5).
 - **`AnchoringProvider` network egress** (ADR-007): a new category of *outbound-only* external
   dependency — the VPS's Celery workers make outbound HTTPS/RPC calls to submit hashes and poll
   proofs (`blockchain-architecture.md` §2). No inbound connection from the anchoring network is ever
@@ -116,7 +116,7 @@ deployment picture, not as a frozen contract):
 | Group | Purpose | Dev default | Prod requirement |
 |---|---|---|---|
 | `CELERY_BROKER_URL` / `CELERY_RESULT_BACKEND` | Point Celery at Redis | Reuses `REDIS_URL` | Same pattern, required |
-| `OBJECT_STORAGE_ENDPOINT` / `_ACCESS_KEY` / `_SECRET_KEY` / `_BUCKET_DOCUMENTS` / `_BUCKET_EVIDENCE` | S3-compatible client config (ADR-008) | Points at the `minio` container | Points at Cloudflare R2, required, no dev default |
+| `OBJECT_STORAGE_ENDPOINT` / `_ACCESS_KEY` / `_SECRET_KEY` / `_BUCKET_DOCUMENTS` / `_BUCKET_EVIDENCE` | S3-compatible client config (ADR-008) | Points at the `s3mock` container | Points at Cloudflare R2, required, no dev default |
 | `AI_PROVIDER_OPENAI_API_KEY` / `AI_PROVIDER_ANTHROPIC_API_KEY` | AI Gateway credentials (ADR-005) | Required even in dev (no mock provider planned for realistic testing) | Required |
 | `ANCHORING_PROVIDER` / `ANCHORING_PROVIDER_CREDENTIALS` | Selects and authenticates the `AnchoringProvider` adapter (ADR-007) | Dev/test can point at a testnet | Points at whichever network the Phase 8 spike selects |
 

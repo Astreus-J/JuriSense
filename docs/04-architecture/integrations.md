@@ -13,7 +13,7 @@ these would contradict `components.md`'s boundary rules and the `Integration` en
 | Brazilian registry/sanctions adapters (CNPJ, CEIS, CNEP, CEPIM) | **`Integrations`** (adapter code) — but the resulting record is persisted by `Suppliers` | Suppliers is the domain owner of `SupplierCheck`; `Integrations` only knows how to talk to the outside world (§2) |
 | Future webhook/integration platform (DocuSign, Slack, ERPs) | **`Integrations`** | This is the canonical "integration platform" role — inbound/outbound, provider-agnostic dispatch (§4) |
 | AI provider gateway (OpenAI/Anthropic) | **`AI Services`**, per ADR-005 | The AI Gateway is defined as living inside `AI Services`, not `Integrations` — see `ai-architecture.md` and `docs/05-ai/ai-strategy.md` for the strategy itself; described only briefly here (§3) for a complete external-surface picture |
-| Object storage adapter (R2/MinIO) | **Shared kernel (`app/core/storage.py`)**, used directly by `Contracts & Documents` and `Evidence & Audit`, per ADR-008 | Not an "integration" in the business sense — it's core infrastructure every context that touches files needs; routing it through `Integrations` would make document upload depend on a context that has no business reason to be in that path (§3) |
+| Object storage adapter (R2/s3mock) | **Shared kernel (`app/core/storage.py`)**, used directly by `Contracts & Documents` and `Evidence & Audit`, per ADR-008 | Not an "integration" in the business sense — it's core infrastructure every context that touches files needs; routing it through `Integrations` would make document upload depend on a context that has no business reason to be in that path (§3) |
 | `AnchoringProvider` adapter (blockchain) | **`Evidence & Audit`**, per ADR-007 | Anchoring is intrinsic to the Trust Layer's own responsibility, not a generic outbound integration — see `blockchain-architecture.md` (§3) |
 | Email provider (SMTP) | **`Identity & Organizations`** (invites, password reset — already built) and **`Approvals & Decisions`** (notifications) | Pre-existing, domain-agnostic infrastructure concern, not routed through `Integrations` |
 
@@ -90,9 +90,9 @@ repeated checks of the same `tax_id` within a short window.
   error/timeout (ADR-005). Full strategy — model selection, prompt versioning, cost thresholds — is
   `docs/05-ai/ai-strategy.md`'s job; the architectural placement is `ai-architecture.md`'s. It is
   listed here only so the external-dependency map in `system-context.md` is traceable to an owner.
-- **Object storage adapter** (R2/MinIO): lives in `app/core/storage.py`, a thin
+- **Object storage adapter** (R2/s3mock): lives in `app/core/storage.py`, a thin
   `put_object`/`get_object`/`generate_presigned_url` wrapper over the S3 API, instantiated once per
-  process with environment-driven endpoint/credentials (MinIO endpoint in dev, R2 endpoint + access
+  process with environment-driven endpoint/credentials (s3mock endpoint in dev, R2 endpoint + access
   keys in prod). `Contracts & Documents` and `Evidence & Audit` both hold a reference to it; neither
   re-implements S3 client logic.
 

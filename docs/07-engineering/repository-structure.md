@@ -12,7 +12,7 @@ JuriSense/
 ├── backend/                  # Python 3.13 + FastAPI modular monolith (see below)
 ├── frontend/                 # Next.js 16 + React 19 + TypeScript app (see below)
 ├── JuriSense_frontend/       # legacy Vite/React prototype — reference only, not built/deployed
-├── docker-compose.yml        # dev stack: frontend, backend, redis, minio (ADR-008)
+├── docker-compose.yml        # dev stack: frontend, backend, redis, s3mock (ADR-008)
 ├── docs/                     # all product/architecture/engineering documentation (see below)
 └── README.md
 ```

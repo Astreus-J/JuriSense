@@ -19,7 +19,7 @@ C4Context
     System_Ext(openai, "OpenAI API", "LLM provider — structured extraction/classification")
     System_Ext(anthropic, "Anthropic API", "LLM provider — fallback / alternate task routing")
     System_Ext(registries, "Brazilian registry & sanctions sources", "Receita Federal (CNPJ), CEIS, CNEP, CEPIM — public data")
-    System_Ext(storage, "Object storage", "Cloudflare R2 (prod) / MinIO (dev) — documents + evidence packages, ADR-008")
+    System_Ext(storage, "Object storage", "Cloudflare R2 (prod) / s3mock (dev) — documents + evidence packages, ADR-008")
     System_Ext(anchor, "AnchoringProvider network", "Constellation Network / EVM L2 testnet / ICP — candidate set, ADR-007 (Status: TBD, see below)")
     System_Ext(email, "Email provider", "SMTP relay — invites, password reset, approval notifications")
     System_Ext(future, "Future integrations", "DocuSign (e-signature), Slack (notifications), ERPs (procurement sync) — not built yet")
@@ -54,7 +54,7 @@ C4Context
 | OpenAI API | Outbound | Structured extraction, classification, summarization | `AI Services` | ADR-005. Selected per task type via config; see `ai-architecture.md` |
 | Anthropic API | Outbound | Same as above, secondary/fallback provider | `AI Services` | Automatic fallback on error/timeout (ADR-005) |
 | Brazilian registry & sanctions sources (CNPJ/CEIS/CNEP/CEPIM) | Outbound | Verify supplier registration status, corporate structure, sanctions/restriction list membership | `Integrations` (adapter) → consumed by `Suppliers` (owns the resulting `SupplierCheck`) | Jurisdiction Pack — Brazil, see `architecture-overview.md` §5 and `integrations.md` §2 |
-| Object storage (R2 prod / MinIO dev) | Outbound | Durable, versioned storage for uploaded documents and immutable evidence packages | `Contracts & Documents` and `Evidence & Audit` directly (shared storage abstraction, not routed through `Integrations` — ADR-008) | See `data-architecture.md` §4 |
+| Object storage (R2 prod / s3mock dev) | Outbound | Durable, versioned storage for uploaded documents and immutable evidence packages | `Contracts & Documents` and `Evidence & Audit` directly (shared storage abstraction, not routed through `Integrations` — ADR-008) | See `data-architecture.md` §4 |
 | AnchoringProvider network | Outbound | Anchor Evidence Package hashes for third-party-verifiable tamper-evidence | `Evidence & Audit` | ADR-007. **Status: TBD / Current preferred option: Constellation Network, then a generic EVM L2 testnet (Base Sepolia or Polygon Amoy), then ICP/Caffeine AI, in that order / Why undecided: no adapter has been benchmarked yet; the choice depends on SDK maturity and integration effort discovered during the Phase 8 spike / Resolution: implement and benchmark at least one adapter during Phase 8 of the roadmap / Decision artifact: ADR-007, to be updated to Accepted after the spike.** |
 | Email provider | Outbound | Transactional email: invites, password reset, approval notifications | `Identity & Organizations` (invites/password reset, reused from `Accounts`) and `Approvals & Decisions` (notifications) | SMTP today (`backend/app/core/config.py`'s `smtp_*` settings); logs to console when unset in dev |
 | Future integrations (DocuSign, Slack, ERPs) | Bidirectional | E-signature completion webhooks, chat notifications, procurement system sync | `Integrations` | Not built yet; architectural shape defined in `integrations.md` §4 |

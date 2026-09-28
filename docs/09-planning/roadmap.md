@@ -80,7 +80,7 @@ business-domain feature work starts.
 - Frontend app shell in `frontend/`: authenticated layout, organization switcher (`BR-ORG-001`
   — a `User` may hold `Membership` in more than one `Organization`), login/invite-accept screens
   ported from the existing Accounts UI flow, empty role-appropriate dashboard.
-- MinIO added to `docker-compose.yml` for local dev object storage, matching the target Cloudflare
+- s3mock added to `docker-compose.yml` for local dev object storage, matching the target Cloudflare
   R2 production backend (`ADR-008`); a single storage abstraction used by any future
   Contracts/Evidence write.
 - `Integration` entity scaffold (config-only, no real connector) so the `Integrations` context
@@ -91,7 +91,7 @@ business-domain feature work starts.
 **Exit criteria**: an Admin can invite a user into an org with one of the 10 compliance roles, and
 that user sees a role-appropriate empty dashboard on login; a deny-by-default RBAC test (a
 `Viewer` cannot write, a `Procurement` user of Org A cannot read Org B's data) passes; the backend
-dev container can read/write to the local MinIO bucket.
+dev container can read/write to the local s3mock bucket.
 
 **Risks**: RBAC default-grid design may not anticipate every context's real permission needs and
 require re-seeding once Suppliers/Contracts land; the frontend runs on a pre-release Next.js 16

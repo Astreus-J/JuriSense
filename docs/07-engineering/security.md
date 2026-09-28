@@ -78,13 +78,13 @@ themselves have received a malicious file:
   per the hosting model in `docs/00-project/overview.md`), and the Neon PostgreSQL connection uses
   `sslmode`/`ssl` (already handled by `_normalizar_database_url` in `app/core/config.py`, which
   converts libpq `sslmode` to asyncpg's `ssl` parameter). Internal Docker Compose network traffic
-  (backend ↔ Redis, backend ↔ MinIO in dev) is not additionally TLS-wrapped in development, which is
+  (backend ↔ Redis, backend ↔ s3mock in dev) is not additionally TLS-wrapped in development, which is
   an accepted trade-off for the local dev environment only — production inter-service traffic on the
   VPS should stay on a private network segment, not exposed beyond the host.
 - **At rest — database**: relies on Neon's own encryption-at-rest for the managed PostgreSQL instance
   (a managed-provider guarantee, not something this codebase implements) — verify Neon's current
   encryption posture as part of vendor due diligence, not assumed silently.
-- **At rest — object storage**: Cloudflare R2 (prod) and MinIO (dev) — both are S3-compatible and
+- **At rest — object storage**: Cloudflare R2 (prod) and s3mock (dev) — both are S3-compatible and
   support server-side encryption; enable it at the bucket level for R2 in production (ADR-008). Never
   rely on application-level encryption of file contents as a substitute for verifying the storage
   backend's own encryption-at-rest is actually enabled.

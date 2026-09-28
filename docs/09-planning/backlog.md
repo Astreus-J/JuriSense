@@ -180,14 +180,14 @@ between organizations if I hold multiple memberships.
 ### FEATURE-1.3 — Object storage adapter
 
 **STORY-1.3.1**: As a developer, I have a single storage abstraction (`put`/`get`/
-`generate_presigned_url`) that any future context can use to read/write files, backed by MinIO in
+`generate_presigned_url`) that any future context can use to read/write files, backed by s3mock in
 dev and swappable to Cloudflare R2 in production [`ADR-008`].
-- Acceptance criteria: MinIO added to `docker-compose.yml`; a storage port interface is defined once
+- Acceptance criteria: s3mock added to `docker-compose.yml`; a storage port interface is defined once
   and has exactly one dev implementation; a smoke test writes and reads back a file through the
   abstraction.
 - Priority: P0 | Risk: low | Complexity: M | Milestone: M1
 - Dependencies: FEATURE-0.1.
-- Tasks: add MinIO service + volume to compose; implement the storage port + MinIO adapter; write
+- Tasks: add s3mock service + volume to compose; implement the storage port + s3mock adapter; write
   the smoke test.
 
 ### FEATURE-1.4 — Integration scaffold

@@ -1,9 +1,24 @@
-# Ambiente de DESENVOLVIMENTO do JuriSense.
-# O banco é o PostgreSQL gerenciado externo (DATABASE_URL em backend/.env);
-# aqui sobem apenas frontend, backend e Redis.
-# Uso: docker compose up -d
-# Variáveis: o backend carrega backend/.env (env_file) e o bloco environment
-# sobrepõe apenas o que muda dentro do container (ex.: host do Redis).
+# JuriSense DEVELOPMENT environment.
+# The database is the external managed PostgreSQL (DATABASE_URL in backend/.env);
+# this file only brings up frontend, backend, Redis, s3mock (S3-compatible
+# object storage, ADR-008), and a Celery worker (async tasks, ADR-006).
+# Usage: docker compose up -d
+# Variables: the backend loads backend/.env (env_file); the environment block
+# below only overrides what changes inside the container (e.g. the Redis host).
+#
+# Object storage: MinIO was ADR-008's original dev choice, but MinIO stopped
+# publishing freely pullable images (Docker Hub, Quay.io, and its own binary
+# releases all now require authentication/a paid plan). LocalStack (the
+# second choice) was tried next, but its "latest" tag now requires a paid
+# license/auth token to start any service, including S3, and its old
+# free-standing S3-only tag was discontinued in 2026-03. `adobe/s3mock`
+# (Apache-2.0, no license gate -- verified live 2026-09-27: pulls and serves
+# put/get/presigned-URL requests against our exact boto3 client) is used
+# instead: same S3 API surface, same `app/core/storage.py` client code, zero
+# application-code impact. See ADR-008's addendum for the full trail.
+# DEV_STORAGE_ACCESS_KEY/DEV_STORAGE_SECRET_KEY below are DEVELOPMENT-only
+# credentials -- production's real backend is Cloudflare R2, with its own
+# credentials set in backend/.env (STORAGE_*), NEVER these.
 
 services:
   frontend:
@@ -32,19 +47,24 @@ services:
     volumes:
       - ./backend:/app
       - backend_venv:/app/.venv
-      - documents_data:/dados/empresas
-    # DATABASE_URL (banco externo) e demais segredos vêm do backend/.env
+    # DATABASE_URL (external database) and other secrets come from backend/.env
     env_file:
       - ./backend/.env
     environment:
       ENVIRONMENT: ${ENVIRONMENT:-development}
       DEBUG: ${DEBUG:-true}
-      # Dentro do container o Redis é o serviço "redis", não localhost
+      # Inside the container, Redis and the object-storage emulator are the
+      # "redis"/"s3mock" services, not localhost
       REDIS_URL: redis://redis:6379/0
-      DOCUMENTS_ROOT: /dados/empresas
+      STORAGE_ENDPOINT_URL: http://s3mock:9090
+      STORAGE_ACCESS_KEY: ${DEV_STORAGE_ACCESS_KEY:-test}
+      STORAGE_SECRET_KEY: ${DEV_STORAGE_SECRET_KEY:-test}
+      STORAGE_BUCKET: ${STORAGE_BUCKET:-jurisense-dev}
       CORS_ORIGINS: '${CORS_ORIGINS:-["http://localhost:3000"]}'
     depends_on:
       redis:
+        condition: service_healthy
+      s3mock:
         condition: service_healthy
 
   redis:
@@ -60,9 +80,54 @@ services:
       timeout: 3s
       retries: 10
 
+  # S3-compatible object storage for local development (ADR-008 addendum).
+  # Production's real backend is Cloudflare R2 -- same S3 API, credentials
+  # swapped via backend/.env (STORAGE_*), no code change required.
+  s3mock:
+    image: adobe/s3mock:latest
+    container_name: jurisense-s3mock
+    environment:
+      initialBuckets: ${STORAGE_BUCKET:-jurisense-dev}
+    ports:
+      - "9090:9090"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9090/"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Celery worker (ADR-006): processes async tasks using the already
+  # provisioned Redis as broker/result backend. No real tasks are registered
+  # yet (app/core/celery_app.py is just the Celery app instance); future
+  # epics (AI extraction, OCR, notifications) register their tasks on it.
+  celery-worker:
+    build:
+      context: ./backend
+      target: dev
+    container_name: jurisense-celery-worker
+    command: sh -c "uv sync --frozen && uv run celery -A app.core.celery_app worker --loglevel=info"
+    volumes:
+      - ./backend:/app
+      # Its own volume (not shared with backend_venv): two containers running
+      # `uv sync` concurrently against the same volume could corrupt the venv.
+      - celery_venv:/app/.venv
+    env_file:
+      - ./backend/.env
+    environment:
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      DEBUG: ${DEBUG:-true}
+      REDIS_URL: redis://redis:6379/0
+      STORAGE_ENDPOINT_URL: http://s3mock:9090
+      STORAGE_ACCESS_KEY: ${DEV_STORAGE_ACCESS_KEY:-test}
+      STORAGE_SECRET_KEY: ${DEV_STORAGE_SECRET_KEY:-test}
+      STORAGE_BUCKET: ${STORAGE_BUCKET:-jurisense-dev}
+    depends_on:
+      redis:
+        condition: service_healthy
+
 volumes:
   redis_data:
-  documents_data:
   frontend_node_modules:
   frontend_next:
   backend_venv:
+  celery_venv:

@@ -93,7 +93,7 @@ Two storage tiers, per ADR-008 and ADR-009:
 
 ### 4.2 Object storage — documents and evidence (ADR-008)
 
-- **Cloudflare R2** in production, **MinIO** in local dev (`containers.md` §5), both accessed through
+- **Cloudflare R2** in production, **s3mock** in local dev (`containers.md` §5), both accessed through
   a single shared storage abstraction in `app/core/storage.py` — used directly by `Contracts &
   Documents` (uploaded documents) and `Evidence & Audit` (evidence package artifacts), per
   `components.md` rule 11. `Integrations` has no role here.

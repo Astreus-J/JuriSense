@@ -77,9 +77,9 @@ no context outside Policy & Compliance decides outcomes).
 
 ## 6. Implement Document ingestion + object storage adapter
 
-Add MinIO to `docker-compose.yml` for local development (S3-compatible, matching production
+Add s3mock to `docker-compose.yml` for local development (S3-compatible, matching production
 Cloudflare R2 per `ADR-008`). Build a single `ObjectStoragePort` interface (`put`, `get`,
-`generate_presigned_url`) in `app/contracts/domain/ports.py` with a MinIO/R2-compatible adapter in
+`generate_presigned_url`) in `app/contracts/domain/ports.py` with a s3mock/R2-compatible adapter in
 `app/contracts/infrastructure/`. Build the `Document` entity and upload API: accept PDF/DOCX/TXT,
 compute and persist `content_hash` (SHA-256) at upload time, never recomputed or mutated afterward.
 Add basic malware/type-spoofing validation on upload per `SEC-003` before the file is persisted.

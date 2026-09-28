@@ -5,42 +5,23 @@ full 8-bounded-context product.
 
 ## Docker Compose dev stack
 
-The existing `docker-compose.yml` runs `frontend` (3000), `backend` (8000), and `redis` (6379, with
-a healthcheck), with source mounted for hot reload and named volumes shadowing `node_modules`/`.next`/
-`.venv` so container-installed dependencies don't fight the host's. `docker compose up -d` brings up
-everything needed to develop against. Two changes extend this for the full product:
+`docker-compose.yml` runs `frontend` (3000), `backend` (8000), `redis` (6379), `s3mock` (9090), and
+`celery-worker`, all with source mounted for hot reload and named volumes shadowing
+`node_modules`/`.next`/`.venv` so container-installed dependencies don't fight the host's.
+`docker compose up -d` brings up everything needed to develop against.
 
-- **Add a `minio` service (ADR-008)**: local S3-compatible object storage for document/evidence
-  uploads, replacing the pre-pivot `documents_data` filesystem volume as the storage backend
-  developers actually write against (the compose file's current `documents_data:/dados/empresas`
-  volume reflects the superseded pre-ADR-008 filesystem-storage decision and is retired once MinIO is
-  wired in — this doc states the target, the compose file change itself is implementation work, not a
-  documentation-only edit). Concretely:
-
-  ```yaml
-  minio:
-    image: minio/minio:latest
-    container_name: jurisense-minio
-    command: server /data --console-address ":9001"
-    ports:
-      - "9000:9000"   # S3 API
-      - "9001:9001"   # web console
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-jurisense}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-jurisense-dev-only}
-    volumes:
-      - minio_data:/data
-    healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-  ```
-
-  The backend service gains `STORAGE_ENDPOINT_URL`/`STORAGE_ACCESS_KEY`/`STORAGE_SECRET_KEY`/
-  `STORAGE_BUCKET` env vars pointing at `minio:9000` in dev and at the real R2 endpoint/credentials
-  in production (`backend/.env`, gitignored, same pattern as `DATABASE_URL` today) — one storage
-  abstraction in code, environment-driven backend swap, per ADR-008.
+- **`s3mock` (ADR-008)**: local S3-compatible object storage for document/evidence uploads, replacing
+  the pre-pivot `documents_data` filesystem volume. `app/core/storage.py`'s `StoragePort` /
+  `S3CompatibleStorage` is the one abstraction every future context uses; only
+  `STORAGE_ENDPOINT_URL`/`STORAGE_ACCESS_KEY`/`STORAGE_SECRET_KEY`/`STORAGE_BUCKET` change between
+  dev (`s3mock:9090`) and production (real Cloudflare R2 endpoint/credentials in `backend/.env`,
+  gitignored, same pattern as `DATABASE_URL` today). ADR-008 originally specified MinIO for local
+  dev; its addendum explains why the compose file actually runs `adobe/s3mock` instead (MinIO,
+  LocalStack, and MinIO's own binary releases all stopped being freely pullable/runnable without a
+  paid license — verified live before switching).
+- **`celery-worker` (ADR-006)**: runs `celery -A app.core.celery_app worker` against the same Redis
+  already provisioned as broker/result backend. No real tasks are registered yet — future epics
+  (AI extraction, OCR, notifications) add them to `app/core/celery_app.py`'s app instance.
 - **No local Postgres, unchanged**: the database remains the external managed PostgreSQL (Neon),
   loaded via `backend/.env`'s `DATABASE_URL` — this decision (`26e3bf9 chore(docker): remove Postgres
   local`) stands for the full product; adding a local Postgres service would reintroduce the
@@ -51,7 +32,7 @@ everything needed to develop against. Two changes extend this for the full produ
 - `Settings` (`app/core/config.py`, pydantic-settings) is the single source of truth for
   configuration; every new required setting is added there with a typed field, not read ad hoc via
   `os.environ.get()` elsewhere in the codebase.
-- The existing `_exige_segredo_em_producao` validator pattern — refusing to boot in `environment ==
+- The existing `_require_production_secrets` validator pattern — refusing to boot in `environment ==
   "production"` with an insecure default — is the model for every new secret-shaped setting: AI
   provider API keys, object storage credentials, and the eventual `AnchoringProvider` credentials all
   get an equivalent "don't start in production without a real value" guard, not just a type
@@ -131,4 +112,4 @@ product end to end — a seed script populates realistic sample data:
 - Backend: `uv sync`, `uv run uvicorn app.main:app --reload`, `uv run pytest`, `uv run ruff check .`,
   `uv run ruff format .`, `uv run alembic upgrade head`.
 - Frontend: `npm run dev`, `npm run build`, `npm run lint`.
-- Full stack: `docker compose up -d` (frontend, backend, redis, and — once added — minio).
+- Full stack: `docker compose up -d` (frontend, backend, redis, and — once added — s3mock).

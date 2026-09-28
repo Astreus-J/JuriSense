@@ -4,3 +4,6 @@
 # Python
 __pycache__/
 *.pyc
+
+# Claude Code local state (settings, agent worktrees)
+.claude/
