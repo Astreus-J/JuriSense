@@ -279,7 +279,7 @@ ISSUES = [
             acceptance=[
                 "An Admin can invite a user into an org with one of the 10 compliance roles, and that user sees a role-appropriate empty dashboard on login.",
                 "A deny-by-default RBAC test (a Viewer cannot write, a Procurement user of Org A cannot read Org B's data) passes.",
-                "The backend dev container can read/write to the local MinIO bucket.",
+                "The backend dev container can read/write to the local s3mock bucket.",
             ],
             dependencies="Phase 0 (Organization, User, Role, AuditEvent must exist first).",
             refs="docs/09-planning/roadmap.md (Phase 1)",
@@ -358,20 +358,20 @@ ISSUES = [
     },
     {
         "key": "STORY-1.3.1", "parent": "FEATURE-1.3",
-        "title": "Implement storage port with MinIO dev adapter",
+        "title": "Implement storage port with s3mock dev adapter",
         "module": "core-platform", "labels": ["type:infrastructure", "area:backend", "area:devops", "scope:foundation", *HACKATHON_LABELS, "risk:low", "tech:docker"],
         "priority": "high", "state": "Ready", "cycle": "cycle-1",
         "description": desc(
             "As a developer, I have a single storage abstraction (put/get/generate_presigned_url) "
-            "that any future context can use to read/write files, backed by MinIO in dev and "
+            "that any future context can use to read/write files, backed by s3mock in dev and "
             "swappable to Cloudflare R2 in production [ADR-008].",
             acceptance=[
-                "MinIO added to docker-compose.yml.",
+                "s3mock added to docker-compose.yml.",
                 "A storage port interface is defined once and has exactly one dev implementation.",
                 "A smoke test writes and reads back a file through the abstraction.",
             ],
             dependencies="FEATURE-0.1.",
-            tasks=["Add MinIO service + volume to compose.", "Implement the storage port + MinIO adapter.", "Write the smoke test."],
+            tasks=["Add s3mock service + volume to compose.", "Implement the storage port + s3mock adapter.", "Write the smoke test."],
         ),
     },
     {
@@ -1567,14 +1567,14 @@ ISSUES = [
     # ============================================================ Cross-cutting: DevOps & Infra ====
     {
         "key": "DEVOPS-SEED-1", "parent": None,
-        "title": "Extend docker-compose.yml with MinIO and a Celery worker",
+        "title": "Extend docker-compose.yml with s3mock and a Celery worker",
         "module": "devops-infra", "labels": ["type:infrastructure", "area:devops", "scope:foundation", *HACKATHON_LABELS, "risk:low", "tech:docker"],
         "priority": "high", "state": "Ready", "cycle": "cycle-1",
         "description": desc(
             "As a developer, my local dev environment matches the target architecture: object "
-            "storage (MinIO) and an async worker (Celery) alongside the existing frontend/backend/"
+            "storage (s3mock) and an async worker (Celery) alongside the existing frontend/backend/"
             "redis services.",
-            acceptance=["docker compose up -d starts a working MinIO service and a Celery worker service.", "The backend can reach both from within the compose network."],
+            acceptance=["docker compose up -d starts a working s3mock service and a Celery worker service.", "The backend can reach both from within the compose network."],
             refs="ADR-006, ADR-008, docs/07-engineering/development-workflow.md",
         ),
     },
