@@ -34,6 +34,11 @@ services:
       - frontend_next:/app/.next
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api}
+      # Server-side-only override (STORY-1.2.1): Server Components, Route
+      # Handlers, and proxy.ts run inside this container and must reach the
+      # backend by its Compose service name, not by the browser-facing
+      # NEXT_PUBLIC_API_URL (localhost:8000 only resolves from the host/browser).
+      API_URL: ${API_URL:-http://backend:8000/api}
     depends_on:
       - backend
 

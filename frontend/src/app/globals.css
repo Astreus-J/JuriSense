@@ -3,6 +3,41 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /* --- App shell design tokens (STORY-1.2.1) -------------------------------
+   * Additive only: the landing page above does not reference these and is
+   * unaffected. Calm / precise / data-oriented per docs/00-project/principles.md
+   * and the frontend-engineer persona's "Visual direction" — not a generic
+   * AI-gradient palette. Reuses the landing page's blue-600 as --primary so
+   * the marketing site and the authenticated app read as one brand. */
+  --surface: #ffffff;
+  --surface-muted: #f8fafc;
+  --surface-raised: #ffffff;
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --foreground-muted: #64748b;
+
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --primary-foreground: #ffffff;
+
+  --danger: #dc2626;
+  --danger-surface: #fef2f2;
+  --danger-border: #fecaca;
+
+  --warning: #d97706;
+  --warning-surface: #fffbeb;
+  --warning-border: #fde68a;
+
+  --success: #16a34a;
+  --success-surface: #f0fdf4;
+  --success-border: #bbf7d0;
+
+  --info: #0891b2;
+  --info-surface: #ecfeff;
+  --info-border: #a5f3fc;
+
+  --focus-ring: #2563eb;
 }
 
 @theme inline {
@@ -10,12 +45,70 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-surface-raised: var(--surface-raised);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-foreground-muted: var(--foreground-muted);
+
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-foreground: var(--primary-foreground);
+
+  --color-danger: var(--danger);
+  --color-danger-surface: var(--danger-surface);
+  --color-danger-border: var(--danger-border);
+
+  --color-warning: var(--warning);
+  --color-warning-surface: var(--warning-surface);
+  --color-warning-border: var(--warning-border);
+
+  --color-success: var(--success);
+  --color-success-surface: var(--success-surface);
+  --color-success-border: var(--success-border);
+
+  --color-info: var(--info);
+  --color-info-surface: var(--info-surface);
+  --color-info-border: var(--info-border);
+
+  --color-focus-ring: var(--focus-ring);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
+
+    --surface: #0b0f19;
+    --surface-muted: #111827;
+    --surface-raised: #161e2e;
+    --border: #263041;
+    --border-strong: #37415a;
+    --foreground-muted: #94a3b8;
+
+    --primary: #3b82f6;
+    --primary-hover: #60a5fa;
+    --primary-foreground: #0b0f19;
+
+    --danger: #f87171;
+    --danger-surface: #2a1315;
+    --danger-border: #7f1d1d;
+
+    --warning: #fbbf24;
+    --warning-surface: #2a2011;
+    --warning-border: #78350f;
+
+    --success: #4ade80;
+    --success-surface: #10241a;
+    --success-border: #14532d;
+
+    --info: #22d3ee;
+    --info-surface: #0b2530;
+    --info-border: #155e75;
+
+    --focus-ring: #60a5fa;
   }
 }
 
