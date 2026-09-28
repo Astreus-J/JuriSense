@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { Role, SessionUser } from "./types";
+import { isRole, type Role, type SessionUser } from "./types";
 
 /**
  * Thin server-only client for the Identity API (backend/app/identity/api/routes.py
@@ -95,7 +95,14 @@ interface RawUserResponse {
 }
 
 function toSessionUser(raw: RawUserResponse): SessionUser {
-  const role = raw.role as Role;
+  // Found in security review: an unvalidated `as Role` cast let any
+  // unrecognized role string from the backend (a future role added
+  // backend-first, or a data inconsistency) flow straight into
+  // `getNavItemsForRole`, whose `ROLE_NAV_ITEMS[role]` lookup would then be
+  // `undefined` and crash the whole authenticated shell for that user. Fail
+  // safe instead: fall back to the least-privileged role rather than the
+  // unrecognized value.
+  const role: Role = isRole(raw.role) ? raw.role : "viewer";
   return {
     id: raw.id,
     fullName: raw.full_name,

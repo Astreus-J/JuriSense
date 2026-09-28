@@ -12,7 +12,15 @@ export const metadata: Metadata = {
 };
 
 function isSafeNextPath(next: string | undefined): next is string {
-  return typeof next === "string" && next.startsWith("/") && !next.startsWith("//");
+  if (typeof next !== "string" || next.length === 0) return false;
+  if (next[0] !== "/") return false;
+  // A single leading "/" is required, but a *second* "/" or a "\" right
+  // after it produces a scheme-relative URL once a browser normalizes it
+  // (both "//evil.com" and "/\evil.com" resolve to https://evil.com) --
+  // reject both, plus any embedded backslash anywhere as defense in depth
+  // (found in security review: the original check only rejected "//").
+  if (/^\/[/\\]/.test(next) || next.includes("\\")) return false;
+  return true;
 }
 
 interface LoginPageProps {
