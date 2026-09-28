@@ -115,6 +115,22 @@ implications**.
 - Audit implications: establishes the identity root that every `actor_id` elsewhere in the catalog
   ultimately resolves to.
 
+**`user.updated`**
+- Producer: `User` aggregate, on an admin changing a user's `role` and/or `status` via
+  `PATCH /users/{id}` (`app/identity/application/user_service.update_user`). Added after security
+  review found role/status changes were the one Identity mutation left unaudited, unlike every
+  sibling use case (registration, invitation, deactivation).
+- Meaning: an admin changed another user's role and/or account status within the organization —
+  the single most security-sensitive action this endpoint exposes (e.g. granting/revoking admin,
+  demoting a user, reactivating a deactivated one).
+- Payload: `user_id`, `updated_by`, and, only for the field(s) that actually changed,
+  `role: {from, to}` and/or `status: {from, to}`.
+- Consumers: security monitoring for unexpected privilege changes; the `ModulePermission` grid
+  reseed (`reseed_permissions_for_role_change`) that runs in the same transaction.
+- Audit implications: the Decision Passport / Evidence & Audit value proposition depends on being
+  able to answer "who had elevated access, and since when?" for any past decision — this event is
+  the only record of that changing over time.
+
 **`user.login_succeeded`**
 - Producer: `User` aggregate / auth service, on successful authentication.
 - Meaning: a user successfully authenticated (credentials + 2FA where enabled).

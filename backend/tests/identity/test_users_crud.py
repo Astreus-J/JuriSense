@@ -3,8 +3,10 @@
 import uuid
 
 import httpx
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
+from app.evidence.infrastructure.models import AuditEvent
 from app.identity.infrastructure.repositories import MembershipRepository, UserRepository
 
 REGISTRATION = {
@@ -152,6 +154,31 @@ async def test_update_user_syncs_membership_role_and_status(
         assert membership.status == "active"
         user = await UserRepository(session).get_by_id(uuid.UUID(created["id"]))
         assert user.is_active is True
+
+
+async def test_role_change_emits_user_updated_audit_event(
+    client: httpx.AsyncClient, db_session_factory: async_sessionmaker
+) -> None:
+    """Regression: role/status changes via PATCH /api/users/{id} used to leave no audit
+    trail at all -- the one Identity mutation missing an AuditEvent, unlike every sibling
+    use case (registration, invitation, deactivation)."""
+    headers = await _admin_headers(client)
+    created = (await client.post("/api/users", json=NEW, headers=headers)).json()
+
+    await client.patch(
+        f"/api/users/{created['id']}", json={"role": "compliance"}, headers=headers
+    )
+
+    async with db_session_factory() as session:
+        events = (
+            await session.execute(
+                select(AuditEvent).where(AuditEvent.event_type == "user.updated")
+            )
+        ).scalars().all()
+        assert len(events) == 1
+        assert events[0].payload["user_id"] == created["id"]
+        assert events[0].payload["role"] == {"from": "legal", "to": "compliance"}
+        assert "status" not in events[0].payload
 
 
 async def test_reactivation_respects_plan_limit(client: httpx.AsyncClient) -> None:

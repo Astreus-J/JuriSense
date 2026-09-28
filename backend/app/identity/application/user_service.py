@@ -118,6 +118,9 @@ async def update_user(
             if active >= organization.user_limit:
                 raise UserLimitReachedError(organization.plan, organization.user_limit)
 
+    previous_role = user.role
+    previous_status = user.status
+
     for field, value in fields.items():
         setattr(user, field, value.value if hasattr(value, "value") else value)
 
@@ -143,6 +146,34 @@ async def update_user(
                     if user.status == UserStatus.ACTIVE.value
                     else MembershipStatus.REVOKED.value
                 )
+
+    # Found in security review: every other mutation in this context (registration,
+    # invite acceptance, deactivation) emits an AuditEvent, but role/status changes
+    # here -- the single most security-sensitive action this endpoint can take,
+    # e.g. an admin granting themselves-adjacent-user admin, or demoting someone --
+    # left no audit trail at all. The Decision Passport / Evidence & Audit value
+    # proposition (ADR-008) depends on exactly this kind of change being evidenced.
+    if "role" in fields or "status" in fields:
+        await emit_audit_event(
+            session,
+            event_type="user.updated",
+            actor_id=admin.id,
+            organization_id=admin.organization_id,
+            payload={
+                "user_id": str(user.id),
+                "updated_by": str(admin.id),
+                **(
+                    {"role": {"from": previous_role, "to": user.role}}
+                    if "role" in fields
+                    else {}
+                ),
+                **(
+                    {"status": {"from": previous_status, "to": user.status}}
+                    if "status" in fields
+                    else {}
+                ),
+            },
+        )
 
     await session.commit()
     await session.refresh(user)

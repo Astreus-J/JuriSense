@@ -91,7 +91,11 @@ async def invite_user(
     await session.commit()
     await session.refresh(invitation)
 
-    link = f"{settings.frontend_url}/accept-invite?token={token}"
+    # Must match the frontend's actual route (frontend/src/app/invite/accept/page.tsx,
+    # also referenced by frontend/src/proxy.ts's AUTH_ONLY_PAGES) -- a prior mismatch
+    # here (`/accept-invite`) pointed every invite email at a 404 (found in security
+    # review, STORY-1.2.1 follow-up).
+    link = f"{settings.frontend_url}/invite/accept?token={token}"
     await email_sender.send(
         to=email,
         subject="JuriSense — You've been invited",

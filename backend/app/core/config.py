@@ -111,6 +111,17 @@ class Settings(BaseSettings):
                 "STORAGE_ACCESS_KEY/STORAGE_SECRET_KEY must be set in production "
                 "with real Cloudflare R2 credentials (never the s3mock dev credentials)"
             )
+        if self.environment == "production" and not self.smtp_host:
+            # Found in security review (MED-A): with no smtp_host, email sending
+            # silently falls back to ConsoleEmailSender, which logs the full
+            # email body -- including raw password-reset and invite links, i.e.
+            # a bearer-equivalent opaque token -- via logger.info(). A
+            # misconfigured production deploy would ship those tokens into the
+            # application log stream instead of failing to boot.
+            raise ValueError(
+                "SMTP_HOST must be set in production -- without it, password-reset "
+                "and invite links are written to the application log instead of emailed"
+            )
         return self
 
 
