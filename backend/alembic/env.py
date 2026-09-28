@@ -14,6 +14,9 @@ from app.evidence.infrastructure import (
 from app.identity.infrastructure import (
     models as identity_models,  # noqa: F401 — registers tables on Base
 )
+from app.integrations.infrastructure import (
+    models as integrations_models,  # noqa: F401 — registers tables on Base
+)
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

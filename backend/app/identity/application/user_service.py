@@ -11,6 +11,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import security
 from app.evidence.application.audit_service import emit_audit_event
+from app.identity.application.permission_service import (
+    reseed_permissions_for_role_change,
+    seed_default_permissions,
+)
 from app.identity.domain.constants import MembershipStatus, Role, UserStatus
 from app.identity.domain.errors import (
     EmailAlreadyRegisteredError,
@@ -75,6 +79,7 @@ async def create_user(
             status=MembershipStatus.ACTIVE.value,
         )
     )
+    await seed_default_permissions(session, user=user, role=role)
 
     await session.commit()
     await session.refresh(user)
@@ -123,6 +128,13 @@ async def update_user(
         if membership is not None:
             if "role" in fields:
                 membership.role = user.role
+                # Re-provision the ModulePermission grid for the new role -- otherwise a
+                # demoted user keeps their old role's permissions indefinitely, since
+                # has_permission() only ever reads the persisted grid (ADR-012), never
+                # re-derives it from the User's current role.
+                await reseed_permissions_for_role_change(
+                    session, user=user, new_role=Role(user.role)
+                )
             if "status" in fields:
                 # Mirrors deactivate_user's status mapping: only "active" keeps the
                 # Membership active, every other User status revokes it.

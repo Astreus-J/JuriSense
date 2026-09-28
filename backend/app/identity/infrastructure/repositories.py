@@ -8,6 +8,7 @@ from app.identity.infrastructure.models import (
     AccessLog,
     Invitation,
     Membership,
+    ModulePermission,
     Organization,
     PasswordResetToken,
     User,
@@ -160,3 +161,42 @@ class MembershipRepository:
 
     def add(self, membership: Membership) -> None:
         self._session.add(membership)
+
+
+class ModulePermissionRepository:
+    """Per-user x module x organization RBAC grid (ADR-003/ADR-012).
+
+    A row is created for every (user, module) pair at user-creation time from that user's
+    role default grid (`app.identity.domain.rbac.DEFAULT_ROLE_GRID`, wired in
+    `permission_service.seed_default_permissions`); an admin may later edit a specific row
+    to grant a per-user override beyond the role default (STORY-0.2.4).
+    """
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def get_by_user_module(
+        self, user_id: uuid.UUID, organization_id: uuid.UUID, module: str
+    ) -> ModulePermission | None:
+        result = await self._session.execute(
+            select(ModulePermission).where(
+                ModulePermission.user_id == user_id,
+                ModulePermission.organization_id == organization_id,
+                ModulePermission.module == module,
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def list_by_user(
+        self, user_id: uuid.UUID, organization_id: uuid.UUID
+    ) -> list[ModulePermission]:
+        result = await self._session.execute(
+            select(ModulePermission).where(
+                ModulePermission.user_id == user_id,
+                ModulePermission.organization_id == organization_id,
+            )
+        )
+        return list(result.scalars())
+
+    def add(self, module_permission: ModulePermission) -> None:
+        self._session.add(module_permission)

@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core import security
 from app.core.config import get_settings
 from app.evidence.application.audit_service import emit_audit_event
+from app.identity.application.permission_service import seed_default_permissions
 from app.identity.domain.constants import InvitationStatus, MembershipStatus, Role
 from app.identity.domain.errors import (
     EmailAlreadyRegisteredError,
@@ -147,6 +148,7 @@ async def accept_invitation(
         status=MembershipStatus.ACTIVE.value,
     )
     MembershipRepository(session).add(membership)
+    await seed_default_permissions(session, user=user, role=Role(invitation.role))
     await session.flush()
 
     invitation.status = InvitationStatus.ACCEPTED.value

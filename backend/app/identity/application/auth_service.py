@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core import security
 from app.core.config import get_settings
 from app.evidence.application.audit_service import emit_audit_event
+from app.identity.application.permission_service import seed_default_permissions
 from app.identity.domain.constants import PLAN_LIMITS, MembershipStatus, Plan, Role
 from app.identity.domain.errors import (
     AccountLockedError,
@@ -109,6 +110,7 @@ async def register_organization(
             status=MembershipStatus.ACTIVE.value,
         )
     )
+    await seed_default_permissions(session, user=admin, role=Role.ADMIN)
     await emit_audit_event(
         session,
         event_type="organization.created",

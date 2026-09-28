@@ -15,6 +15,9 @@ from app.identity.api.deps import get_email_sender
 from app.identity.infrastructure import (
     models as identity_models,  # noqa: F401 — registers tables on Base
 )
+from app.integrations.infrastructure import (
+    models as integrations_models,  # noqa: F401 — registers tables on Base
+)
 from app.main import app
 
 
