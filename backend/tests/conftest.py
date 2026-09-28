@@ -6,15 +6,20 @@ from fakeredis import FakeAsyncRedis
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
-from app.accounts.api.deps import get_email_sender
-from app.accounts.infrastructure import models  # noqa: F401 — registra as tabelas na Base
 from app.core.db import Base, get_session
 from app.core.redis import get_redis
+from app.evidence.infrastructure import (
+    models as evidence_models,  # noqa: F401 — registers tables on Base
+)
+from app.identity.api.deps import get_email_sender
+from app.identity.infrastructure import (
+    models as identity_models,  # noqa: F401 — registers tables on Base
+)
 from app.main import app
 
 
 class CapturingEmailSender:
-    """Captura e-mails enviados durante os testes."""
+    """Captures emails sent during tests."""
 
     def __init__(self) -> None:
         self.messages: list[dict[str, str]] = []
