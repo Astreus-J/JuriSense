@@ -83,6 +83,38 @@ async def test_fetch_latest_returns_none_when_nothing_found_in_window(
     assert result is None
 
 
+async def test_oversized_download_is_treated_as_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Security review (2026-09-29): defense-in-depth against a zip-bomb -- a response
+    exceeding `_MAX_DOWNLOAD_BYTES` must abort, never be fully buffered."""
+    monkeypatch.setattr(sanctions_source, "_MAX_DOWNLOAD_BYTES", 10)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=_zip_bytes(_CEIS_HEADER + _CEIS_ROW))
+
+    _patch_transport(monkeypatch, handler)
+
+    result = PortalTransparenciaSanctionsSource(max_days_back=0).fetch_latest(SanctionsList.CEIS)
+
+    assert result is None
+
+
+async def test_row_count_is_capped(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sanctions_source, "_MAX_ROWS_PER_EXTRACT", 2)
+    csv_text = _CEIS_HEADER + _CEIS_ROW * 5
+
+    _patch_transport(
+        monkeypatch, lambda request: httpx.Response(200, content=_zip_bytes(csv_text))
+    )
+
+    result = PortalTransparenciaSanctionsSource().fetch_latest(SanctionsList.CEIS)
+
+    assert result is not None
+    _, rows = result
+    assert len(rows) == 2
+
+
 async def test_cepim_uses_entity_shaped_field_names(monkeypatch: pytest.MonkeyPatch) -> None:
     cepim_csv = (
         '"CNPJ ENTIDADE";"NOME ENTIDADE";"NÚMERO CONVÊNIO";'
