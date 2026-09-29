@@ -20,6 +20,20 @@ const VARIANT_CLASSES: Record<Variant, string> = {
   danger: "bg-danger text-white hover:opacity-90",
 };
 
+const BASE_CLASSES =
+  "inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium " +
+  "transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 " +
+  "disabled:cursor-not-allowed disabled:opacity-60";
+
+/**
+ * Shares the Button's visual style with elements that must not be a
+ * `<button>` — e.g. a `Link` styled as a primary action (navigating to
+ * `/suppliers/new`) — without a second, drifting copy of these classes.
+ */
+export function buttonClasses(variant: Variant = "primary", className?: string): string {
+  return cn(BASE_CLASSES, VARIANT_CLASSES[variant], className);
+}
+
 /**
  * The one button primitive the app shell uses. Deliberately small: no size
  * prop yet (nothing in this story needs more than one size) — add variants
@@ -35,13 +49,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       ref={ref}
       disabled={disabled || loading}
       aria-busy={loading || undefined}
-      className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium",
-        "transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2",
-        "disabled:cursor-not-allowed disabled:opacity-60",
-        VARIANT_CLASSES[variant],
-        className,
-      )}
+      className={buttonClasses(variant, className)}
       {...props}
     >
       {loading && <Spinner className="size-4" />}

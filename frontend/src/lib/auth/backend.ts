@@ -45,7 +45,14 @@ async function parseErrorDetail(response: Response): Promise<string> {
   return "Unexpected error communicating with the server.";
 }
 
-async function request<T>(
+/**
+ * The one low-level fetch helper every server-only backend client in this app
+ * should go through (exported so `src/lib/suppliers/backend.ts` and future
+ * bounded-context clients reuse the same base-URL resolution, Bearer-token
+ * attachment, no-store caching, and `ApiError` unwrapping instead of hand
+ * -rolling a second HTTP client with different error handling).
+ */
+export async function request<T>(
   path: string,
   init: RequestInit & { accessToken?: string } = {},
 ): Promise<T> {
