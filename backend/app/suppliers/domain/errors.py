@@ -11,6 +11,11 @@ class SupplierNotFoundError(SupplierError):
         super().__init__("Supplier not found")
 
 
+class InvalidTaxIdError(SupplierError):
+    """SUP-001: the tax_id's shape can't be real for its jurisdiction (e.g. a CNPJ that
+    fails the official checksum) -- a data-quality rejection, not a duplicate."""
+
+
 class DuplicateSupplierError(SupplierError):
     """BR-SUP-002: tax_id + organization_id must be unique."""
 

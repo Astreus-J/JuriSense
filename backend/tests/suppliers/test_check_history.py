@@ -123,7 +123,7 @@ async def test_br_sup_003_approval_rejected_without_any_check(client: httpx.Asyn
     created = (
         await client.post(
             "/api/suppliers",
-            json={"legal_name": "Acme", "tax_id": "44444444000144", "jurisdiction": "BR"},
+            json={"legal_name": "Acme", "tax_id": "44444444000191", "jurisdiction": "BR"},
             headers=headers,
         )
     ).json()
@@ -142,7 +142,7 @@ async def test_can_move_to_blocked_without_a_completed_check(client: httpx.Async
     created = (
         await client.post(
             "/api/suppliers",
-            json={"legal_name": "Acme", "tax_id": "55555555000155", "jurisdiction": "BR"},
+            json={"legal_name": "Acme", "tax_id": "55555555000191", "jurisdiction": "BR"},
             headers=headers,
         )
     ).json()

@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
-import { SUPPLIER_STATUSES, SUPPLIER_STATUS_LABELS } from "@/lib/suppliers/types";
+import { ALLOWED_STATUS_TRANSITIONS, SUPPLIER_STATUS_LABELS } from "@/lib/suppliers/types";
 import type { Supplier, SupplierStatus } from "@/lib/suppliers/types";
 
 interface SupplierDetailActionsProps {
@@ -33,6 +33,8 @@ export function SupplierDetailActions({ supplier, canUpdate }: SupplierDetailAct
   const [recheckStarted, setRecheckStarted] = useState(false);
 
   if (!canUpdate) return null;
+
+  const allowedTargets = ALLOWED_STATUS_TRANSITIONS[supplier.status];
 
   async function handleRecheck() {
     setRechecking(true);
@@ -88,30 +90,35 @@ export function SupplierDetailActions({ supplier, canUpdate }: SupplierDetailAct
   return (
     <div className="flex flex-col items-end gap-3">
       <div className="flex flex-wrap items-center justify-end gap-2">
-        <form onSubmit={handleStatusChange} className="flex items-center gap-2">
-          <label className="sr-only" htmlFor="supplier-next-status">
-            Change supplier status
-          </label>
-          <select
-            id="supplier-next-status"
-            value={nextStatus}
-            onChange={(event) => setNextStatus(event.target.value as SupplierStatus)}
-            disabled={updatingStatus}
-            className="rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-focus-ring"
-          >
-            <option value="">Change status…</option>
-            {SUPPLIER_STATUSES.filter((candidate) => candidate !== supplier.status).map(
-              (candidate) => (
+        {allowedTargets.length > 0 && (
+          <form onSubmit={handleStatusChange} className="flex items-center gap-2">
+            <label className="sr-only" htmlFor="supplier-next-status">
+              Change supplier status
+            </label>
+            <select
+              id="supplier-next-status"
+              value={nextStatus}
+              onChange={(event) => setNextStatus(event.target.value as SupplierStatus)}
+              disabled={updatingStatus}
+              className="rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-focus-ring"
+            >
+              <option value="">Change status…</option>
+              {allowedTargets.map((candidate) => (
                 <option key={candidate} value={candidate}>
                   {SUPPLIER_STATUS_LABELS[candidate]}
                 </option>
-              ),
-            )}
-          </select>
-          <Button type="submit" variant="secondary" loading={updatingStatus} disabled={!nextStatus}>
-            Update
-          </Button>
-        </form>
+              ))}
+            </select>
+            <Button
+              type="submit"
+              variant="secondary"
+              loading={updatingStatus}
+              disabled={!nextStatus}
+            >
+              Update
+            </Button>
+          </form>
+        )}
 
         <Button variant="secondary" onClick={handleRecheck} loading={rechecking}>
           Run verification check

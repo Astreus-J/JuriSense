@@ -89,7 +89,7 @@ async def test_list_scoped_to_own_organization(client: httpx.AsyncClient) -> Non
     headers_b = await register_org_and_login(client, "list-b@example.com")
     await client.post(
         "/api/suppliers",
-        json={"legal_name": "Acme A", "tax_id": "11111111000111", "jurisdiction": "BR"},
+        json={"legal_name": "Acme A", "tax_id": "11111111000191", "jurisdiction": "BR"},
         headers=headers_a,
     )
 
@@ -104,7 +104,7 @@ async def test_list_filters_by_status(client: httpx.AsyncClient) -> None:
     headers = await register_org_and_login(client, "status-filter@example.com")
     await client.post(
         "/api/suppliers",
-        json={"legal_name": "Acme", "tax_id": "22222222000122", "jurisdiction": "BR"},
+        json={"legal_name": "Acme", "tax_id": "22222222000191", "jurisdiction": "BR"},
         headers=headers,
     )
 
@@ -121,7 +121,7 @@ async def test_get_supplier_from_another_org_returns_404(client: httpx.AsyncClie
     created = (
         await client.post(
             "/api/suppliers",
-            json={"legal_name": "Acme", "tax_id": "33333333000133", "jurisdiction": "BR"},
+            json={"legal_name": "Acme", "tax_id": "33333333000191", "jurisdiction": "BR"},
             headers=headers_a,
         )
     ).json()

@@ -19,6 +19,8 @@ from app.suppliers.domain.constants import SupplierStatus
 from app.suppliers.domain.errors import (
     ApprovalRequiresCompletedCheckError,
     DuplicateSupplierError,
+    InvalidStatusTransitionError,
+    InvalidTaxIdError,
     SupplierNotFoundError,
     SupplierProfileNotFoundError,
 )
@@ -51,6 +53,10 @@ async def create_supplier(
         )
     except DuplicateSupplierError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.message) from exc
+    except InvalidTaxIdError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=exc.message
+        ) from exc
     return SupplierResponse.model_validate(supplier)
 
 
@@ -102,7 +108,7 @@ async def update_supplier_status(
         )
     except SupplierNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.message) from exc
-    except ApprovalRequiresCompletedCheckError as exc:
+    except (ApprovalRequiresCompletedCheckError, InvalidStatusTransitionError) as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.message) from exc
     return SupplierResponse.model_validate(supplier)
 

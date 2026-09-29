@@ -25,6 +25,21 @@ export const SUPPLIER_STATUS_LABELS: Record<SupplierStatus, string> = {
   inactive: "Inactive",
 };
 
+/**
+ * Mirrors `ALLOWED_STATUS_TRANSITIONS` in `backend/app/suppliers/domain/constants.py`
+ * exactly. Security/QA review (2026-09-29) found the status dropdown offered every other
+ * status as a target regardless of the current one, actively inviting a 409 the backend
+ * now correctly rejects (e.g. `approved -> prospect`) -- this is a UI-only hint to keep
+ * the dropdown honest; the backend's own guard is what's actually authoritative.
+ */
+export const ALLOWED_STATUS_TRANSITIONS: Record<SupplierStatus, readonly SupplierStatus[]> = {
+  prospect: ["under_review", "blocked"],
+  under_review: ["approved", "blocked"],
+  approved: ["blocked", "inactive"],
+  blocked: ["inactive"],
+  inactive: [],
+};
+
 export interface Supplier {
   id: string;
   organizationId: string;

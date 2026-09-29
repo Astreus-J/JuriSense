@@ -7,12 +7,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.evidence.application.audit_service import emit_audit_event
 from app.suppliers.application import check_service
-from app.suppliers.domain.constants import SupplierCheckStatus, SupplierStatus
+from app.suppliers.domain.constants import (
+    ALLOWED_STATUS_TRANSITIONS,
+    SupplierCheckStatus,
+    SupplierStatus,
+)
 from app.suppliers.domain.errors import (
     ApprovalRequiresCompletedCheckError,
     DuplicateSupplierError,
+    InvalidStatusTransitionError,
     SupplierNotFoundError,
 )
+from app.suppliers.domain.tax_id import validate_tax_id
 from app.suppliers.infrastructure.models import Supplier
 from app.suppliers.infrastructure.repositories import (
     SupplierCheckRepository,
@@ -42,6 +48,7 @@ async def create_supplier(
     SupplierCheck (SUP-002) — BR-SUP-001 (single organization) is enforced by always
     taking `organization_id` from the authenticated caller, never a request payload."""
     normalized_tax_id = _normalize_tax_id(tax_id)
+    validate_tax_id(normalized_tax_id, jurisdiction=jurisdiction)
 
     suppliers = SupplierRepository(session)
     if (
@@ -125,6 +132,15 @@ async def update_supplier_status(
     """
     supplier = await get_supplier(session, organization_id=organization_id, supplier_id=supplier_id)
     previous_status = supplier.status
+
+    # Security/QA review (2026-09-29): this used to accept any target status from any
+    # current one (e.g. `inactive -> prospect`, `approved -> prospect`), silently
+    # ignoring the documented lifecycle diagram entirely.
+    allowed = ALLOWED_STATUS_TRANSITIONS[SupplierStatus(previous_status)]
+    if new_status not in allowed:
+        raise InvalidStatusTransitionError(
+            f"Cannot move a supplier from '{previous_status}' to '{new_status.value}'"
+        )
 
     if new_status == SupplierStatus.APPROVED:
         latest_check = await SupplierCheckRepository(session).get_latest_by_supplier(supplier.id)
