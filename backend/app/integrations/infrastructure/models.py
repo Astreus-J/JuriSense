@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, DateTime, ForeignKey, String, func
+from sqlalchemy import JSON, DateTime, ForeignKey, Index, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -32,4 +32,43 @@ class Integration(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class SanctionsEntry(Base):
+    """One row from a Brazilian sanctions/restriction list bulk extract (CEIS, CNEP or
+    CEPIM — `SanctionsList`), locally indexed by `refresh_sanctions_index`
+    (`app/integrations/infrastructure/tasks.py`) so `SanctionsAdapter` can answer a
+    `SupplierCheck`'s sanctions leg without a live call per check (ADR-017: Portal da
+    Transparência's live query API requires a registered API key we do not
+    self-provision; its public bulk open-data extracts do not).
+
+    Deliberately a **global** reference table, not tenant-scoped: sanctions lists are
+    public, jurisdiction-wide facts, not per-organization data (see
+    `docs/04-architecture/components.md` — only `Supplier`/`SupplierCheck`/
+    `SupplierProfile`, which reference this table's matches, carry `organization_id`).
+
+    Rows for one `list_name` are fully replaced (not accumulated) on each refresh, via
+    `SanctionsRepository.replace_list` — the same "replace, don't accumulate" idea as
+    `SupplierProfile`, applied to reference data instead of per-supplier data.
+    """
+
+    __tablename__ = "sanctions_entries"
+    __table_args__ = (
+        Index("ix_sanctions_entries_list_document", "list_name", "document"),
+        Index("ix_sanctions_entries_list_name_normalized", "list_name", "name_normalized"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    list_name: Mapped[str] = mapped_column(String(10), index=True)
+    # Digits-only CPF/CNPJ of the sanctioned party, when the extract provides one.
+    document: Mapped[str] = mapped_column(String(20), default="")
+    # Uppercased, whitespace-normalized name — matched against a Supplier's legal_name
+    # and, per ADR-017's documented CPF-masking limitation, against responsible-party
+    # names (best-effort; CPFs for partners come masked from the CNPJ registry source).
+    name_normalized: Mapped[str] = mapped_column(String(255), default="")
+    raw: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    extract_date: Mapped[str] = mapped_column(String(10))  # ISO date of the source extract
+    refreshed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
     )
