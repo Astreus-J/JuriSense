@@ -60,3 +60,43 @@ async def test_sanctions_flag_stays_true_after_a_clean_recheck(
         f"/api/suppliers/{supplier_id}/status", json={"status": "approved"}, headers=headers
     )
     assert still_blocked.status_code == 409
+
+
+async def test_carried_forward_flag_flips_true_on_the_inherited_detail(
+    client: httpx.AsyncClient,
+    mock_cnpj_registry,
+    seed_sanctions_index,
+    run_supplier_checks_inline,
+) -> None:
+    """QA review (2026-09-29): the inherited sanctions_detail entries used to keep the
+    `carried_forward: False` stamp from the check that originally found them, forever --
+    actively misleading a Compliance reviewer about whether a listed hit is current
+    evidence (this check found it) or stale evidence (a prior check found it, and it's
+    only still open because nothing has explicitly cleared it).
+    """
+    mock_cnpj_registry(data=ACTIVE_CNPJ_RESPONSE)
+    await seed_sanctions_index(hit_document=TAX_ID)
+    headers = await register_org_and_login(client, "carried-forward@example.com")
+
+    created = (
+        await client.post(
+            "/api/suppliers",
+            json={"legal_name": "Banco do Brasil SA", "tax_id": TAX_ID, "jurisdiction": "BR"},
+            headers=headers,
+        )
+    ).json()
+    supplier_id = created["id"]
+
+    first_profile = (
+        await client.get(f"/api/suppliers/{supplier_id}/profile", headers=headers)
+    ).json()
+    assert first_profile["sanctions_detail"][0]["carried_forward"] is False
+
+    await seed_sanctions_index()
+    await client.post(f"/api/suppliers/{supplier_id}/recheck", headers=headers)
+
+    second_profile = (
+        await client.get(f"/api/suppliers/{supplier_id}/profile", headers=headers)
+    ).json()
+    assert second_profile["sanctions_hit"] is True
+    assert second_profile["sanctions_detail"][0]["carried_forward"] is True

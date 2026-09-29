@@ -154,7 +154,15 @@ def _build_profile_fields(
     if new_hits:
         sanctions_detail = new_hits
     elif previously_flagged:
-        sanctions_detail = previous_profile.sanctions_detail
+        # QA review (2026-09-29): these entries were stamped `carried_forward: False` when
+        # first recorded (as fresh hits, above) -- copying them verbatim across every
+        # subsequent clean re-check left that flag permanently wrong (still `False`
+        # forever), actively misleading a Compliance reviewer about whether a hit is
+        # current or stale evidence. Re-stamp on each inherit instead of mutating the
+        # prior (persisted) profile's own list/dicts in place.
+        sanctions_detail = [
+            {**hit, "carried_forward": True} for hit in previous_profile.sanctions_detail
+        ]
     else:
         sanctions_detail = []
 
