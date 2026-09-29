@@ -1,3 +1,4 @@
+import uuid
 from collections.abc import AsyncIterator
 
 import httpx
@@ -19,6 +20,10 @@ from app.integrations.infrastructure import (
     models as integrations_models,  # noqa: F401 — registers tables on Base
 )
 from app.main import app
+from app.suppliers.application import check_service
+from app.suppliers.infrastructure import (
+    models as suppliers_models,  # noqa: F401 — registers tables on Base
+)
 
 
 class CapturingEmailSender:
@@ -52,6 +57,36 @@ async def db_session_factory(db_engine: AsyncEngine) -> async_sessionmaker:
 @pytest.fixture
 def sent_emails() -> CapturingEmailSender:
     return CapturingEmailSender()
+
+
+@pytest.fixture(autouse=True)
+def stub_supplier_check_enqueue(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Default: registering/re-checking a Supplier in a test does not actually run a
+    SupplierCheck (no network, no Celery/broker) — mirrors `CapturingEmailSender`'s role
+    for email sending. Tests that need a real (mocked-HTTP) check outcome request the
+    opt-in `run_supplier_checks_inline` fixture below instead, which overrides this."""
+
+    async def _noop(check_id: object) -> None:
+        return None
+
+    monkeypatch.setattr(check_service, "enqueue_supplier_check", _noop)
+
+
+@pytest.fixture
+def run_supplier_checks_inline(
+    monkeypatch: pytest.MonkeyPatch, db_session_factory: async_sessionmaker
+) -> None:
+    """Opt-in: runs the real `check_service.run_supplier_check` synchronously against the
+    test database whenever a check is enqueued, in place of a real Celery worker. Tests
+    requesting this fixture must also stub the HTTP layer (see
+    `tests/suppliers/conftest.py`'s `mock_cnpj_registry`) — this fixture does not touch
+    network access by itself, it only removes the Celery/broker dependency."""
+
+    async def _run_inline(check_id: uuid.UUID) -> None:
+        async with db_session_factory() as session:
+            await check_service.run_supplier_check(session, check_id=check_id)
+
+    monkeypatch.setattr(check_service, "enqueue_supplier_check", _run_inline)
 
 
 @pytest.fixture
