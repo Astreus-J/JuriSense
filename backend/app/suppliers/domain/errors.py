@@ -26,6 +26,18 @@ class SupplierCheckNotFoundError(SupplierError):
         super().__init__("Supplier check not found")
 
 
+class SupplierProfileNotFoundError(SupplierError):
+    """No SupplierProfile exists yet -- e.g. the initial SupplierCheck triggered on
+    creation (SUP-002) is still running (Celery is async) or has not yet completed
+    successfully."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "No SupplierProfile yet -- the supplier's verification check has not "
+            "completed successfully"
+        )
+
+
 class InvalidStatusTransitionError(SupplierError):
     def __init__(self, reason: str) -> None:
         super().__init__(reason)
