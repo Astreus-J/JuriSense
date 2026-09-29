@@ -162,11 +162,7 @@ async def update_user(
             payload={
                 "user_id": str(user.id),
                 "updated_by": str(admin.id),
-                **(
-                    {"role": {"from": previous_role, "to": user.role}}
-                    if "role" in fields
-                    else {}
-                ),
+                **({"role": {"from": previous_role, "to": user.role}} if "role" in fields else {}),
                 **(
                     {"status": {"from": previous_status, "to": user.status}}
                     if "status" in fields

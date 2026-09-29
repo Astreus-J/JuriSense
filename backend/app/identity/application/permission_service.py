@@ -64,9 +64,7 @@ async def reseed_permissions_for_role_change(
     overrides for the new role afterward if needed.
     """
     grid = DEFAULT_ROLE_GRID[new_role]
-    existing = await ModulePermissionRepository(session).list_by_user(
-        user.id, user.organization_id
-    )
+    existing = await ModulePermissionRepository(session).list_by_user(user.id, user.organization_id)
     by_module = {row.module: row for row in existing}
     for module, permission in grid.items():
         row = by_module.get(module.value)

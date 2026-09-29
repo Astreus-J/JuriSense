@@ -112,4 +112,3 @@ def get_email_sender() -> EmailSender:
 
 
 EmailDep = Annotated[EmailSender, Depends(get_email_sender)]
-

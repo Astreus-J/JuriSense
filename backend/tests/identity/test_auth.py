@@ -130,9 +130,7 @@ async def test_me_requires_valid_token(client: httpx.AsyncClient) -> None:
     tokens = await _tokens(client)
 
     no_token = await client.get("/api/auth/me")
-    invalid_token = await client.get(
-        "/api/auth/me", headers={"Authorization": "Bearer not-a-jwt"}
-    )
+    invalid_token = await client.get("/api/auth/me", headers={"Authorization": "Bearer not-a-jwt"})
     valid = await client.get(
         "/api/auth/me", headers={"Authorization": f"Bearer {tokens['access_token']}"}
     )
@@ -155,9 +153,7 @@ async def test_refresh_token_does_not_work_as_access(client: httpx.AsyncClient) 
 async def test_refresh_rotates_and_invalidates_previous(client: httpx.AsyncClient) -> None:
     tokens = await _tokens(client)
 
-    first = await client.post(
-        "/api/auth/refresh", json={"refresh_token": tokens["refresh_token"]}
-    )
+    first = await client.post("/api/auth/refresh", json={"refresh_token": tokens["refresh_token"]})
     assert first.status_code == 200
     assert first.json()["refresh_token"] != tokens["refresh_token"]
 

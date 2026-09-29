@@ -153,9 +153,7 @@ async def test_role_change_reseeds_the_permission_grid(
     grid = await _grid_for_user(db_session_factory, user_id)
     _assert_matches_default_grid(grid, Role.PROCUREMENT)
 
-    response = await client.patch(
-        f"/api/users/{user_id}", json={"role": "viewer"}, headers=headers
-    )
+    response = await client.patch(f"/api/users/{user_id}", json={"role": "viewer"}, headers=headers)
     assert response.status_code == 200
 
     grid = await _grid_for_user(db_session_factory, user_id)

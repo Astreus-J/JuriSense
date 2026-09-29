@@ -76,9 +76,7 @@ async def list_invites(admin: CurrentAdmin, session: SessionDep) -> list[Invitat
     return [InvitationResponse.model_validate(i) for i in invitations]
 
 
-@router.post(
-    "/accept-invite", response_model=UserResponse, status_code=status.HTTP_201_CREATED
-)
+@router.post("/accept-invite", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def accept_invite(body: AcceptInviteRequest, session: SessionDep) -> UserResponse:
     """Public endpoint: the invitee sets their password and joins the invitation's organization."""
     try:

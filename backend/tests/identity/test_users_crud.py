@@ -128,9 +128,7 @@ async def test_update_user_syncs_membership_role_and_status(
     headers = await _admin_headers(client)
     created = (await client.post("/api/users", json=NEW, headers=headers)).json()
 
-    await client.patch(
-        f"/api/users/{created['id']}", json={"role": "compliance"}, headers=headers
-    )
+    await client.patch(f"/api/users/{created['id']}", json={"role": "compliance"}, headers=headers)
     async with db_session_factory() as session:
         membership = await MembershipRepository(session).get_by_user_and_organization(
             uuid.UUID(created["id"]), uuid.UUID(created["organization_id"])
@@ -144,9 +142,7 @@ async def test_update_user_syncs_membership_role_and_status(
         )
         assert membership.status == "revoked"
 
-    await client.patch(
-        f"/api/users/{created['id']}", json={"status": "active"}, headers=headers
-    )
+    await client.patch(f"/api/users/{created['id']}", json={"status": "active"}, headers=headers)
     async with db_session_factory() as session:
         membership = await MembershipRepository(session).get_by_user_and_organization(
             uuid.UUID(created["id"]), uuid.UUID(created["organization_id"])
@@ -165,16 +161,18 @@ async def test_role_change_emits_user_updated_audit_event(
     headers = await _admin_headers(client)
     created = (await client.post("/api/users", json=NEW, headers=headers)).json()
 
-    await client.patch(
-        f"/api/users/{created['id']}", json={"role": "compliance"}, headers=headers
-    )
+    await client.patch(f"/api/users/{created['id']}", json={"role": "compliance"}, headers=headers)
 
     async with db_session_factory() as session:
         events = (
-            await session.execute(
-                select(AuditEvent).where(AuditEvent.event_type == "user.updated")
+            (
+                await session.execute(
+                    select(AuditEvent).where(AuditEvent.event_type == "user.updated")
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         assert len(events) == 1
         assert events[0].payload["user_id"] == created["id"]
         assert events[0].payload["role"] == {"from": "legal", "to": "compliance"}

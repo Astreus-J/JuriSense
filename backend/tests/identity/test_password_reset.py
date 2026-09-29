@@ -28,9 +28,7 @@ async def _prepare(client: httpx.AsyncClient, sender: CapturingEmailSender) -> s
 async def test_forgot_does_not_reveal_existence(client: httpx.AsyncClient) -> None:
     await client.post("/api/auth/register", json=REGISTRATION)
 
-    existing = await client.post(
-        "/api/auth/password/forgot", json={"email": REGISTRATION["email"]}
-    )
+    existing = await client.post("/api/auth/password/forgot", json={"email": REGISTRATION["email"]})
     nonexistent = await client.post(
         "/api/auth/password/forgot", json={"email": "nobody@example.com"}
     )

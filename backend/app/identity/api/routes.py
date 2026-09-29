@@ -71,9 +71,7 @@ async def forgot_password(
     body: ForgotPasswordRequest, session: SessionDep, email_sender: EmailDep
 ) -> MessageResponse:
     await password_service.request_password_reset(session, email_sender, email=body.email)
-    return MessageResponse(
-        detail="If the email is registered, we'll send a recovery link."
-    )
+    return MessageResponse(detail="If the email is registered, we'll send a recovery link.")
 
 
 @router.post("/password/reset", response_model=MessageResponse)
@@ -125,9 +123,7 @@ async def login(
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh(body: RefreshRequest, session: SessionDep, redis: RedisDep) -> TokenResponse:
     try:
-        tokens = await auth_service.refresh_tokens(
-            session, redis, refresh_token=body.refresh_token
-        )
+        tokens = await auth_service.refresh_tokens(session, redis, refresh_token=body.refresh_token)
     except InvalidRefreshTokenError as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=exc.message) from exc
     return TokenResponse(access_token=tokens.access_token, refresh_token=tokens.refresh_token)
