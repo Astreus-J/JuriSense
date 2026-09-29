@@ -32,7 +32,10 @@ export default async function SupplierDetailPage({ params }: SupplierDetailPageP
   try {
     supplier = await getSupplier(accessToken, id);
   } catch (error) {
-    if (error instanceof ApiError && error.status === 404) notFound();
+    // A malformed id (not a UUID) is treated the same as "no such supplier" -- there's no
+    // useful distinction to surface to the user, and it avoids routing an invalid-input
+    // case through the generic error boundary instead of the expected not-found page.
+    if (error instanceof ApiError && (error.status === 404 || error.status === 400)) notFound();
     if (error instanceof ApiError && error.status === 403) {
       return (
         <div className="space-y-6">

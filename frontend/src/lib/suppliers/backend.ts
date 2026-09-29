@@ -13,6 +13,29 @@ import type {
 
 export { ApiError };
 
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Security review (2026-09-29): every function below used to interpolate `supplierId`
+ * straight into a backend URL path with no validation. Next.js decodes a dynamic route
+ * segment (`[id]`) before handing it to a Route Handler, so a request like
+ * `PATCH /api/suppliers/..%2Fme/status` arrived here as the literal string `../me`, and
+ * `fetch`'s URL parser then resolved that `..` against the backend base URL -- confirmed
+ * live to redirect the outbound request (carrying the caller's own bearer token) to an
+ * arbitrary backend path (e.g. `/auth/logout`), entirely escaping `/suppliers/{id}` and
+ * even the `/api` prefix. The real backend still enforces its own auth/org-scoping on
+ * whatever path actually resolves, so no privilege escalation was demonstrated, but this
+ * is a confused-deputy primitive that gets more dangerous as more contexts add their own
+ * BFF routes reusing this same interpolation pattern. Every backend supplier id actually
+ * is a UUID, so reject anything else before it ever reaches a template string.
+ */
+function assertValidSupplierId(supplierId: string): void {
+  if (!UUID_PATTERN.test(supplierId)) {
+    throw new ApiError(400, "Invalid supplier id.");
+  }
+}
+
 /**
  * Thin server-only client for the Suppliers API (`backend/app/suppliers/api/routes.py`),
  * following the exact pattern of `src/lib/auth/backend.ts`: reuse its `request()` helper
@@ -119,6 +142,7 @@ export async function listSuppliers(
 }
 
 export async function getSupplier(accessToken: string, supplierId: string): Promise<Supplier> {
+  assertValidSupplierId(supplierId);
   const raw = await request<RawSupplierResponse>(`/suppliers/${supplierId}`, { accessToken });
   return toSupplier(raw);
 }
@@ -132,6 +156,7 @@ export async function getSupplierProfile(
   accessToken: string,
   supplierId: string,
 ): Promise<SupplierProfile | null> {
+  assertValidSupplierId(supplierId);
   try {
     const raw = await request<RawSupplierProfileResponse>(`/suppliers/${supplierId}/profile`, {
       accessToken,
@@ -148,6 +173,7 @@ export async function listSupplierChecks(
   accessToken: string,
   supplierId: string,
 ): Promise<SupplierCheck[]> {
+  assertValidSupplierId(supplierId);
   const raw = await request<RawSupplierCheckResponse[]>(`/suppliers/${supplierId}/checks`, {
     accessToken,
   });
@@ -181,6 +207,7 @@ export async function updateSupplierStatus(
   supplierId: string,
   status: SupplierStatus,
 ): Promise<Supplier> {
+  assertValidSupplierId(supplierId);
   const raw = await request<RawSupplierResponse>(`/suppliers/${supplierId}/status`, {
     method: "PATCH",
     accessToken,
@@ -194,6 +221,7 @@ export async function recheckSupplier(
   accessToken: string,
   supplierId: string,
 ): Promise<SupplierCheck> {
+  assertValidSupplierId(supplierId);
   const raw = await request<RawSupplierCheckResponse>(`/suppliers/${supplierId}/recheck`, {
     method: "POST",
     accessToken,
