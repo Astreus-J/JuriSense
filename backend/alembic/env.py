@@ -20,6 +20,9 @@ from app.identity.infrastructure import (
 from app.integrations.infrastructure import (
     models as integrations_models,  # noqa: F401 — registers tables on Base
 )
+from app.policies.infrastructure import (
+    models as policies_models,  # noqa: F401 — registers tables on Base
+)
 from app.suppliers.infrastructure import (
     models as suppliers_models,  # noqa: F401 — registers tables on Base
 )

@@ -24,6 +24,9 @@ from app.integrations.infrastructure import (
     models as integrations_models,  # noqa: F401 — registers tables on Base
 )
 from app.main import app
+from app.policies.infrastructure import (
+    models as policies_models,  # noqa: F401 — registers tables on Base
+)
 from app.suppliers.application import check_service
 from app.suppliers.infrastructure import (
     models as suppliers_models,  # noqa: F401 — registers tables on Base

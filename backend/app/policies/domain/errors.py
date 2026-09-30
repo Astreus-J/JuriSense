@@ -1,0 +1,58 @@
+class PolicyError(Exception):
+    """Domain error for the Policy & Compliance bounded context."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.message = message
+
+
+class PolicyNotFoundError(PolicyError):
+    def __init__(self) -> None:
+        super().__init__("Policy not found")
+
+
+class PolicyVersionNotFoundError(PolicyError):
+    def __init__(self) -> None:
+        super().__init__("Policy version not found")
+
+
+class RuleNotFoundError(PolicyError):
+    def __init__(self) -> None:
+        super().__init__("Rule not found")
+
+
+class RuleValidationError(PolicyError):
+    """The rule YAML/grammar is malformed, references an unknown context field, or its
+    `when` clause does not compile to a valid CEL expression (#55/#57) -- raised before
+    anything is saved to a draft, never after (`policy-engine.md`: "a syntactically
+    invalid rule is rejected... never silently accepted")."""
+
+
+class DuplicateRuleKeyError(PolicyError):
+    """A `rule.id` (business key, e.g. "LGPD-001") must be unique within one
+    PolicyVersion -- domain-model.md's "Rule" identity."""
+
+    def __init__(self, rule_key: str) -> None:
+        super().__init__(f"A rule with id '{rule_key}' already exists in this policy version")
+        self.rule_key = rule_key
+
+
+class PolicyVersionNotDraftError(PolicyError):
+    """BR-POL-001: a Rule is created/edited only inside a draft PolicyVersion; a
+    published PolicyVersion's rules are frozen permanently."""
+
+    def __init__(self) -> None:
+        super().__init__("Rules can only be created or edited inside a draft policy version")
+
+
+class PublishedRuleImmutableError(PolicyError):
+    """BR-POL-001, enforced at the domain (ORM) layer, not just the service/API layer --
+    see `Rule`'s `@validates` guard in `app.policies.infrastructure.models`."""
+
+    def __init__(self) -> None:
+        super().__init__("A rule belonging to a published policy version cannot be modified")
+
+
+class NoDraftVersionToPublishError(PolicyError):
+    def __init__(self) -> None:
+        super().__init__("Only a draft policy version can be published")
