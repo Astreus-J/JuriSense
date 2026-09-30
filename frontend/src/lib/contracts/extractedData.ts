@@ -64,3 +64,51 @@ export function formatFieldPath(path: string): string {
     })
     .join(" → ");
 }
+
+export type LeafType = "boolean" | "number" | "string" | "object";
+
+/**
+ * QA review (2026-09-30): the confirmation form used to dispatch its input type on
+ * `typeof leaf.value`, which breaks for every nullable leaf whose AI-extracted `value` is
+ * `null` — a documented, legitimate, and specifically *likely* case for exactly the
+ * low-confidence fields this form handles. `typeof null === "object"` is excluded by the
+ * `!== null` guard, so a null boolean/number field fell through to a plain text input,
+ * and a typed correction like "true" was submitted as the literal string `"true"`, not
+ * `true` — silently corrupting the field's type for every downstream consumer (the future
+ * Policy Engine's normalized context expects real booleans/numbers, per
+ * `docs/05-ai/structured-extraction.md`'s mapping table).
+ *
+ * `ExtractedValue.value` is typed `Any` at the Pydantic level (`app/ai_services/domain
+ * /schema.py`) — nothing server-side constrains it either, so this map is the one place
+ * that encodes each field's *intended* type from `structured-extraction.md`'s own
+ * `extractedBoolean`/`extractedNumber`/`extractedString` annotations, keyed by path with
+ * array indices stripped (`"obligations[3]"` -> `"obligations"`,
+ * `"deadlines[1].date"` -> `"deadlines.date"`).
+ */
+const LEAF_TYPE_BY_NORMALIZED_PATH: Record<string, LeafType> = {
+  contract_type: "string",
+  parties: "object",
+  "value.amount": "number",
+  "value.currency": "string",
+  "duration.start_date": "string",
+  "duration.end_date": "string",
+  "duration.auto_renewal": "boolean",
+  "termination.notice_period_days": "number",
+  "termination.termination_for_convenience": "boolean",
+  "termination.termination_for_cause_conditions": "string",
+  "liability.type": "string",
+  "liability.cap": "number",
+  "privacy.processes_personal_data": "boolean",
+  "privacy.dpa_present": "boolean",
+  obligations: "string",
+  subprocessors: "string",
+  jurisdiction: "string",
+  guarantees: "string",
+  penalties: "string",
+  "deadlines.date": "string",
+};
+
+export function expectedTypeForPath(path: string): LeafType {
+  const normalized = path.replace(/\[\d+\]/g, "");
+  return LEAF_TYPE_BY_NORMALIZED_PATH[normalized] ?? "string";
+}

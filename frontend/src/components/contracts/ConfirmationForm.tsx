@@ -9,8 +9,9 @@ import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/cn";
-import { formatFieldPath, getLeafAtPath } from "@/lib/contracts/extractedData";
+import { expectedTypeForPath, formatFieldPath, getLeafAtPath } from "@/lib/contracts/extractedData";
 import { formatConfidence } from "@/lib/format";
+import type { LeafType } from "@/lib/contracts/extractedData";
 import type { ContractFields, ExtractedLeaf } from "@/lib/contracts/types";
 
 const INPUT_CLASSES =
@@ -31,32 +32,40 @@ type FieldMode = "accept" | "correct";
 type FieldState = { mode: FieldMode; raw: string };
 type FormErrorState = { title: string; body?: string } | null;
 
-function initialRawValue(value: unknown): string {
-  if (typeof value === "boolean") return value ? "true" : "false";
-  if (typeof value === "object" && value !== null) return JSON.stringify(value, null, 2);
-  return String(value ?? "");
-}
-
 function describeValue(value: unknown): string {
   if (typeof value === "boolean") return value ? "Yes" : "No";
   if (typeof value === "object" && value !== null) return JSON.stringify(value);
   return String(value ?? "—");
 }
 
+// QA review (2026-09-30): dispatch on the field's documented schema type
+// (`expectedTypeForPath`), never `typeof value` — `value` is frequently `null` for
+// exactly the low-confidence fields this form handles, and `typeof null === "object"`
+// tells you nothing about whether the field is *meant* to be a boolean, a number, or an
+// object. See `expectedTypeForPath`'s own docstring for the full failure mode this
+// replaces.
+function initialRawValue(value: unknown, type: LeafType): string {
+  if (type === "boolean") return value === true ? "true" : value === false ? "false" : "true";
+  if (type === "object") return JSON.stringify(value ?? (Array.isArray(value) ? [] : {}), null, 2);
+  return value === null || value === undefined ? "" : String(value);
+}
+
 function parseCorrectionValue(
-  original: unknown,
+  type: LeafType,
   raw: string,
 ): { ok: true; value: unknown } | { ok: false; error: string } {
-  if (typeof original === "boolean") {
+  if (type === "boolean") {
     if (raw !== "true" && raw !== "false") return { ok: false, error: "Choose Yes or No." };
     return { ok: true, value: raw === "true" };
   }
-  if (typeof original === "number") {
+  if (type === "number") {
+    // Number("") === 0 in JS -- an empty/blank input must not silently become 0.
+    if (raw.trim().length === 0) return { ok: false, error: "Enter a valid number." };
     const parsed = Number(raw);
     if (Number.isNaN(parsed)) return { ok: false, error: "Enter a valid number." };
     return { ok: true, value: parsed };
   }
-  if (typeof original === "object" && original !== null) {
+  if (type === "object") {
     try {
       return { ok: true, value: JSON.parse(raw) };
     } catch {
@@ -70,17 +79,17 @@ function parseCorrectionValue(
 }
 
 function CorrectionInput({
-  original,
+  type,
   value,
   onChange,
   disabled,
 }: {
-  original: unknown;
+  type: LeafType;
   value: string;
   onChange: (value: string) => void;
   disabled: boolean;
 }) {
-  if (typeof original === "boolean") {
+  if (type === "boolean") {
     return (
       <select
         value={value}
@@ -93,7 +102,7 @@ function CorrectionInput({
       </select>
     );
   }
-  if (typeof original === "number") {
+  if (type === "number") {
     return (
       <input
         type="number"
@@ -104,7 +113,7 @@ function CorrectionInput({
       />
     );
   }
-  if (typeof original === "object" && original !== null) {
+  if (type === "object") {
     return (
       <textarea
         value={value}
@@ -115,12 +124,15 @@ function CorrectionInput({
       />
     );
   }
+  // QA review: a free-text correction (e.g. termination_for_cause_conditions) is often
+  // multi-sentence — a single-line <input> was awkward to review/edit; use a textarea
+  // consistently with the object branch above instead.
   return (
-    <input
-      type="text"
+    <textarea
       value={value}
       onChange={(event) => onChange(event.target.value)}
       disabled={disabled}
+      rows={3}
       className={INPUT_CLASSES}
     />
   );
@@ -159,7 +171,10 @@ export function ConfirmationForm({
 
   const [fieldStates, setFieldStates] = useState<Record<string, FieldState>>(() =>
     Object.fromEntries(
-      entries.map(({ path, leaf }) => [path, { mode: "accept" as FieldMode, raw: initialRawValue(leaf.value) }]),
+      entries.map(({ path, leaf }) => [
+        path,
+        { mode: "accept" as FieldMode, raw: initialRawValue(leaf.value, expectedTypeForPath(path)) },
+      ]),
     ),
   );
   const [submitting, setSubmitting] = useState(false);
@@ -210,10 +225,10 @@ export function ConfirmationForm({
     setError(null);
 
     const corrections: Record<string, unknown> = {};
-    for (const { path, leaf } of entries) {
+    for (const { path } of entries) {
       const state = fieldStates[path];
       if (state.mode !== "correct") continue;
-      const parsed = parseCorrectionValue(leaf.value, state.raw);
+      const parsed = parseCorrectionValue(expectedTypeForPath(path), state.raw);
       if (!parsed.ok) {
         setError({ title: "Check your corrections", body: `"${formatFieldPath(path)}": ${parsed.error}` });
         return;
@@ -354,7 +369,7 @@ export function ConfirmationForm({
                 {state.mode === "correct" && (
                   <div className="pl-6">
                     <CorrectionInput
-                      original={leaf.value}
+                      type={expectedTypeForPath(path)}
                       value={state.raw}
                       onChange={(raw) => updateField(path, { raw })}
                       disabled={submitting}
