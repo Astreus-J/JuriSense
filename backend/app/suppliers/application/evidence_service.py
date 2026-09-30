@@ -36,3 +36,30 @@ async def get_normalized_profile(
         address_flag=profile.address_flag,
         cnae_code=profile.cnae_code,
     )
+
+
+async def get_evidence_ref_for_supplier(
+    session: AsyncSession, *, organization_id: uuid.UUID, supplier_id: uuid.UUID
+) -> dict | None:
+    """The evidence-ref counterpart to `get_normalized_profile` (Phase 5's
+    `RuleEvaluation.evidence_refs` traceability, #126): every `supplier.*` context field
+    comes from the same current `SupplierProfile` row (unlike Contracts' per-field
+    `provenance`, `SupplierProfile` has no per-column source -- it is itself the
+    normalized snapshot produced by one `SupplierCheck`), so one evidence-ref dict
+    (`supplier_id`/`supplier_profile_id`/`supplier_check_id`) is traceability enough for
+    any `supplier.*` path a rule references. Returns `None` under the exact same
+    conditions as `get_normalized_profile` (no such supplier in this organization, or no
+    current profile yet)."""
+    supplier = await SupplierRepository(session).get_by_id_and_organization(
+        supplier_id, organization_id
+    )
+    if supplier is None:
+        return None
+    profile = await SupplierProfileRepository(session).get_current_by_supplier(supplier.id)
+    if profile is None:
+        return None
+    return {
+        "supplier_id": str(supplier.id),
+        "supplier_profile_id": str(profile.id),
+        "supplier_check_id": str(profile.source_check_id),
+    }

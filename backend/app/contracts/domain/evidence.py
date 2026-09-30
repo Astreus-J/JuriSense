@@ -48,6 +48,63 @@ def _leaf_value(fields: dict[str, Any], *path: str) -> Any:
     return node.get("value")
 
 
+_EVIDENCE_REF_FIELD_PATHS: dict[str, tuple[str, ...]] = {
+    "contract.contract_type": ("contract_type",),
+    "contract.value.amount": ("value", "amount"),
+    "contract.value.currency": ("value", "currency"),
+    "contract.duration.start_date": ("duration", "start_date"),
+    "contract.duration.end_date": ("duration", "end_date"),
+    "contract.duration.auto_renewal": ("duration", "auto_renewal"),
+    "contract.termination.notice_period_days": ("termination", "notice_period_days"),
+    "contract.termination.termination_for_convenience": (
+        "termination",
+        "termination_for_convenience",
+    ),
+    "contract.liability.type": ("liability", "type"),
+    "contract.liability.cap": ("liability", "cap"),
+    "contract.processes_personal_data": ("privacy", "processes_personal_data"),
+    "contract.dpa_present": ("privacy", "dpa_present"),
+    "contract.jurisdiction": ("jurisdiction",),
+}
+
+
+def _leaf_provenance(fields: dict[str, Any], *path: str) -> dict[str, Any] | None:
+    node: Any = fields
+    for segment in path:
+        if not isinstance(node, dict) or segment not in node:
+            return None
+        node = node[segment]
+    if not isinstance(node, dict) or "provenance" not in node:
+        return None
+    return node["provenance"]
+
+
+def contract_fields_to_evidence_refs(fields: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Maps every extracted-field leaf's `provenance` (document_id/page/text_span --
+    `app.ai_services.domain.schema.Provenance`) to the exact `contract.*` dotted context
+    path `app.policies.domain.context_schema.CONTRACT_CONTEXT_PATHS`/`rule_dsl`'s
+    `referenced_paths` use -- so a caller holding a `Rule`'s referenced paths (Phase 5's
+    `RuleEvaluation.evidence_refs` traceability, #126) can look a path up directly, with
+    no second mapping table to keep in sync with `contract_fields_to_evidence_dto`'s own
+    walk. A field the extraction never produced (no leaf present) is simply absent from
+    the result -- mirrors `_leaf_value`'s `None` for an absent leaf on the DTO side.
+
+    `contract.value.brl` is a synthesized, currency-normalized field with no extraction
+    leaf of its own (`context_builder._contract_value_brl`) -- when present, it reuses
+    `value.amount`'s provenance, since a BRL contract's `.brl` *is* that same extracted
+    amount, not a separately-sourced fact.
+    """
+    refs: dict[str, dict[str, Any]] = {}
+    for context_path, leaf_path in _EVIDENCE_REF_FIELD_PATHS.items():
+        provenance = _leaf_provenance(fields, *leaf_path)
+        if provenance is not None:
+            refs[context_path] = provenance
+    amount_provenance = refs.get("contract.value.amount")
+    if amount_provenance is not None:
+        refs.setdefault("contract.value.brl", amount_provenance)
+    return refs
+
+
 def contract_fields_to_evidence_dto(fields: dict[str, Any]) -> ContractEvidenceDTO:
     """Pure transform: `ContractVersion.extracted_data["fields"]` (a plain dict, the
     JSON-persisted `ContractFields`) -> `ContractEvidenceDTO`. Separated from

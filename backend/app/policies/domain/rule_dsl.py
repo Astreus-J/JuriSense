@@ -270,6 +270,17 @@ def parse_rule_document(doc: dict[str, Any]) -> ParsedRule:
     )
 
 
+def referenced_paths_of(when: dict[str, Any]) -> tuple[str, ...]:
+    """Resolves every `when` key to its canonical context path, without compiling CEL --
+    a lighter-weight companion to `compile_rule_when` for callers that only need to know
+    *which* evaluation-context fields a rule references, not its compiled expressions
+    (Phase 5's `RuleEvaluation.evidence_refs` traceability, #126 -- see
+    `app.policies.application.compliance_review_service`). `when` here is always an
+    already-validated, already-persisted `Rule.when` (compiled once at creation/update
+    time via `compile_rule_when`), so every key is guaranteed to resolve without raising."""
+    return tuple(sorted({resolve_path(k) for k in when if isinstance(k, str)}))
+
+
 def parse_rule_yaml(yaml_text: str) -> ParsedRule:
     """The entry point actually used by the create/update-rule endpoints -- policy
     authors submit YAML text (ADR-004: "Policy authors interact with YAML... not raw

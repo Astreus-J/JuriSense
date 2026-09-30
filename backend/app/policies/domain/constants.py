@@ -69,3 +69,24 @@ SEVERITY_ORDER: tuple[Severity, ...] = (
     Severity.MEDIUM,
     Severity.LOW,
 )
+
+
+class ComplianceReviewStatus(StrEnum):
+    """`ComplianceReview`'s lifecycle + final aggregate outcome (Phase 5/EPIC-5;
+    docs/03-domain/domain-model.md "ComplianceReview"; ADR-010 §2).
+
+    Rule evaluation itself is synchronous and in-process, not a Celery/async step
+    (docs/04-architecture/components.md's async-boundary table: "Compliance Engine rule
+    evaluation itself... deterministic, in-process, no I/O"). Consequently `IN_PROGRESS`
+    is never externally observable -- it exists only transiently, in-memory, between the
+    row being constructed and the same call flipping it straight to one of the three
+    terminal aggregate outcomes before committing. A persisted (queryable) `ComplianceReview`
+    is therefore always already terminal, which is what makes "immutable once completed"
+    (BR-CMP-003's spirit, applied to the review record itself) trivially true: nothing
+    ever observes, let alone mutates, a row still in `IN_PROGRESS`.
+    """
+
+    IN_PROGRESS = "in_progress"
+    APPROVE = "APPROVE"
+    REVIEW = "REVIEW"
+    BLOCK = "BLOCK"

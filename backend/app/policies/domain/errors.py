@@ -56,3 +56,20 @@ class PublishedRuleImmutableError(PolicyError):
 class NoDraftVersionToPublishError(PolicyError):
     def __init__(self) -> None:
         super().__init__("Only a draft policy version can be published")
+
+
+class ContractVersionNotFoundError(PolicyError):
+    """Phase 5 (#123): raised when a `ComplianceReview` is triggered against a
+    `contract_version_id` that doesn't exist, or whose `Contract` isn't in the caller's
+    organization -- distinct from "exists but extraction hasn't produced evidence yet",
+    which is a valid state to trigger a review in (BR-CMP-001: `contract.*` rules simply
+    come back `NOT_APPLICABLE`), see
+    `app.contracts.application.evidence_service.contract_version_belongs_to_organization`."""
+
+    def __init__(self) -> None:
+        super().__init__("Contract version not found")
+
+
+class ComplianceReviewNotFoundError(PolicyError):
+    def __init__(self) -> None:
+        super().__init__("Compliance review not found")
