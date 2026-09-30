@@ -9,20 +9,32 @@ from app.identity.domain.constants import Module
 from app.identity.infrastructure.models import User
 from app.policies.api.schemas import (
     AggregatePreviewResponse,
+    ComplianceReviewDetailResponse,
+    ComplianceReviewResponse,
     ContractSimulationResultResponse,
     CreatePolicyRequest,
     CreatePolicyResponse,
     CreateRuleRequest,
     PolicyResponse,
     PolicyVersionResponse,
+    RiskResponse,
+    RuleEvaluationRecordResponse,
     RuleEvaluationResponse,
     RuleResponse,
     SimulateRequest,
     SimulationResponse,
+    TriggerReviewRequest,
 )
-from app.policies.application import policy_service, publish_service, rule_service
+from app.policies.application import (
+    compliance_review_service,
+    policy_service,
+    publish_service,
+    rule_service,
+)
 from app.policies.application.simulation_service import run_simulation
 from app.policies.domain.errors import (
+    ComplianceReviewNotFoundError,
+    ContractVersionNotFoundError,
     DuplicateRuleKeyError,
     NoDraftVersionToPublishError,
     PolicyNotFoundError,
@@ -33,10 +45,18 @@ from app.policies.domain.errors import (
 )
 
 router = APIRouter(prefix="/policies", tags=["policies"])
+compliance_router = APIRouter(prefix="/compliance", tags=["compliance"])
 
 CanCreatePolicies = Annotated[User, Depends(require_permission(Module.POLICIES, "create"))]
 CanReadPolicies = Annotated[User, Depends(require_permission(Module.POLICIES, "read"))]
 CanUpdatePolicies = Annotated[User, Depends(require_permission(Module.POLICIES, "update"))]
+
+CanCreateComplianceReviews = Annotated[
+    User, Depends(require_permission(Module.COMPLIANCE_REVIEWS, "create"))
+]
+CanReadComplianceReviews = Annotated[
+    User, Depends(require_permission(Module.COMPLIANCE_REVIEWS, "read"))
+]
 
 
 @router.post("", response_model=CreatePolicyResponse, status_code=status.HTTP_201_CREATED)
@@ -299,4 +319,46 @@ async def simulate(
             )
             for cr in result.contract_results
         ],
+    )
+
+
+@compliance_router.post(
+    "/reviews", response_model=ComplianceReviewResponse, status_code=status.HTTP_201_CREATED
+)
+async def trigger_review(
+    body: TriggerReviewRequest, user: CanCreateComplianceReviews, session: SessionDep
+) -> ComplianceReviewResponse:
+    """#123: triggers a real `ComplianceReview` -- pools every currently-published
+    `PolicyVersion` in the caller's organization (see
+    `app.policies.application.compliance_review_service`'s module docstring for the
+    multi-policy pooling design decision) and evaluates them against the given
+    `ContractVersion`'s normalized evidence, persisting the result."""
+    try:
+        review = await compliance_review_service.trigger_review(
+            session,
+            organization_id=user.organization_id,
+            actor_id=user.id,
+            contract_version_id=body.contract_version_id,
+        )
+    except ContractVersionNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.message) from exc
+    return ComplianceReviewResponse.model_validate(review)
+
+
+@compliance_router.get("/reviews/{review_id}", response_model=ComplianceReviewDetailResponse)
+async def get_review(
+    review_id: uuid.UUID, user: CanReadComplianceReviews, session: SessionDep
+) -> ComplianceReviewDetailResponse:
+    """The read-model #127/#62's frontend results screen needs: one `ComplianceReview`
+    with its full `RuleEvaluation` and `Risk` lists."""
+    try:
+        review, evaluations, risks = await compliance_review_service.get_review_detail(
+            session, organization_id=user.organization_id, review_id=review_id
+        )
+    except ComplianceReviewNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.message) from exc
+    return ComplianceReviewDetailResponse(
+        review=ComplianceReviewResponse.model_validate(review),
+        rule_evaluations=[RuleEvaluationRecordResponse.model_validate(e) for e in evaluations],
+        risks=[RiskResponse.model_validate(r) for r in risks],
     )

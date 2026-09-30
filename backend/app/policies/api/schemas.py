@@ -96,3 +96,53 @@ class SimulationResponse(BaseModel):
     version_number: int
     version_status: str
     contract_results: list[ContractSimulationResultResponse]
+
+
+class TriggerReviewRequest(BaseModel):
+    contract_version_id: uuid.UUID
+
+
+class ComplianceReviewResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    organization_id: uuid.UUID
+    contract_version_id: uuid.UUID
+    policy_version_ids: list[str]
+    status: str
+    started_at: datetime
+    completed_at: datetime | None
+
+
+class RuleEvaluationRecordResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    compliance_review_id: uuid.UUID
+    rule_id: uuid.UUID
+    rule_key: str
+    rule_name: str
+    outcome: str
+    severity: str
+    approver_role: str | None
+    rationale: str
+    evidence_refs: list[dict[str, Any]]
+    created_at: datetime
+
+
+class RiskResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    compliance_review_id: uuid.UUID
+    category: str
+    description: str
+    severity: str
+    evidence_refs: list[dict[str, Any]]
+    created_at: datetime
+
+
+class ComplianceReviewDetailResponse(BaseModel):
+    review: ComplianceReviewResponse
+    rule_evaluations: list[RuleEvaluationRecordResponse]
+    risks: list[RiskResponse]
