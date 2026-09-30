@@ -7,6 +7,12 @@ interface ConfirmBody {
   corrections?: unknown;
 }
 
+// Security review (2026-09-30): `corrections` is arbitrary client-supplied JSON with no
+// size bound before this route buffers/parses it. Lower-risk than the upload route (JSON
+// bodies here are inherently small in the legitimate case, and the backend's own
+// MaxBodySizeMiddleware still applies once forwarded), but a consistent guard regardless.
+const MAX_BODY_BYTES = 1_000_000;
+
 /** BFF endpoint for `ConfirmationForm`'s submit (CON-005/BR-CON-003). */
 export async function POST(
   request: Request,
@@ -15,6 +21,14 @@ export async function POST(
   const accessToken = await readAccessToken();
   if (!accessToken) {
     return NextResponse.json({ detail: "Not authenticated." }, { status: 401 });
+  }
+
+  const declaredLength = Number(request.headers.get("content-length") ?? "0");
+  if (declaredLength > MAX_BODY_BYTES) {
+    return NextResponse.json(
+      { detail: `Request body exceeds the maximum allowed size of ${MAX_BODY_BYTES} bytes` },
+      { status: 413 },
+    );
   }
 
   const { id, versionId } = await params;

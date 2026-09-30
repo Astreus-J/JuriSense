@@ -9,13 +9,44 @@ function stringField(value: FormDataEntryValue | null): string | undefined {
 
 // Mirrors backend/app/core/config.py's document_max_size_bytes (25 MB) plus the same
 // multipart-overhead margin backend/app/core/middleware.py's MaxBodySizeMiddleware uses.
-// Found during review (2026-09-30): request.formData() below fully buffers the request
-// body into the Next.js server's memory before any of this route's own code runs --
-// Next.js App Router Route Handlers have no built-in body-size cap (unlike the old Pages
-// API's bodyParser.sizeLimit), so without this check an oversized upload hits the exact
-// same unbounded-buffering issue the backend's MaxBodySizeMiddleware was added to fix,
-// just one layer up, in the BFF itself rather than the FastAPI app.
 const MAX_UPLOAD_BYTES = 25_000_000 + 65_536;
+
+class BodyTooLargeError extends Error {}
+
+/**
+ * QA/security review (2026-09-30), confirmed live: a `Content-Length` pre-check alone
+ * (what this route had before) is a no-op against a chunked-transfer-encoded request --
+ * verified live that Next.js still buffered the full body proportional to its actual
+ * size before this route's own check ever ran, the exact two-layer gap
+ * `backend/app/core/middleware.py`'s `MaxBodySizeMiddleware` was built to close on the
+ * backend (its own docstring: "a `Content-Length`... check... can't prevent [a client
+ * that lies/omits it]"). This counts bytes as the body actually streams through, aborting
+ * before more than `maxBytes` is ever buffered -- mirrors that middleware's second layer,
+ * one level up, in the BFF itself rather than the FastAPI app.
+ */
+function capRequestBody(request: Request, maxBytes: number): Request {
+  if (!request.body) return request;
+  let total = 0;
+  const limited = request.body.pipeThrough(
+    new TransformStream<Uint8Array, Uint8Array>({
+      transform(chunk, controller) {
+        total += chunk.byteLength;
+        if (total > maxBytes) {
+          controller.error(new BodyTooLargeError());
+          return;
+        }
+        controller.enqueue(chunk);
+      },
+    }),
+  );
+  return new Request(request.url, {
+    method: request.method,
+    headers: request.headers,
+    body: limited,
+    // Required by undici/fetch whenever a Request body is a stream, not a static value.
+    duplex: "half",
+  } as RequestInit & { duplex: "half" });
+}
 
 /**
  * BFF endpoint for `UploadContractForm`. `multipart/form-data` in, `multipart/form-data`
@@ -37,7 +68,18 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
-  const formData = await request.formData();
+  let formData: FormData;
+  try {
+    formData = await capRequestBody(request, MAX_UPLOAD_BYTES).formData();
+  } catch (error) {
+    if (error instanceof BodyTooLargeError) {
+      return NextResponse.json(
+        { detail: `Request body exceeds the maximum allowed size of ${MAX_UPLOAD_BYTES} bytes` },
+        { status: 413 },
+      );
+    }
+    return NextResponse.json({ detail: "Could not read the upload." }, { status: 400 });
+  }
   const file = formData.get("file");
   const supplierId = stringField(formData.get("supplierId"));
 
