@@ -7,6 +7,10 @@ from fakeredis import FakeAsyncRedis
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
+from app.contracts.application import extraction_orchestration
+from app.contracts.infrastructure import (
+    models as contracts_models,  # noqa: F401 — registers tables on Base
+)
 from app.core.db import Base, get_session
 from app.core.redis import get_redis
 from app.evidence.infrastructure import (
@@ -87,6 +91,37 @@ def run_supplier_checks_inline(
             await check_service.run_supplier_check(session, check_id=check_id)
 
     monkeypatch.setattr(check_service, "enqueue_supplier_check", _run_inline)
+
+
+@pytest.fixture(autouse=True)
+def stub_contract_extraction_enqueue(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Default: uploading a contract version in a test does not actually run AI
+    extraction (no network, no Celery/broker) — same role as
+    `stub_supplier_check_enqueue` above. Tests that need a real (mocked-HTTP) extraction
+    outcome request the opt-in `run_contract_extraction_inline` fixture instead."""
+
+    async def _noop(contract_version_id: object) -> None:
+        return None
+
+    monkeypatch.setattr(extraction_orchestration, "enqueue_contract_extraction", _noop)
+
+
+@pytest.fixture
+def run_contract_extraction_inline(
+    monkeypatch: pytest.MonkeyPatch, db_session_factory: async_sessionmaker
+) -> None:
+    """Opt-in: runs `extraction_orchestration.run_extraction_for_version` synchronously
+    against the test database whenever extraction is enqueued, in place of a real Celery
+    worker. Tests requesting this fixture must also stub the AI Gateway's HTTP layer
+    (see `tests/contracts/conftest.py`'s `mock_openrouter`)."""
+
+    async def _run_inline(contract_version_id: uuid.UUID) -> None:
+        async with db_session_factory() as session:
+            await extraction_orchestration.run_extraction_for_version(
+                session, contract_version_id=contract_version_id
+            )
+
+    monkeypatch.setattr(extraction_orchestration, "enqueue_contract_extraction", _run_inline)
 
 
 @pytest.fixture
