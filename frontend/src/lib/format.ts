@@ -20,8 +20,15 @@ export function formatDate(iso: string): string {
  * valid ISO 4217 code (`Intl.NumberFormat` throws on an invalid one, and AI-extracted
  * currency text is not guaranteed to be clean) — better to show the raw amount than crash
  * the field it's rendered in.
+ *
+ * QA review (2026-09-30): `amount` is a nullable AI-extracted field
+ * (`ExtractedValue.value` can legitimately be `null`) despite this function's earlier
+ * `number`-only signature, which let `Intl.NumberFormat(...).format(null)` silently
+ * coerce to `0` — misrepresenting "unknown/unconfirmed value" as "confirmed zero," and
+ * disagreeing with every other field's "—" placeholder for the identical null case.
  */
-export function formatCurrency(amount: number, currency?: string | null): string {
+export function formatCurrency(amount: number | null | undefined, currency?: string | null): string {
+  if (amount === null || amount === undefined) return "—";
   if (!currency) return new Intl.NumberFormat(undefined).format(amount);
   try {
     return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(amount);

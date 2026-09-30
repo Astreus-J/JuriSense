@@ -158,7 +158,10 @@ export function ExtractedDataView({ fields, needsConfirmationPaths }: ExtractedD
                 path="value.amount"
                 needsConfirmationPaths={needsConfirmationPaths}
                 format={(value) =>
-                  formatCurrency(value as number, fields.value?.currency?.value as string | undefined)
+                  formatCurrency(
+                    value as number | null,
+                    fields.value?.currency?.value as string | undefined,
+                  )
                 }
               />
               <FieldRow
@@ -305,7 +308,7 @@ export function ExtractedDataView({ fields, needsConfirmationPaths }: ExtractedD
           <ul className="space-y-2">
             {obligations.map((leaf, index) => (
               <li key={index} className="flex flex-wrap items-center gap-2 text-sm">
-                <span className="text-foreground">{leaf.value as string}</span>
+                <span className="text-foreground">{formatPlainValue(leaf.value)}</span>
                 <ConfidenceIndicator
                   leaf={leaf}
                   flagged={needsConfirmationPaths.includes(`obligations[${index}]`)}
@@ -347,7 +350,7 @@ export function ExtractedDataView({ fields, needsConfirmationPaths }: ExtractedD
                 </p>
                 <ul className="mt-1 space-y-1 text-sm text-foreground">
                   {guarantees.map((leaf, index) => (
-                    <li key={index}>{leaf.value as string}</li>
+                    <li key={index}>{formatPlainValue(leaf.value)}</li>
                   ))}
                 </ul>
               </div>
@@ -359,7 +362,7 @@ export function ExtractedDataView({ fields, needsConfirmationPaths }: ExtractedD
                 </p>
                 <ul className="mt-1 space-y-1 text-sm text-foreground">
                   {penalties.map((leaf, index) => (
-                    <li key={index}>{leaf.value as string}</li>
+                    <li key={index}>{formatPlainValue(leaf.value)}</li>
                   ))}
                 </ul>
               </div>
@@ -371,7 +374,7 @@ export function ExtractedDataView({ fields, needsConfirmationPaths }: ExtractedD
                 </p>
                 <ul className="mt-1 space-y-1 text-sm text-foreground">
                   {subprocessors.map((leaf, index) => (
-                    <li key={index}>{leaf.value as string}</li>
+                    <li key={index}>{formatPlainValue(leaf.value)}</li>
                   ))}
                 </ul>
               </div>
