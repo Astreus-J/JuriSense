@@ -46,18 +46,24 @@ context, not a separate list.
   whatever real/messy documents are used for stress-testing, so a demo-day accuracy dip on an edge
   case does not sink the whole presentation.
 
-## 3. Policy engine expressiveness risk
+## 3. Policy engine expressiveness risk — RESOLVED 2026-09-30
 
-- **Description**: `ADR-004` is "Proposed — pending prototype/benchmark," not "Accepted." The
-  Phase 4 spike could reveal that `cel-python` (or JSONLogic) cannot cleanly express the nested,
-  cross-entity conditions the Rule DSL promises (`docs/03-domain/policy-engine.md`), or that hiding
-  CEL's raw syntax from non-technical policy authors is harder in practice than the ADR assumes.
-- **Likelihood**: medium. CEL is purpose-built for exactly this kind of in-process expression
-  evaluation, but the YAML-to-CEL compilation layer and the specific rule-conflict/priority
-  semantics in `policy-engine.md` are unvalidated against real code today.
-- **Impact**: high if it happens — the Policy Engine is described as "the core competitive
-  component" of the product; a materially weaker-than-planned expression language would ripple into
-  Compliance (Phase 5) and delay the entire remaining sequential spine.
+- **Description** (as originally written, kept for the record): `ADR-004` was "Proposed — pending
+  prototype/benchmark," not "Accepted." The Phase 4 spike could reveal that `cel-python` (or
+  JSONLogic) cannot cleanly express the nested, cross-entity conditions the Rule DSL promises
+  (`docs/03-domain/policy-engine.md`), or that hiding CEL's raw syntax from non-technical policy
+  authors is harder in practice than the ADR assumes.
+- **Resolution**: the Phase 4 spike (EPIC-4 STORY #55) ran, built a working YAML-to-CEL compiler and
+  rule-execution engine against all 5 worked-example rules plus real Supplier/Contract evidence end
+  to end, and found CEL works cleanly for this grammar — the one real wrinkle (CEL's `has()` macro
+  not guarding an explicitly-`null` field, only a genuinely-absent one) has a documented, tested fix
+  (the context builder never emits `null` leaves; a two-phase presence/condition CEL compilation
+  distinguishes `NOT_APPLICABLE` from `PASS`). `ADR-004`'s status is now **Accepted** — see its
+  "Spike findings" section for the full live-verified detail (real performance numbers, the
+  null-handling strategy, the bare-field-name resolution rule). This risk no longer threatens the
+  remaining sequential spine; Compliance (Phase 5) can build on a validated expression language.
+- **Likelihood/impact** (historical, pre-resolution): medium likelihood, high impact if it had
+  happened — see the original description above; both are moot now that the spike is done.
 - **Mitigation**: the spike is scheduled early (Phase 4) rather than assumed away, specifically so
   a bad outcome is discovered with runway left to react; JSONLogic is already documented as the
   fallback compilation target if CEL proves unworkable for hand-authored rules; as a last resort if
