@@ -34,3 +34,8 @@ cycles:
     start_date: "2026-11-01"
     end_date: "2026-11-07"
     description: "Week 5. Targets Milestone M4 (EPIC-6, EPIC-7, EPIC-8 — Hackathon Cut complete) and M5 (hackathon submission). Judging opens 2026-11-05 inside this cycle."
+  - key: cycle-6
+    name: "Cycle 6 — Production Deployment & Infrastructure (Hostinger VPS)"
+    start_date: "2026-11-08"
+    end_date: "2026-11-14"
+    description: "Placeholder dates, added 2026-09-30 -- real velocity has run ahead of the original weekly cadence (EPIC-2/EPIC-3 backend already complete before their planned Cycle 2-3 window), so this can be pulled forward once prioritized. Transforms the dev-oriented docker-compose.yml into a production-ready single-VPS deployment per docs/04-architecture/deployment.md: Nginx reverse proxy, private Docker networking, production env/secrets, deploy + backup/restore scripts, CI build/compose validation, and the accompanying ADR + operations docs. See EPIC: Production Deployment — Single VPS (Hostinger)."
