@@ -3,7 +3,14 @@ import uuid
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.policies.infrastructure.models import Policy, PolicyVersion, Rule
+from app.policies.infrastructure.models import (
+    ComplianceReview,
+    Policy,
+    PolicyVersion,
+    Risk,
+    Rule,
+    RuleEvaluation,
+)
 
 
 class PolicyRepository:
@@ -83,6 +90,21 @@ class PolicyVersionRepository:
             .values(is_current=False)
         )
 
+    async def list_current_by_organization(self, organization_id: uuid.UUID) -> list[PolicyVersion]:
+        """Every currently-published `PolicyVersion` across the whole organization -- one
+        per `Policy` that has ever been published, at most, since `is_current` is only
+        ever set `True` at publish time (`publish_service.publish_version`) and a `Policy`
+        with no published version yet contributes none. This is the multi-policy pooling
+        source for #123's trigger-review use case (see `ComplianceReview`'s module
+        docstring for the design decision)."""
+        result = await self._session.execute(
+            select(PolicyVersion)
+            .join(Policy, PolicyVersion.policy_id == Policy.id)
+            .where(Policy.organization_id == organization_id, PolicyVersion.is_current.is_(True))
+            .order_by(PolicyVersion.policy_id)
+        )
+        return list(result.scalars())
+
 
 class RuleRepository:
     def __init__(self, session: AsyncSession) -> None:
@@ -124,3 +146,82 @@ class RuleRepository:
         payload -- never go stale relative to what was actually persisted."""
         for rule in rules:
             rule.is_frozen = True
+
+
+class ComplianceReviewRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    def add(self, review: ComplianceReview) -> None:
+        self._session.add(review)
+
+    async def get_by_id_and_organization(
+        self, review_id: uuid.UUID, organization_id: uuid.UUID
+    ) -> ComplianceReview | None:
+        result = await self._session.execute(
+            select(ComplianceReview).where(
+                ComplianceReview.id == review_id,
+                ComplianceReview.organization_id == organization_id,
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def list_by_contract_version(
+        self, contract_version_id: uuid.UUID, organization_id: uuid.UUID
+    ) -> list[ComplianceReview]:
+        result = await self._session.execute(
+            select(ComplianceReview)
+            .where(
+                ComplianceReview.contract_version_id == contract_version_id,
+                ComplianceReview.organization_id == organization_id,
+            )
+            .order_by(ComplianceReview.started_at)
+        )
+        return list(result.scalars())
+
+
+class RuleEvaluationRepository:
+    """Append-only repository for `RuleEvaluation` (#126). Intentionally exposes only
+    `add`/`get`/`list` -- no `update` or `delete` method exists anywhere on this class,
+    mirroring `app.evidence.infrastructure.repositories.AuditEventRepository` exactly.
+    This is the enforcement mechanism for BR-CMP-003: no actor, including an approver
+    overriding a decision (a future EPIC-6 concern), has any path to modify or remove a
+    recorded `RuleEvaluation` -- see `tests/policies/test_compliance_review.py`'s negative
+    test."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    def add(self, evaluation: RuleEvaluation) -> None:
+        self._session.add(evaluation)
+
+    async def get(self, evaluation_id: uuid.UUID) -> RuleEvaluation | None:
+        return await self._session.get(RuleEvaluation, evaluation_id)
+
+    async def list_by_review(self, compliance_review_id: uuid.UUID) -> list[RuleEvaluation]:
+        result = await self._session.execute(
+            select(RuleEvaluation)
+            .where(RuleEvaluation.compliance_review_id == compliance_review_id)
+            .order_by(RuleEvaluation.created_at)
+        )
+        return list(result.scalars())
+
+
+class RiskRepository:
+    """Append-only repository for `Risk` -- exposes only `add`/`list`, mirroring
+    `RuleEvaluationRepository`/`AuditEventRepository` (domain-model.md: "Invariants:
+    immutable once created")."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    def add(self, risk: Risk) -> None:
+        self._session.add(risk)
+
+    async def list_by_review(self, compliance_review_id: uuid.UUID) -> list[Risk]:
+        result = await self._session.execute(
+            select(Risk)
+            .where(Risk.compliance_review_id == compliance_review_id)
+            .order_by(Risk.created_at)
+        )
+        return list(result.scalars())
