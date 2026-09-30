@@ -89,6 +89,36 @@ class Settings(BaseSettings):
     password_reset_expire_minutes: int = 60
     invite_expire_days: int = 7
 
+    # AI Gateway (ADR-005 + docs/adr/ADR-005-addendum-interim-ai-provider.md): interim
+    # provider is OpenRouter, an OpenAI-compatible API, until a real OpenAI/Anthropic key
+    # exists -- swapping to a real provider is a config-only change (base URL + key +
+    # model names), never an application-code change.
+    ai_gateway_base_url: str = "https://openrouter.ai/api/v1"
+    openrouter_api_key: str | None = None
+    ai_extraction_primary_model: str = "nvidia/nemotron-3-super-120b-a12b:free"
+    ai_extraction_fallback_model: str = "qwen/qwen3.8-27b:free"
+    ai_extraction_timeout_seconds: float = 60.0
+    # Contracts routinely exceed a single extraction call's practical input budget for
+    # very long master service agreements; full structural chunking
+    # (docs/05-ai/document-intelligence.md "Chunking strategy") is out of scope for this
+    # phase -- text is truncated to this budget and a warning is logged, documented here
+    # rather than silently dropped. Revisit once chunking is implemented.
+    ai_extraction_max_input_chars: int = 60_000
+
+    # BR-CON-003's confidence threshold, resolved here per the same "pick a defensible
+    # default now, document it, revisit after real data" approach used for ADR-008/
+    # ADR-017's TBDs -- see docs/05-ai/evaluation.md's addendum note and
+    # docs/adr/ADR-005-addendum-interim-ai-provider.md. A per-field minimum, not a
+    # document-level average (contract-compliance.md), in the 0.80-0.85 candidate range
+    # that document names; 0.82 is the chosen starting point pending golden-dataset
+    # calibration. Configurable per environment, not a hardcoded constant, precisely
+    # because it is expected to move once real extraction data exists.
+    contract_extraction_confidence_threshold: float = 0.82
+
+    # SEC-003: upload validation limits (see app/contracts/infrastructure/document_scanner.py
+    # for the full malware/type-spoofing scope decision).
+    document_max_size_bytes: int = 25_000_000  # 25 MB
+
     @model_validator(mode="after")
     def _normalize_database_url_field(self) -> "Settings":
         self.database_url = _normalize_database_url(self.database_url)
