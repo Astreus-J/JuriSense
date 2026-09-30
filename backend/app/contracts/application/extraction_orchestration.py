@@ -99,7 +99,23 @@ async def run_extraction_for_version(
         await _fail_version(session, version=version, document=document, reason=str(exc))
         return version
     except AllProvidersExhaustedError as exc:
-        await _fail_version(session, version=version, document=document, reason=exc.message)
+        # Security review (2026-09-29): `exc.message` includes each attempt's raw
+        # upstream response text (`openrouter_gateway.py`'s `response.text[:500]`) --
+        # useful for debugging, but this is minor vendor-internals information
+        # disclosure once it reaches `extraction_failure_reason`, which the API returns
+        # verbatim to any org member. Full detail goes to the log only; the persisted/
+        # API-exposed reason stays generic.
+        logger.warning(
+            "ContractVersion %s: all AI Gateway providers exhausted -- %s",
+            version.id,
+            exc.message,
+        )
+        await _fail_version(
+            session,
+            version=version,
+            document=document,
+            reason="AI extraction failed after trying all configured providers/models",
+        )
         return version
 
     fields_dict = envelope.fields.model_dump(mode="json")
