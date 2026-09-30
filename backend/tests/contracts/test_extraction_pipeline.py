@@ -9,20 +9,15 @@ import io
 import httpx
 import pypdf
 
+from app.core.config import get_settings
 from tests.contracts.conftest import (
     HIGH_CONFIDENCE_ENVELOPE,
     LOW_CONFIDENCE_ENVELOPE,
+    _envelope_with_min_confidence,
     create_supplier,
+    pdf_bytes_with_text,
     register_org_and_login,
 )
-
-
-def _pdf_bytes() -> bytes:
-    writer = pypdf.PdfWriter()
-    writer.add_blank_page(width=200, height=200)
-    buf = io.BytesIO()
-    writer.write(buf)
-    return buf.getvalue()
 
 
 async def _upload_and_refetch(client: httpx.AsyncClient, headers: dict, supplier_id: str) -> dict:
@@ -36,7 +31,7 @@ async def _upload_and_refetch(client: httpx.AsyncClient, headers: dict, supplier
     uploaded = (
         await client.post(
             "/api/contracts/upload",
-            files={"file": ("contract.pdf", _pdf_bytes(), "application/pdf")},
+            files={"file": ("contract.pdf", pdf_bytes_with_text(), "application/pdf")},
             data={"supplier_id": supplier_id, "title": "MSA", "contract_type": "msa"},
             headers=headers,
         )
@@ -86,6 +81,71 @@ async def test_low_confidence_field_marks_needs_confirmation(
     assert version["extraction_confidence"] == 0.4
 
 
+async def test_confidence_exactly_at_the_threshold_marks_analyzed(
+    client: httpx.AsyncClient, mock_openrouter, run_contract_extraction_inline
+) -> None:
+    """BR-CON-003: "meeting the minimum confidence threshold" is `>=`, not `>` -- a
+    field at exactly the threshold must pass, not be treated as below it."""
+    threshold = get_settings().contract_extraction_confidence_threshold
+    mock_openrouter(payload=_envelope_with_min_confidence(threshold))
+    headers = await register_org_and_login(client, "extract-boundary-at@example.com")
+    supplier = await create_supplier(client, headers, tax_id="00000000000191")
+
+    version = await _upload_and_refetch(client, headers, supplier["id"])
+    assert version["status"] == "analyzed"
+    assert version["extraction_confidence"] == threshold
+
+
+async def test_confidence_just_below_the_threshold_marks_needs_confirmation(
+    client: httpx.AsyncClient, mock_openrouter, run_contract_extraction_inline
+) -> None:
+    threshold = get_settings().contract_extraction_confidence_threshold
+    mock_openrouter(payload=_envelope_with_min_confidence(threshold - 0.01))
+    headers = await register_org_and_login(client, "extract-boundary-below@example.com")
+    supplier = await create_supplier(client, headers, tax_id="00000000000191")
+
+    version = await _upload_and_refetch(client, headers, supplier["id"])
+    assert version["status"] == "needs_confirmation"
+
+
+async def test_blank_document_marks_extraction_failed(
+    client: httpx.AsyncClient, mock_openrouter, run_contract_extraction_inline
+) -> None:
+    """QA review (2026-09-29): `text_extraction.py`'s own docstring already claimed an
+    entirely-empty document (e.g. a scanned/image-only PDF -- OCR is a documented TBD)
+    would fail fast as `document.processing_failed`, but nothing implemented it; a blank
+    document silently proceeded to the AI Gateway with empty page content instead. Note
+    `mock_openrouter` is still wired up here so a bug that regresses this check would
+    surface as a wrong *status*, not a confusing "no mock configured" test failure.
+    """
+    mock_openrouter(payload=HIGH_CONFIDENCE_ENVELOPE)
+    headers = await register_org_and_login(client, "extract-blank@example.com")
+    supplier = await create_supplier(client, headers, tax_id="00000000000191")
+
+    writer = pypdf.PdfWriter()
+    writer.add_blank_page(width=200, height=200)  # deliberately no content stream at all
+    buf = io.BytesIO()
+    writer.write(buf)
+
+    uploaded = (
+        await client.post(
+            "/api/contracts/upload",
+            files={"file": ("blank.pdf", buf.getvalue(), "application/pdf")},
+            data={"supplier_id": supplier["id"], "title": "MSA", "contract_type": "msa"},
+            headers=headers,
+        )
+    ).json()
+    version = (
+        await client.get(
+            f"/api/contracts/{uploaded['contract_id']}/versions/{uploaded['id']}",
+            headers=headers,
+        )
+    ).json()
+
+    assert version["status"] == "extraction_failed"
+    assert "no extractable text" in version["extraction_failure_reason"]
+
+
 async def test_all_providers_exhausted_marks_extraction_failed(
     client: httpx.AsyncClient, mock_openrouter, run_contract_extraction_inline
 ) -> None:
@@ -95,4 +155,8 @@ async def test_all_providers_exhausted_marks_extraction_failed(
 
     version = await _upload_and_refetch(client, headers, supplier["id"])
     assert version["status"] == "extraction_failed"
-    assert version["extraction_failure_reason"] is not None
+    # Security review (2026-09-29): the raw upstream response body (here, the mock's
+    # literal "error" text) must never reach the API-exposed reason -- only the log.
+    assert version["extraction_failure_reason"] == (
+        "AI extraction failed after trying all configured providers/models"
+    )

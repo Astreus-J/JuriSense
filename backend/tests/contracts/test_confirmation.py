@@ -1,24 +1,14 @@
 """CON-005/BR-CON-003: human confirmation unblocks a `needs_confirmation` ContractVersion
 to `analyzed`."""
 
-import io
-
 import httpx
-import pypdf
 
 from tests.contracts.conftest import (
     LOW_CONFIDENCE_ENVELOPE,
     create_supplier,
+    pdf_bytes_with_text,
     register_org_and_login,
 )
-
-
-def _pdf_bytes() -> bytes:
-    writer = pypdf.PdfWriter()
-    writer.add_blank_page(width=200, height=200)
-    buf = io.BytesIO()
-    writer.write(buf)
-    return buf.getvalue()
 
 
 async def _upload_and_refetch(client: httpx.AsyncClient, headers: dict, supplier_id: str) -> dict:
@@ -28,7 +18,7 @@ async def _upload_and_refetch(client: httpx.AsyncClient, headers: dict, supplier
     uploaded = (
         await client.post(
             "/api/contracts/upload",
-            files={"file": ("contract.pdf", _pdf_bytes(), "application/pdf")},
+            files={"file": ("contract.pdf", pdf_bytes_with_text(), "application/pdf")},
             data={"supplier_id": supplier_id, "title": "MSA", "contract_type": "msa"},
             headers=headers,
         )

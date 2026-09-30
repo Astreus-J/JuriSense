@@ -5,6 +5,7 @@ directly (enforced by `tests/ai_services/test_boundary_rules.py` and
 `tests/contracts/test_boundary_rules.py`).
 """
 
+from app.ai_services.domain.errors import DocumentParsingError
 from app.ai_services.domain.ports import AIGatewayPort
 from app.ai_services.domain.schema import ExtractionEnvelope
 from app.ai_services.infrastructure.openrouter_gateway import OpenRouterAIGateway
@@ -54,6 +55,17 @@ async def run_contract_extraction(
     """
     settings = get_settings()
     extracted = extract_document_pages(document_bytes, mime_type)
+    # QA review (2026-09-29): `text_extraction.py`'s own module docstring already
+    # documented this as the intended behavior ("an entirely-empty document ... a
+    # parsing failure"), but nothing actually implemented it -- a scanned/image-only PDF
+    # (no OCR yet, a documented TBD) silently proceeded to the AI Gateway with blank
+    # page content instead of failing fast. `not text.strip()` treats whitespace-only
+    # pages the same as truly empty ones.
+    if all(not page.strip() for page in extracted.pages):
+        raise DocumentParsingError(
+            "Document yielded no extractable text (possibly a scanned/image-only file "
+            "-- OCR is not yet supported, see docs/05-ai/document-intelligence.md)"
+        )
     pages = truncate_pages(extracted.pages, max_chars=settings.ai_extraction_max_input_chars)
 
     gateway = get_ai_gateway()

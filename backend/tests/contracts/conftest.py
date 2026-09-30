@@ -4,17 +4,55 @@ Supplier to attach contracts to, and mocking the AI Gateway's HTTP layer end to 
 live calls" instruction, same discipline as `tests/suppliers/conftest.py`).
 """
 
+import io
 import json
 from collections.abc import Callable
 
 import httpx
+import pypdf
 import pytest
+from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
 
 from app.ai_services.application import extraction_service
 from app.ai_services.infrastructure import openrouter_gateway
 
 # Re-exported so contracts tests don't need to know Suppliers' test layout.
 from tests.suppliers.conftest import register_org_and_login  # noqa: F401
+
+
+def pdf_bytes_with_text(text: str = "Contract Agreement Liability Clause") -> bytes:
+    """A minimal single-page PDF with genuinely extractable text, built via pypdf's
+    low-level object API (no PDF-authoring library like reportlab is a project
+    dependency). Every test that exercises the real extraction pipeline needs this, not
+    `writer.add_blank_page()` alone: a page with no content stream at all yields empty
+    `extract_text()`, which `extraction_service.run_contract_extraction` now correctly
+    rejects as `document.processing_failed` (QA review, 2026-09-29) -- a blank PDF is
+    unparseable input for these tests' purposes, not valid "successful extraction" test
+    data.
+    """
+    writer = pypdf.PdfWriter()
+    page = writer.add_blank_page(width=200, height=200)
+
+    font = DictionaryObject()
+    font[NameObject("/Type")] = NameObject("/Font")
+    font[NameObject("/Subtype")] = NameObject("/Type1")
+    font[NameObject("/BaseFont")] = NameObject("/Helvetica")
+    font_ref = writer._add_object(font)
+
+    resources = DictionaryObject()
+    font_dict = DictionaryObject()
+    font_dict[NameObject("/F1")] = font_ref
+    resources[NameObject("/Font")] = font_dict
+    page[NameObject("/Resources")] = resources
+
+    content = DecodedStreamObject()
+    content.set_data(f"BT /F1 12 Tf 10 100 Td ({text}) Tj ET".encode())
+    page[NameObject("/Contents")] = writer._add_object(content)
+
+    buf = io.BytesIO()
+    writer.write(buf)
+    return buf.getvalue()
+
 
 HIGH_CONFIDENCE_ENVELOPE = {
     "fields": {
@@ -57,6 +95,27 @@ HIGH_CONFIDENCE_ENVELOPE = {
         }
     ],
 }
+
+def _envelope_with_min_confidence(confidence: float) -> dict:
+    """QA review (2026-09-29): MED-3 -- no test previously pinned the BR-CON-003
+    threshold boundary (`contract_extraction_confidence_threshold`, 0.82) exactly, so a
+    future `>=` -> `>` regression could ship silently. Builds a single-field envelope at
+    exactly the given confidence."""
+    return {
+        "fields": {
+            "contract_type": {
+                "value": "saas_subscription",
+                "confidence": confidence,
+                "provenance": {
+                    "document_id": "x",
+                    "page": 1,
+                    "text_span": {"start": 0, "end": 10},
+                },
+            },
+        },
+        "clauses": [],
+    }
+
 
 LOW_CONFIDENCE_ENVELOPE = {
     "fields": {
