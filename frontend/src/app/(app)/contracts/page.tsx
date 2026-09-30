@@ -1,11 +1,111 @@
 import type { Metadata } from "next";
+import Link from "next/link";
+import { Plus } from "lucide-react";
 
-import { ComingSoon } from "@/components/shared/ComingSoon";
+import { Alert } from "@/components/ui/Alert";
+import { buttonClasses } from "@/components/ui/Button";
+import { ContractTable } from "@/components/contracts/ContractTable";
+import { ApiError } from "@/lib/auth/backend";
+import { readAccessToken } from "@/lib/auth/cookies";
+import { requireSession } from "@/lib/auth/session";
+import { listContracts } from "@/lib/contracts/backend";
+import { getContractPermissions } from "@/lib/contracts/permissions";
 import { NAV_ITEMS } from "@/lib/navigation/modules";
+import { listSuppliers } from "@/lib/suppliers/backend";
 
 export const metadata: Metadata = { title: "Contracts — JuriSense Gate" };
 
-export default function ContractsPage() {
-  const { icon, label, comingSoonDescription } = NAV_ITEMS.contracts;
-  return <ComingSoon icon={icon} title={label} description={comingSoonDescription ?? ""} />;
+/**
+ * No status filter here (unlike Suppliers' `StatusFilterTabs`): the brief leaves this to
+ * judgment, and with `ContractStatus` mostly reflecting the commercial lifecycle rather
+ * than something a reviewer triages by day-to-day, a single most-recently-updated-first
+ * list is enough for this epic's scope — add filtering if/when the list actually grows
+ * unwieldy in practice, not preemptively.
+ */
+export default async function ContractsPage() {
+  const user = await requireSession();
+  const permissions = getContractPermissions(user.role);
+  const accessToken = (await readAccessToken())!;
+
+  let contracts: Awaited<ReturnType<typeof listContracts>> = [];
+  let forbidden = false;
+
+  try {
+    contracts = await listContracts(accessToken);
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 403) {
+      forbidden = true;
+    } else {
+      throw error;
+    }
+  }
+
+  // Best-effort supplier-name lookup for the table's "Supplier" column — every role with
+  // Contracts read access also has at least Suppliers read access in the default RBAC
+  // grid (`backend/app/identity/domain/rbac.py`), but a per-user override could still
+  // narrow that, so a failure here degrades to showing raw ids rather than breaking the
+  // whole page (persona: "design the unhappy paths").
+  const supplierNames = new Map<string, string>();
+  if (!forbidden && contracts.length > 0) {
+    try {
+      const suppliers = await listSuppliers(accessToken);
+      for (const supplier of suppliers) supplierNames.set(supplier.id, supplier.legalName);
+    } catch {
+      // Leave supplierNames empty — ContractTable already falls back to "—" per row.
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Contracts</h1>
+          <p className="mt-1 max-w-2xl text-sm text-foreground-muted">
+            Every contract your organization has uploaded, with the structured, cited
+            extraction behind each version.
+          </p>
+        </div>
+        {!forbidden && permissions.canCreate && (
+          <Link href="/contracts/new" className={buttonClasses("primary")}>
+            <Plus className="size-4" aria-hidden="true" />
+            Upload contract
+          </Link>
+        )}
+      </div>
+
+      {forbidden ? (
+        <Alert tone="danger" title="You don't have access to Contracts.">
+          Ask an administrator to grant you the &quot;contracts&quot; read permission for
+          this organization.
+        </Alert>
+      ) : contracts.length === 0 ? (
+        <ContractsEmptyState canCreate={permissions.canCreate} />
+      ) : (
+        <ContractTable contracts={contracts} supplierNames={supplierNames} />
+      )}
+    </div>
+  );
+}
+
+function ContractsEmptyState({ canCreate }: { canCreate: boolean }) {
+  const Icon = NAV_ITEMS.contracts.icon;
+  return (
+    <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border bg-surface px-6 py-16 text-center">
+      <div className="flex size-12 items-center justify-center rounded-full bg-surface-muted">
+        <Icon className="size-6 text-foreground-muted" aria-hidden="true" />
+      </div>
+      <h2 className="text-lg font-semibold text-foreground">No contracts yet</h2>
+      <p className="max-w-sm text-sm text-foreground-muted">
+        {canCreate
+          ? "Upload your first contract to start tracking its structured, cited extraction against your policies."
+          : "No contracts have been uploaded for your organization yet."}
+      </p>
+      {canCreate && (
+        <Link href="/contracts/new" className={buttonClasses("primary", "mt-1")}>
+          <Plus className="size-4" aria-hidden="true" />
+          Upload contract
+        </Link>
+      )}
+    </div>
+  );
 }
