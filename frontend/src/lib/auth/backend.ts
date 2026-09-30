@@ -82,6 +82,42 @@ export async function request<T>(
   return (await response.json()) as T;
 }
 
+/**
+ * `request()`'s multipart counterpart — needed because `request()` unconditionally sets
+ * `Content-Type: application/json`, which is wrong for a `FormData` body (the browser/
+ * runtime must set its own `multipart/form-data; boundary=...` header, which is only
+ * possible when the caller does *not* set `Content-Type` at all). Everything else
+ * (base-URL resolution, Bearer token, no-store caching, `ApiError` unwrapping) matches
+ * `request()` exactly — `lib/contracts/backend.ts`'s contract upload is the first caller
+ * (`POST /contracts/upload` takes `multipart/form-data`, unlike every other endpoint in
+ * this codebase so far).
+ */
+export async function requestMultipart<T>(
+  path: string,
+  init: { accessToken?: string; formData: FormData; method?: string },
+): Promise<T> {
+  const { accessToken, formData, method = "POST" } = init;
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method,
+    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+    body: formData,
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    const detail = await parseErrorDetail(response);
+    const retryAfterHeader = response.headers.get("Retry-After");
+    throw new ApiError(
+      response.status,
+      detail,
+      retryAfterHeader ? Number(retryAfterHeader) : undefined,
+    );
+  }
+
+  if (response.status === 204) return undefined as T;
+  return (await response.json()) as T;
+}
+
 export interface TokenPair {
   access_token: string;
   refresh_token: string;
