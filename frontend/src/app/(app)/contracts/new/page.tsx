@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 
+import { Alert } from "@/components/ui/Alert";
 import { UploadContractForm } from "@/components/contracts/UploadContractForm";
+import { ApiError } from "@/lib/auth/backend";
 import { readAccessToken } from "@/lib/auth/cookies";
 import { requireSession } from "@/lib/auth/session";
 import { listContracts } from "@/lib/contracts/backend";
@@ -36,10 +38,44 @@ export default async function NewContractPage({ searchParams }: NewContractPageP
   // Both lists are needed regardless of which flow the user ends up picking (the radio
   // choice is client-side), and both are cheap, org-scoped GETs — fetched together rather
   // than gating one behind the other's result.
-  const [suppliers, contracts] = await Promise.all([
-    listSuppliers(accessToken),
-    listContracts(accessToken),
-  ]);
+  //
+  // QA review (2026-09-30): unlike contracts/page.tsx, this page had no 403 handling for
+  // these fetches at all -- a per-user override narrowing someone's read access below
+  // this page's own no-gate design (see docstring above) would throw into the generic
+  // error boundary instead of an actionable message. Mirrors the list page's pattern.
+  let suppliers: Awaited<ReturnType<typeof listSuppliers>> = [];
+  let contracts: Awaited<ReturnType<typeof listContracts>> = [];
+  let forbidden = false;
+  try {
+    [suppliers, contracts] = await Promise.all([
+      listSuppliers(accessToken),
+      listContracts(accessToken),
+    ]);
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 403) {
+      forbidden = true;
+    } else {
+      throw error;
+    }
+  }
+
+  if (forbidden) {
+    return (
+      <div className="max-w-lg space-y-6">
+        <Link
+          href="/contracts"
+          className="inline-flex items-center gap-1 text-sm font-medium text-foreground-muted hover:text-foreground"
+        >
+          <ArrowLeft className="size-4" aria-hidden="true" />
+          Back to contracts
+        </Link>
+        <Alert tone="danger" title="You don't have access to upload a contract.">
+          Ask an administrator to grant you the &quot;contracts&quot; and &quot;suppliers&quot;
+          read permissions for this organization.
+        </Alert>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-lg space-y-6">
