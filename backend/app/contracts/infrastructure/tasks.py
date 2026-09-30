@@ -9,7 +9,7 @@ import logging
 import uuid
 
 from app.core.celery_app import celery_app
-from app.core.db import get_sessionmaker
+from app.core.db import task_session
 
 logger = logging.getLogger("jurisense.contracts.tasks")
 
@@ -17,7 +17,7 @@ logger = logging.getLogger("jurisense.contracts.tasks")
 async def _run(contract_version_id: str) -> None:
     from app.contracts.application.extraction_orchestration import run_extraction_for_version
 
-    async with get_sessionmaker()() as session:
+    async with task_session() as session:
         await run_extraction_for_version(
             session, contract_version_id=uuid.UUID(contract_version_id)
         )

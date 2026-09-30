@@ -11,7 +11,7 @@ import logging
 import uuid
 
 from app.core.celery_app import celery_app
-from app.core.db import get_sessionmaker
+from app.core.db import task_session
 
 logger = logging.getLogger("jurisense.suppliers.tasks")
 
@@ -22,7 +22,7 @@ async def _run(check_id: str) -> None:
     # to break the natural application<->task-wrapper import cycle.
     from app.suppliers.application.check_service import run_supplier_check
 
-    async with get_sessionmaker()() as session:
+    async with task_session() as session:
         await run_supplier_check(session, check_id=uuid.UUID(check_id))
 
 

@@ -13,7 +13,7 @@ import asyncio
 import logging
 
 from app.core.celery_app import celery_app
-from app.core.db import get_sessionmaker
+from app.core.db import task_session
 from app.integrations.domain.constants import SanctionsList
 from app.integrations.infrastructure.models import SanctionsEntry
 from app.integrations.infrastructure.sanctions_repository import SanctionsRepository
@@ -43,7 +43,7 @@ async def _refresh_one_list(list_name: SanctionsList) -> int:
         for row in rows
     ]
 
-    async with get_sessionmaker()() as session:
+    async with task_session() as session:
         count = await SanctionsRepository(session).replace_list(
             list_name=list_name.value, extract_date=extract_date, entries=entries
         )
