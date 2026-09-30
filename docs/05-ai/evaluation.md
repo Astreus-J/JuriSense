@@ -112,6 +112,30 @@ Qualitatively, a prompt/model configuration is good enough to promote to product
 > re-validate after the first month of production spot-review data. / Decision artifact: a dated
 > addendum to this document recording the chosen thresholds, cross-referenced from `BR-CON-003`.
 
+## Addendum (2026-09-30) — interim confidence threshold chosen ahead of a golden dataset
+
+EPIC-3 (Contract Intelligence) needed a real, enforceable `BR-CON-003` gate to ship the
+extraction pipeline; a golden dataset (Method 1 above) does not exist yet, so waiting for
+it would have blocked all of EPIC-3, not just the threshold's own refinement. Consistent
+with the `ADR-008`/`ADR-017` precedent for resolving an implementation-blocking `TBD`
+("pick a defensible default now, document the reasoning, revisit with real data" — see
+`docs/adr/ADR-005-addendum-interim-ai-provider.md` for the full writeup, which this note
+cross-references per this document's own "Decision artifact" instruction above):
+
+- **Threshold chosen: 0.82**, applied per-field (never a document-level average, per this
+  document's own "one weak field... cannot be masked" design rule above), as a
+  `Settings.contract_extraction_confidence_threshold` field (`app/core/config.py`) --
+  configurable per environment, not a hardcoded constant, precisely because it is
+  expected to move.
+- **Why 0.82 specifically**: the midpoint of `contract-compliance.md`'s own candidate
+  range (0.80-0.85), named there before this addendum existed. No golden-dataset run
+  informs this number yet -- it is explicitly a placeholder default, not a calibrated
+  value, and this addendum says so rather than implying otherwise.
+- **What re-validates it**: the first full golden-dataset run (once that dataset exists,
+  Method 1) against the actual production extraction model, per this document's own
+  already-stated resolution path -- at that point this addendum should be superseded by
+  a second, data-backed one recording the calibrated threshold(s).
+
 ## Relationship to other guardrails
 
 Evaluation and guardrails are complementary, not the same thing: `evaluation.md` (this document)
