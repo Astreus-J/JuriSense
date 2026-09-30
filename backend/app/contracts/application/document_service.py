@@ -10,7 +10,11 @@ import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.contracts.domain.constants import DocumentStatus
-from app.contracts.infrastructure.document_scanner import compute_content_hash, validate_and_scan
+from app.contracts.infrastructure.document_scanner import (
+    compute_content_hash,
+    safe_storage_filename,
+    validate_and_scan,
+)
 from app.contracts.infrastructure.models import Document
 from app.contracts.infrastructure.repositories import DocumentRepository
 from app.core.config import get_settings
@@ -37,7 +41,10 @@ async def upload_document(
     content_hash = compute_content_hash(data)
 
     document_id = uuid.uuid4()
-    storage_key = f"contracts/{organization_id}/{document_id}/{filename}"
+    # Security review (2026-09-29): the storage key's filename component must never be
+    # the raw client-supplied `filename` (see `safe_storage_filename`'s docstring) --
+    # `original_filename` below keeps the raw value for display.
+    storage_key = f"contracts/{organization_id}/{document_id}/{safe_storage_filename(filename)}"
     storage.put(storage_key, data, content_type=sniffed_mime)
 
     document = Document(

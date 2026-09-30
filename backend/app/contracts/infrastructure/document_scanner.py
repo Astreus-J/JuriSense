@@ -89,6 +89,29 @@ def _extension_of(filename: str) -> str:
     return "." + filename.rsplit(".", 1)[-1].lower()
 
 
+_SAFE_FILENAME_CHARS = frozenset(
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-_"
+)
+
+
+def safe_storage_filename(filename: str) -> str:
+    """The filename component of an object-storage key must never be the raw
+    client-supplied `filename` -- security review (2026-09-29): live-tested that
+    `filename=../../../../etc/passwd.txt` was accepted outright, with no
+    basename-stripping or character allowlist. S3-compatible keys are flat strings (no
+    path resolution) and a fresh random `document_id` is always interposed before this
+    component, so this wasn't independently exploitable for cross-object access -- but
+    there was no defense at all against control characters, extreme lengths, or
+    key-display log/CSV injection from an arbitrary filename. `original_filename` (the
+    DB column used for display) keeps the raw, unsanitized value; only the *storage key*
+    uses this.
+    """
+    basename = filename.rsplit("/", 1)[-1].rsplit("\\", 1)[-1]
+    cleaned = "".join(ch if ch in _SAFE_FILENAME_CHARS else "_" for ch in basename)
+    cleaned = cleaned.strip("._") or "upload"
+    return cleaned[:200]
+
+
 def _sniff_and_validate_type(data: bytes, *, filename: str) -> str:
     extension = _extension_of(filename)
     expected_mime = EXTENSION_TO_MIME.get(extension)

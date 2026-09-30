@@ -14,7 +14,11 @@ from app.contracts.domain.errors import (
     MalwareDetectedError,
     UnsupportedFileTypeError,
 )
-from app.contracts.infrastructure.document_scanner import compute_content_hash, validate_and_scan
+from app.contracts.infrastructure.document_scanner import (
+    compute_content_hash,
+    safe_storage_filename,
+    validate_and_scan,
+)
 
 _MINIMAL_PDF = b"%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF"
 _EICAR = b"X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*"
@@ -98,3 +102,32 @@ def test_content_hash_is_deterministic_sha256() -> None:
     expected = hashlib.sha256(_MINIMAL_PDF).hexdigest()
     assert compute_content_hash(_MINIMAL_PDF) == expected
     assert len(expected) == 64
+
+
+def test_safe_storage_filename_strips_path_traversal() -> None:
+    """Security review (2026-09-29): confirmed live that a filename like
+    `../../../../etc/passwd.txt` was accepted outright into the storage key."""
+    assert "/" not in safe_storage_filename("../../../../etc/passwd.txt")
+    assert ".." not in safe_storage_filename("../../../../etc/passwd.txt")
+
+
+def test_safe_storage_filename_strips_backslashes_and_control_chars() -> None:
+    result = safe_storage_filename("..\\..\\windows\\system32\\evil.txt")
+    assert "\\" not in result
+    assert ".." not in result
+
+    result = safe_storage_filename("contract\x00\n\r.pdf")
+    assert "\x00" not in result
+    assert "\n" not in result
+
+
+def test_safe_storage_filename_keeps_a_normal_name_readable() -> None:
+    assert safe_storage_filename("Master Service Agreement (v2).pdf") == (
+        "Master_Service_Agreement__v2_.pdf"
+    )
+
+
+def test_safe_storage_filename_never_returns_empty() -> None:
+    assert safe_storage_filename("") == "upload"
+    assert safe_storage_filename("...") == "upload"
+    assert safe_storage_filename("/") == "upload"
