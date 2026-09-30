@@ -222,3 +222,51 @@ async def test_simulate_contract_without_supplier_evidence_is_not_applicable(
     assert outcomes["SANC-001"] == "NOT_APPLICABLE"
     # The contract-side rules are still fully evaluable regardless of supplier evidence.
     assert outcomes["FIN-003"] == "REVIEW"
+
+
+async def test_simulate_unknown_contract_version_is_not_found(client: httpx.AsyncClient) -> None:
+    """QA finding (2026-09-30): unlike `trigger_review`, this endpoint previously never
+    verified `contract_version_id` ownership before evaluating -- a nonexistent id
+    silently produced a 200 with an empty context (every rule NOT_APPLICABLE, aggregate
+    APPROVE) instead of a 404."""
+    headers = await register_org_and_login(client, "simulate-404@example.com")
+    policy_id, version_id = await _setup_policy_with_rules(client, headers)
+
+    response = await client.post(
+        f"/api/policies/{policy_id}/versions/{version_id}/simulate",
+        json={"contract_version_ids": ["00000000-0000-0000-0000-000000000000"]},
+        headers=headers,
+    )
+    assert response.status_code == 404
+
+
+async def test_simulate_cross_tenant_contract_version_is_not_found(
+    client: httpx.AsyncClient,
+    mock_openrouter,
+    run_contract_extraction_inline,
+) -> None:
+    """Same finding as above, but for a `contract_version_id` that is real -- just owned
+    by a different organization -- confirming this is a genuine cross-tenant IDOR fix,
+    not just an existence check."""
+    mock_openrouter(payload=SIMULATION_ENVELOPE)
+    org_a_headers = await register_org_and_login(client, "simulate-cross-a@example.com")
+    supplier = await create_supplier(client, org_a_headers, tax_id=TAX_ID)
+    upload = (
+        await client.post(
+            "/api/contracts/upload",
+            files={"file": ("contract.pdf", pdf_bytes_with_text(), "application/pdf")},
+            data={"supplier_id": supplier["id"], "title": "MSA", "contract_type": "msa"},
+            headers=org_a_headers,
+        )
+    ).json()
+    other_org_contract_version_id = upload["id"]
+
+    org_b_headers = await register_org_and_login(client, "simulate-cross-b@example.com")
+    policy_id, version_id = await _setup_policy_with_rules(client, org_b_headers)
+
+    response = await client.post(
+        f"/api/policies/{policy_id}/versions/{version_id}/simulate",
+        json={"contract_version_ids": [other_org_contract_version_id]},
+        headers=org_b_headers,
+    )
+    assert response.status_code == 404

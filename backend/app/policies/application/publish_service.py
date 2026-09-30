@@ -4,12 +4,13 @@ makes it the Policy's one current version (BR-POL-002)."""
 import uuid
 from datetime import UTC, datetime
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.evidence.application.audit_service import emit_audit_event
 from app.policies.application import policy_service
 from app.policies.domain.constants import PolicyStatus, PolicyVersionStatus
-from app.policies.domain.errors import NoDraftVersionToPublishError
+from app.policies.domain.errors import NoDraftVersionToPublishError, PolicyVersionConflictError
 from app.policies.infrastructure.models import PolicyVersion
 from app.policies.infrastructure.repositories import PolicyVersionRepository, RuleRepository
 
@@ -68,6 +69,13 @@ async def publish_version(
         },
     )
 
-    await session.commit()
+    try:
+        await session.commit()
+    except IntegrityError as exc:
+        # QA review (2026-09-30): a concurrent publish of a different draft version of
+        # the same Policy can race on uq_policy_versions_one_current -- confirmed
+        # empirically to previously surface as an unhandled 500.
+        await session.rollback()
+        raise PolicyVersionConflictError() from exc
     await session.refresh(version)
     return version

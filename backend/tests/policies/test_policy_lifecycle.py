@@ -324,3 +324,119 @@ async def test_policies_are_scoped_to_the_caller_organization(client: httpx.Asyn
 
     response = await client.get(f"/api/policies/{body['policy']['id']}", headers=headers_b)
     assert response.status_code == 404
+
+
+async def test_concurrent_publish_yields_one_success_and_one_clean_conflict(
+    client: httpx.AsyncClient, monkeypatch
+) -> None:
+    """QA review (2026-09-30): publish_version had no IntegrityError handling around its
+    commit -- two concurrent publishes of different draft versions of the same Policy can
+    both attempt to claim uq_policy_versions_one_current. True concurrency can't be
+    reproduced hermetically (SQLite/StaticPool doesn't support genuinely concurrent
+    transactions -- same limitation as the EPIC-3 ContractVersion race test); instead this
+    deterministically forces the collision by making supersede_current a no-op on the
+    second call, the same effect two simultaneous publishes racing past that step before
+    either commits would have.
+    """
+    from app.policies.infrastructure.repositories import PolicyVersionRepository
+
+    headers = await register_org_and_login(client, "policy-publish-race@example.com")
+    body = await _create_policy(client, headers)
+    policy_id = body["policy"]["id"]
+    v1_id = body["initial_version"]["id"]
+    await client.post(
+        f"/api/policies/{policy_id}/versions/{v1_id}/rules",
+        json={"yaml": SANC_001_YAML},
+        headers=headers,
+    )
+
+    v2 = (await client.post(f"/api/policies/{policy_id}/versions", headers=headers)).json()
+    await client.post(
+        f"/api/policies/{policy_id}/versions/{v2['id']}/rules",
+        json={"yaml": FIN_003_YAML},
+        headers=headers,
+    )
+
+    real_supersede = PolicyVersionRepository.supersede_current
+    call_count = {"n": 0}
+
+    async def _supersede_only_first_time(self, policy_id):
+        call_count["n"] += 1
+        if call_count["n"] == 1:
+            return await real_supersede(self, policy_id)
+        return None  # second call: pretend the race already passed this step
+
+    monkeypatch.setattr(PolicyVersionRepository, "supersede_current", _supersede_only_first_time)
+
+    first = await client.post(
+        f"/api/policies/{policy_id}/versions/{v1_id}/publish", headers=headers
+    )
+    second = await client.post(
+        f"/api/policies/{policy_id}/versions/{v2['id']}/publish", headers=headers
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 409  # not 500, and not a silently-broken invariant
+
+
+async def test_concurrent_draft_creation_yields_one_success_and_one_clean_conflict(
+    client: httpx.AsyncClient, monkeypatch
+) -> None:
+    """QA review (2026-09-30): create_draft_version's flush had no IntegrityError
+    handling -- two concurrent "create draft version" calls computing the same "next"
+    version_number race on uq_policy_version_number."""
+    from app.policies.infrastructure.repositories import PolicyVersionRepository
+
+    headers = await register_org_and_login(client, "policy-draft-race@example.com")
+    body = await _create_policy(client, headers)
+    policy_id = body["policy"]["id"]
+
+    real_get_next = PolicyVersionRepository.get_next_version_number
+    call_count = {"n": 0}
+
+    async def _stale_get_next(self, policy_id):
+        call_count["n"] += 1
+        if call_count["n"] == 1:
+            return await real_get_next(self, policy_id)
+        return 2  # pretend it computed "2" before the first draft committed
+
+    monkeypatch.setattr(PolicyVersionRepository, "get_next_version_number", _stale_get_next)
+
+    first = await client.post(f"/api/policies/{policy_id}/versions", headers=headers)
+    second = await client.post(f"/api/policies/{policy_id}/versions", headers=headers)
+
+    assert first.status_code == 201
+    assert second.status_code == 409
+
+
+async def test_concurrent_rule_creation_with_same_key_yields_one_success_and_one_conflict(
+    client: httpx.AsyncClient, monkeypatch
+) -> None:
+    """QA review (2026-09-30): create_rule's flush had no IntegrityError handling --
+    two concurrent requests creating a rule with the same rule_key in the same draft
+    version can both pass the get_by_key_and_version pre-check before either commits."""
+    from app.policies.infrastructure.repositories import RuleRepository
+
+    headers = await register_org_and_login(client, "policy-rule-race@example.com")
+    body = await _create_policy(client, headers)
+    policy_id = body["policy"]["id"]
+    version_id = body["initial_version"]["id"]
+
+    async def _always_none(self, rule_key, version_id):
+        return None  # pretend both requests checked before either committed
+
+    monkeypatch.setattr(RuleRepository, "get_by_key_and_version", _always_none)
+
+    first = await client.post(
+        f"/api/policies/{policy_id}/versions/{version_id}/rules",
+        json={"yaml": SANC_001_YAML},
+        headers=headers,
+    )
+    second = await client.post(
+        f"/api/policies/{policy_id}/versions/{version_id}/rules",
+        json={"yaml": SANC_001_YAML},
+        headers=headers,
+    )
+
+    assert first.status_code == 201
+    assert second.status_code == 409

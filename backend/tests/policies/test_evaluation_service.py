@@ -126,6 +126,19 @@ def test_evaluate_rule_blocks_when_sanctions_hit_present() -> None:
     assert result.outcome == RuleOutcome.BLOCK.value
 
 
+def test_evaluate_rule_rationale_is_human_readable_not_a_python_repr() -> None:
+    """QA review (2026-09-30): `rationale` previously rendered `repr(rule.when)` verbatim
+    (e.g. `{'contract.value.brl': {'gte': 250000}}`) -- raw Python dict syntax, not the
+    human-readable condition text ADR-010's "WHY, EVIDENCE, POLICY, SOURCE" explainability
+    principle calls for. `describe_when` must render the DSL's own operator symbols
+    instead of Python's dict/repr syntax."""
+    rule = _rule_from_yaml(FIN_003_YAML)
+    result = evaluate_rule(rule, {"contract": {"value": {"brl": 300000}}})
+    assert result.outcome == "REVIEW"
+    assert "{'gte':" not in result.rationale
+    assert "contract.value.brl >= 250000" in result.rationale
+
+
 def test_evaluate_policy_version_runs_every_rule_independently() -> None:
     rules = [_rule_from_yaml(SANC_001_YAML), _rule_from_yaml(FIN_003_YAML)]
     context = {"supplier": {"sanctions_hit": False}, "contract": {"value": {"brl": 300000}}}

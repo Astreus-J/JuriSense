@@ -66,7 +66,11 @@ class RuleResponse(BaseModel):
 
 
 class SimulateRequest(BaseModel):
-    contract_version_ids: list[uuid.UUID] = Field(min_length=1)
+    # QA/security review (2026-09-30), confirmed live by both: no cap meant the global
+    # MaxBodySizeMiddleware (sized for document uploads, ~25MB) let through on the order
+    # of 500k-600k UUID strings in one request, each triggering several sequential DB
+    # round-trips plus real CEL rule evaluation -- a cheap, single-request DoS lever.
+    contract_version_ids: list[uuid.UUID] = Field(min_length=1, max_length=50)
 
 
 class RuleEvaluationResponse(BaseModel):

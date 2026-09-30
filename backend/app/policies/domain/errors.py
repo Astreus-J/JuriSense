@@ -73,3 +73,18 @@ class ContractVersionNotFoundError(PolicyError):
 class ComplianceReviewNotFoundError(PolicyError):
     def __init__(self) -> None:
         super().__init__("Compliance review not found")
+
+
+class PolicyVersionConflictError(PolicyError):
+    """QA review (2026-09-30): two concurrent requests can race on either of two unique
+    constraints -- two concurrent publishes of different draft versions of the same
+    Policy both targeting `uq_policy_versions_one_current`, or two concurrent "create
+    draft version" calls computing the same "next" version_number and colliding on
+    `uq_policy_version_number`. Both previously surfaced as an unhandled 500
+    (uncaught IntegrityError) instead of a clean 409, the same bug class already found
+    and fixed for ContractVersion re-uploads. The client should simply retry."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "Another request just changed this policy's versions -- retry the operation"
+        )

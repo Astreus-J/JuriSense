@@ -29,6 +29,7 @@ from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.contracts.application.evidence_service import contract_version_belongs_to_organization
 from app.policies.application import policy_service
 from app.policies.application.context_builder import build_context_for_contract_version
 from app.policies.application.evaluation_service import (
@@ -37,6 +38,7 @@ from app.policies.application.evaluation_service import (
     aggregate_preview,
     evaluate_policy_version,
 )
+from app.policies.domain.errors import ContractVersionNotFoundError
 from app.policies.infrastructure.repositories import RuleRepository
 
 logger = logging.getLogger("jurisense.policies.simulation")
@@ -74,6 +76,15 @@ async def run_simulation(
 
     contract_results: list[ContractSimulationResult] = []
     for contract_version_id in contract_version_ids:
+        # QA review (2026-09-30), confirmed live: unlike `trigger_review`,
+        # `build_context_for_contract_version` alone doesn't distinguish "not found" from
+        # "cross-tenant" from "no supplier attached yet" -- all three silently yield an
+        # empty context, which previously let this endpoint return 200/APPROVE for a
+        # nonexistent or another organization's `contract_version_id` instead of 404.
+        if not await contract_version_belongs_to_organization(
+            session, organization_id=organization_id, contract_version_id=contract_version_id
+        ):
+            raise ContractVersionNotFoundError()
         context = await build_context_for_contract_version(
             session, organization_id=organization_id, contract_version_id=contract_version_id
         )

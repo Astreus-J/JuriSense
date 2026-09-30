@@ -123,6 +123,21 @@ def _cel_literal(value: Any) -> str:
     )
 
 
+def _is_numeric(value: Any) -> bool:
+    return isinstance(value, int | float) and not isinstance(value, bool)
+
+
+def _numeric_cel_literal(value: Any) -> str:
+    """Renders a numeric literal wrapped in CEL's `double()` conversion. cel-python's
+    IntType/DoubleType are not freely comparable (`CELEvalError: no such overload`) --
+    confirmed live e.g. `IntType(300000) >= DoubleType(250000.0)` crashes uncaught. A YAML
+    author writing `gte: 250000` (int) vs `gte: 250000.0` (double) is an implementation
+    detail they can't see or control, and the runtime context value's own int/double-ness
+    depends on how it was produced upstream -- so both sides of every numeric comparison
+    are cast to `double` symmetrically, regardless of which one is naturally int vs float."""
+    return f"double({_cel_literal(value)})"
+
+
 def _compile_condition_clause(path: str, raw_key: str, raw_value: Any) -> str:
     if isinstance(raw_value, dict):
         if len(raw_value) != 1:
@@ -139,10 +154,20 @@ def _compile_condition_clause(path: str, raw_key: str, raw_value: Any) -> str:
         if op_key == "in":
             if not isinstance(op_value, list):
                 raise RuleValidationError(f"The 'in' operator for '{raw_key}' requires a list")
-            return f"{path} in {_cel_literal(op_value)}"
+            if op_value and all(_is_numeric(item) for item in op_value):
+                operand = f"double({path})"
+                literal = "[" + ", ".join(_numeric_cel_literal(item) for item in op_value) + "]"
+            else:
+                operand = path
+                literal = _cel_literal(op_value)
+            return f"{operand} in {literal}"
+        if _is_numeric(op_value):
+            return f"double({path}) {_OPERATORS[op_key]} {_numeric_cel_literal(op_value)}"
         return f"{path} {_OPERATORS[op_key]} {_cel_literal(op_value)}"
     # Implicit equality (e.g. `processes_personal_data: true`,
     # `contract.liability.type: unlimited`).
+    if _is_numeric(raw_value):
+        return f"double({path}) == {_numeric_cel_literal(raw_value)}"
     return f"{path} == {_cel_literal(raw_value)}"
 
 
@@ -255,7 +280,18 @@ def parse_rule_document(doc: dict[str, Any]) -> ParsedRule:
             f"'approver_role' must be null when result.status is {result_status}"
         )
 
-    compiled = compile_rule_when(when)
+    try:
+        compiled = compile_rule_when(when)
+    except RecursionError as exc:
+        # QA review (2026-09-30): a `when` clause containing a pathologically deep nested
+        # list literal (e.g. thousands of brackets in an `in: [[[...]]]`) blows the
+        # recursive descent both `_cel_literal` and cel-python's own compiler use,
+        # raising an uncaught `RecursionError` instead of the intended
+        # `RuleValidationError` -- confirmed empirically, previously an unhandled 500 on
+        # rule create/update.
+        raise RuleValidationError(
+            "'when' clause is too deeply nested to compile"
+        ) from exc
 
     return ParsedRule(
         rule_key=rule_key,
@@ -268,6 +304,35 @@ def parse_rule_document(doc: dict[str, Any]) -> ParsedRule:
         compiled_condition_cel=compiled.condition_cel,
         referenced_paths=list(compiled.referenced_paths),
     )
+
+
+_HUMAN_OPERATORS: dict[str, str] = {
+    "eq": "=",
+    "ne": "!=",
+    "gt": ">",
+    "gte": ">=",
+    "lt": "<",
+    "lte": "<=",
+    "in": "in",
+}
+
+
+def describe_when(when: dict[str, Any]) -> str:
+    """Renders a `when` clause as the human-readable condition text the product's "WHY,
+    EVIDENCE, POLICY, SOURCE" explainability principle (ADR-010) requires --
+    `evaluation_service.evaluate_rule`'s `rationale` field previously used `repr(rule.when)`
+    (QA review, 2026-09-30), which surfaces raw Python dict syntax (e.g.
+    `{'contract.value.brl': {'gte': 250000}}`) instead of the author-facing condition text
+    (`contract.value.brl >= 250000`) a compliance reviewer actually needs."""
+    clauses = []
+    for raw_key, raw_value in when.items():
+        if isinstance(raw_value, dict) and len(raw_value) == 1:
+            (op_key, op_value), = raw_value.items()
+            op = _HUMAN_OPERATORS.get(op_key, op_key)
+            clauses.append(f"{raw_key} {op} {op_value!r}")
+        else:
+            clauses.append(f"{raw_key} = {raw_value!r}")
+    return " AND ".join(clauses)
 
 
 def referenced_paths_of(when: dict[str, Any]) -> tuple[str, ...]:
@@ -289,4 +354,10 @@ def parse_rule_yaml(yaml_text: str) -> ParsedRule:
         doc = yaml.safe_load(yaml_text)
     except yaml.YAMLError as exc:
         raise RuleValidationError(f"Invalid YAML: {exc}") from exc
+    except RecursionError as exc:
+        # Same pathologically-deep-nesting failure mode `parse_rule_document` guards
+        # against below, but reachable earlier here: PyYAML's own composer/constructor
+        # recurses per nesting level while parsing the raw YAML text, before a `when`
+        # dict even exists to hand to `compile_rule_when`.
+        raise RuleValidationError("Rule YAML is too deeply nested to parse") from exc
     return parse_rule_document(doc)

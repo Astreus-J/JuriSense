@@ -5,11 +5,16 @@ only inside a draft PolicyVersion")."""
 
 import uuid
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.evidence.application.audit_service import emit_audit_event
 from app.policies.domain.constants import PolicyVersionStatus
-from app.policies.domain.errors import PolicyNotFoundError, PolicyVersionNotFoundError
+from app.policies.domain.errors import (
+    PolicyNotFoundError,
+    PolicyVersionConflictError,
+    PolicyVersionNotFoundError,
+)
 from app.policies.infrastructure.models import Policy, PolicyVersion, Rule
 from app.policies.infrastructure.repositories import (
     PolicyRepository,
@@ -97,7 +102,14 @@ async def create_draft_version(
         policy_id=policy.id, version_number=next_number, status=PolicyVersionStatus.DRAFT.value
     )
     version_repo.add(new_version)
-    await session.flush()
+    try:
+        await session.flush()
+    except IntegrityError as exc:
+        # QA review (2026-09-30): two concurrent "create draft version" calls computing
+        # the same "next" version_number race on uq_policy_version_number -- confirmed
+        # empirically to previously surface as an unhandled 500.
+        await session.rollback()
+        raise PolicyVersionConflictError() from exc
 
     if current is not None:
         existing_rules = await rule_repo.list_by_version(current.id)

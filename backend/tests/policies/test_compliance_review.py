@@ -48,6 +48,18 @@ severity: high
 approver_role: legal
 """
 
+FIN_004_YAML = """
+rule:
+  id: FIN-004
+  name: Very High-Value Contract Requires Director Approval
+when:
+  contract.value.brl: { gte: 200000 }
+result:
+  status: REVIEW
+severity: high
+approver_role: director
+"""
+
 EVIDENCE_ENVELOPE = {
     "fields": {
         "value": {
@@ -241,12 +253,26 @@ async def test_trigger_review_order_independent_regardless_of_rule_order(
     depend on the order rules were authored/evaluated in -- confirmed here at the
     *persisted* integration level (`evaluate_policy_version`/`aggregate_preview`'s own
     order-independence is already unit-tested in test_evaluation_service.py; this confirms
-    the real trigger-review path preserves that property end to end)."""
+    the real trigger-review path preserves that property end to end).
+
+    QA review (2026-09-30): the original version of this test used SANC-001 (BLOCK) plus
+    two REVIEW rules -- since "any BLOCK -> BLOCK" trivially wins regardless of which
+    element of the list happens to be checked first, that combination cannot actually
+    distinguish a correct order-independent aggregation from a broken order-*dependent*
+    one (e.g. "first/last rule's outcome wins"). This version drops SANC-001 and instead
+    uses two same-severity-tier REVIEW rules with two DIFFERENT approver roles
+    (LEGAL-008: high/legal, FIN-004: high/director) plus one lower-severity REVIEW rule
+    (FIN-003: medium/legal) -- ADR-010's tie-break ("ties broken by naming every distinct
+    role at that severity") means the correct required-approver set is exactly
+    `{"director", "legal"}` (the two *high*-severity roles; FIN-003's *medium* role is
+    excluded), a result only reachable by actually applying the severity-based algorithm,
+    not by any order-dependent shortcut -- and it is asserted identically for both
+    authoring orders."""
     mock_cnpj_registry(data=ACTIVE_CNPJ_RESPONSE)
     await seed_sanctions_index(hit_document=TAX_ID)
     mock_openrouter(payload=EVIDENCE_ENVELOPE)
 
-    # Org A: SANC-001 (BLOCK) authored before FIN-003 (REVIEW)/LEGAL-008 (REVIEW).
+    # Org A: FIN-003 (medium/legal) authored before LEGAL-008/FIN-004 (both high).
     headers_a = await register_org_and_login(client, "order-a@example.com")
     supplier_a = await create_supplier(client, headers_a, tax_id=TAX_ID)
     contract_a = await _upload_contract(client, headers_a, supplier_a["id"])
@@ -254,7 +280,7 @@ async def test_trigger_review_order_independent_regardless_of_rule_order(
         client,
         headers_a,
         name="Policy A",
-        rule_yamls=[SANC_001_YAML, FIN_003_YAML, LEGAL_008_YAML],
+        rule_yamls=[FIN_003_YAML, LEGAL_008_YAML, FIN_004_YAML],
     )
     response_a = await client.post(
         "/api/compliance/reviews", json={"contract_version_id": contract_a}, headers=headers_a
@@ -268,14 +294,29 @@ async def test_trigger_review_order_independent_regardless_of_rule_order(
         client,
         headers_b,
         name="Policy B",
-        rule_yamls=[LEGAL_008_YAML, FIN_003_YAML, SANC_001_YAML],
+        rule_yamls=[FIN_004_YAML, LEGAL_008_YAML, FIN_003_YAML],
     )
     response_b = await client.post(
         "/api/compliance/reviews", json={"contract_version_id": contract_b}, headers=headers_b
     )
 
     assert response_a.status_code == 201 and response_b.status_code == 201
-    assert response_a.json()["status"] == response_b.json()["status"] == "BLOCK"
+    assert response_a.json()["status"] == response_b.json()["status"] == "REVIEW"
+
+    async def _fetch_required_roles(review_id: str, headers: dict) -> set[str]:
+        detail = (
+            await client.get(f"/api/compliance/reviews/{review_id}", headers=headers)
+        ).json()
+        review_evals = [e for e in detail["rule_evaluations"] if e["outcome"] == "REVIEW"]
+        highest_severity = min(
+            (e["severity"] for e in review_evals),
+            key=lambda s: ["critical", "high", "medium", "low"].index(s),
+        )
+        return {e["approver_role"] for e in review_evals if e["severity"] == highest_severity}
+
+    roles_a = await _fetch_required_roles(response_a.json()["id"], headers_a)
+    roles_b = await _fetch_required_roles(response_b.json()["id"], headers_b)
+    assert roles_a == roles_b == {"legal", "director"}
 
 
 async def test_trigger_review_zero_published_policies_defaults_to_approve(

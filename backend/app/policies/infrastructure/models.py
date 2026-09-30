@@ -102,9 +102,15 @@ class Rule(Base):
     service layer that normally guards it -- `is_frozen` starts `False` and is flipped to
     `True` exactly once, by `publish_service.publish_version`, in the same transaction
     that publishes the owning `PolicyVersion`. The `@validates` hook below then refuses
-    any further change to a mutable field on a frozen row, regardless of which code path
-    attempts it (service, a future second API route, a script) -- not just the route this
-    epic ships.
+    any further change to a mutable field on a frozen row coming through ORM
+    instance-attribute assignment (`rule.name = ...`) -- so any future second API route,
+    service, or script that loads a `Rule` and mutates it the normal SQLAlchemy way is
+    covered, not just `rule_service`'s own routes. It does **not** guard a bulk/raw-SQL
+    update (e.g. `session.execute(update(Rule)...)` or a direct `UPDATE rules ...`) that
+    bypasses ORM attribute assignment entirely -- `@validates` is a Python-level hook, not
+    a database constraint. No code path in this codebase currently does that, so this is a
+    documented gap, not a live one; a DB-level trigger would be the defense-in-depth fix
+    if a bulk-update path is ever added (tracked as backlog, not yet needed).
     """
 
     __tablename__ = "rules"

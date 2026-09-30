@@ -17,6 +17,7 @@ from typing import Any
 import celpy
 
 from app.policies.domain.constants import SEVERITY_ORDER, RuleOutcome, Severity
+from app.policies.domain.rule_dsl import describe_when
 from app.policies.infrastructure.models import Rule
 
 _CEL_ENV = celpy.Environment()
@@ -98,7 +99,7 @@ def evaluate_rule(rule: Rule, context: dict[str, Any]) -> RuleEvaluationResult:
             outcome=rule.result_status,
             severity=rule.severity,
             approver_role=rule.approver_role,
-            rationale=f"Rule '{rule.rule_key}' condition matched: {rule.when!r}.",
+            rationale=f"Rule '{rule.rule_key}' condition matched: {describe_when(rule.when)}.",
         )
 
     return RuleEvaluationResult(

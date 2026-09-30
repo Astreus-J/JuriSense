@@ -38,6 +38,7 @@ from app.policies.domain.errors import (
     DuplicateRuleKeyError,
     NoDraftVersionToPublishError,
     PolicyNotFoundError,
+    PolicyVersionConflictError,
     PolicyVersionNotDraftError,
     PolicyVersionNotFoundError,
     RuleNotFoundError,
@@ -120,6 +121,8 @@ async def create_draft_version(
         )
     except PolicyNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.message) from exc
+    except PolicyVersionConflictError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.message) from exc
     return PolicyVersionResponse.model_validate(version)
 
 
@@ -156,6 +159,8 @@ async def publish_version(
     except (PolicyNotFoundError, PolicyVersionNotFoundError) as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.message) from exc
     except NoDraftVersionToPublishError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.message) from exc
+    except PolicyVersionConflictError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.message) from exc
     return PolicyVersionResponse.model_validate(version)
 
@@ -274,13 +279,22 @@ async def simulate(
     policy_id: uuid.UUID,
     version_id: uuid.UUID,
     body: SimulateRequest,
-    user: CanReadPolicies,
+    user: CanCreatePolicies,
     session: SessionDep,
 ) -> SimulationResponse:
     """#61: dry-run against one or more existing `ContractVersion`s. No `ComplianceReview`
     /`RuleEvaluation`/`Decision` row is created and no real domain event is emitted --
     see `app.policies.application.simulation_service`'s module docstring for the scope
-    call this endpoint implements."""
+    call this endpoint implements.
+
+    Security review (2026-09-30), confirmed live: gated on `create` (`CanCreatePolicies`),
+    not `read` -- even though simulation writes nothing, it runs real CEL rule evaluation
+    against arbitrary existing ContractVersions in the caller's org, which is a policy-
+    authoring capability, not a read one. Under `read`, 7 of 10 roles (procurement,
+    privacy, security, finance, approver, auditor, viewer) could invoke arbitrary CEL
+    evaluation -- confirmed live with a `viewer`-role user (403 on rule creation, 200 on
+    simulate before this fix).
+    """
     try:
         result = await run_simulation(
             session,
@@ -290,7 +304,11 @@ async def simulate(
             version_id=version_id,
             contract_version_ids=body.contract_version_ids,
         )
-    except (PolicyNotFoundError, PolicyVersionNotFoundError) as exc:
+    except (
+        PolicyNotFoundError,
+        PolicyVersionNotFoundError,
+        ContractVersionNotFoundError,
+    ) as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.message) from exc
     return SimulationResponse(
         policy_id=result.policy_id,

@@ -3,6 +3,8 @@ compiler (#55/#57). Includes the 5 worked examples from
 docs/03-domain/policy-engine.md verbatim, and the missing-field/NOT_APPLICABLE behavior
 the ADR-004 spike validated (see rule_dsl.py's module docstring)."""
 
+from typing import Any
+
 import celpy
 import pytest
 
@@ -123,6 +125,35 @@ def test_fin_003_and_fin_004_threshold_boundaries() -> None:
     assert _eval(fin_004.compiled_condition_cel, ctx) is False
 
 
+def test_numeric_comparison_does_not_crash_on_int_double_type_mismatch() -> None:
+    """QA finding (2026-09-30): a rule's `when` numeric literal and the runtime
+    evaluation-context value for the same field can be cel-python IntType/DoubleType
+    respectively (or vice versa) -- cel-python does not consider them comparable and
+    raises an uncaught `CELEvalError: no such overload` instead of the intended
+    True/False, which previously propagated as an unhandled 500 through
+    `evaluate_policy_version` -> `trigger_review`/`run_simulation`. Both directions are
+    covered: FIN_003's `when` literal (`gte: 250000`, an int) against a float context
+    value, and a rule whose own literal is a float against an int context value."""
+    fin_003 = parse_rule_yaml(FIN_003)  # when: { gte: 250000 } -- an int literal
+    float_ctx = {"contract": {"value": {"brl": 300000.0}}}  # a double context value
+    assert _eval(fin_003.compiled_condition_cel, float_ctx) is True
+
+    decimal_threshold = """
+rule:
+  id: FIN-005
+  name: Decimal Threshold Regression
+when:
+  contract.value.brl: { gte: 250000.0 }
+result:
+  status: REVIEW
+severity: medium
+approver_role: legal
+"""
+    parsed = parse_rule_yaml(decimal_threshold)  # when: { gte: 250000.0 } -- a float literal
+    int_ctx = {"contract": {"value": {"brl": 300000}}}  # an int context value
+    assert _eval(parsed.compiled_condition_cel, int_ctx) is True
+
+
 # --- Missing-field / NOT_APPLICABLE semantics (the ADR-004 spike's core finding) ---
 
 
@@ -134,17 +165,21 @@ def test_presence_check_is_false_when_referenced_field_entirely_absent() -> None
     assert _eval(parsed.compiled_presence_cel, {}) is False
 
 
-def test_condition_would_error_on_a_present_but_null_leaf() -> None:
+def test_condition_is_false_not_error_on_a_present_but_null_numeric_leaf() -> None:
     """The documented reason the context builder must OMIT an inapplicable field rather
-    than setting it to `null`: has() alone does not protect a present-but-null leaf, so
-    evaluating the condition directly against a null value raises -- callers must never
-    do this; `context_builder.normalize_context` is what prevents it from ever happening
-    in practice."""
+    than setting it to `null`: has() alone does not protect a present-but-null leaf. For a
+    numeric comparison, CEL's `double(...)` cast (added to symmetrically resolve
+    IntType/DoubleType overload mismatches -- see `rule_dsl._numeric_cel_literal`) also
+    happens to accept `null` without raising, evaluating the comparison to `False` instead
+    of the `CELEvalError` a raw (uncast) comparison would raise. This is a silent-failure
+    mode, not a crash, if the context builder's null-leaf-omission invariant is ever
+    violated -- `context_builder.normalize_context` is what actually prevents a null leaf
+    from reaching here in production, and remains the real safety net regardless of this
+    behavior."""
     parsed = parse_rule_yaml(FIN_003)
     ctx = {"contract": {"value": {"brl": None}}}
     assert _eval(parsed.compiled_presence_cel, ctx) is True  # has() sees the key as present
-    with pytest.raises(celpy.evaluation.CELEvalError):
-        _eval(parsed.compiled_condition_cel, ctx)
+    assert _eval(parsed.compiled_condition_cel, ctx) is False
 
 
 # --- Unknown-field / syntax rejection (#57) ---
@@ -171,6 +206,23 @@ def test_rejects_invalid_yaml_syntax() -> None:
         parse_rule_yaml("rule: [unterminated")
 
 
+def test_resolve_path_rejects_ambiguous_bare_field_name(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`resolve_path`'s bare-suffix fallback (module docstring point 4) must reject a bare
+    name that matches more than one registered context path rather than silently picking
+    one -- no such collision exists in the real `ALL_CONTEXT_PATHS` today (every bare
+    suffix is currently unique), so the ambiguous branch is exercised here by patching in
+    two paths that share a suffix, the way a future context-schema addition could."""
+    import app.policies.domain.rule_dsl as rule_dsl_module
+
+    monkeypatch.setattr(
+        rule_dsl_module,
+        "ALL_CONTEXT_PATHS",
+        frozenset({"contract.risk_score", "supplier.risk_score"}),
+    )
+    with pytest.raises(RuleValidationError, match="ambiguous"):
+        rule_dsl_module.resolve_path("risk_score")
+
+
 def test_rejects_missing_rule_id() -> None:
     bad = """
 rule:
@@ -184,6 +236,50 @@ approver_role: null
 """
     with pytest.raises(RuleValidationError, match="rule.id"):
         parse_rule_yaml(bad)
+
+
+def test_rejects_pathologically_deeply_nested_when_literal_via_yaml() -> None:
+    """QA finding POL-003 (2026-09-30): a `when` clause with a deeply nested list literal
+    (an author submitting raw YAML text, e.g. thousands of `[`s) previously blew PyYAML's
+    own recursive-descent parser with an uncaught `RecursionError` -- a rule create/update
+    must always fail as a clean `RuleValidationError`, never a 500, regardless of how
+    pathological the input is."""
+    depth = 3000
+    nested_literal = "[" * depth + "1" + "]" * depth
+    bad = f"""
+rule:
+  id: POL-003-TEST
+  name: Recursion Test
+when:
+  contract.value.brl: {{ in: {nested_literal} }}
+result:
+  status: REVIEW
+severity: medium
+approver_role: legal
+"""
+    with pytest.raises(RuleValidationError, match="too deeply nested"):
+        parse_rule_yaml(bad)
+
+
+def test_rejects_pathologically_deeply_nested_when_literal_via_direct_dict() -> None:
+    """Same POL-003 finding, but via `parse_rule_document`'s direct-dict entry point (the
+    one a future no-code rule builder would use, per its own docstring) -- the recursion
+    there happens inside `compile_rule_when`/`_cel_literal`/CEL's own compiler, not
+    PyYAML, so it needs its own guard."""
+    from app.policies.domain.rule_dsl import parse_rule_document
+
+    nested: Any = 1
+    for _ in range(3000):
+        nested = [nested]
+    doc = {
+        "rule": {"id": "POL-003-TEST", "name": "Recursion Test"},
+        "when": {"contract.value.brl": {"in": nested}},
+        "result": {"status": "REVIEW"},
+        "severity": "medium",
+        "approver_role": "legal",
+    }
+    with pytest.raises(RuleValidationError, match="too deeply nested"):
+        parse_rule_document(doc)
 
 
 def test_rejects_review_without_approver_role() -> None:

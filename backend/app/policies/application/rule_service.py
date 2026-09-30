@@ -5,6 +5,7 @@ or one referencing an unknown evaluation-context field, is rejected with
 
 import uuid
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.evidence.application.audit_service import emit_audit_event
@@ -57,7 +58,14 @@ async def create_rule(
         compiled_condition_cel=parsed.compiled_condition_cel,
     )
     rule_repo.add(rule)
-    await session.flush()
+    try:
+        await session.flush()
+    except IntegrityError as exc:
+        # QA review (2026-09-30): two concurrent requests creating a rule with the same
+        # rule_key in the same draft version can both pass the get_by_key_and_version
+        # check above before either commits, then race on uq_rule_key_per_version.
+        await session.rollback()
+        raise DuplicateRuleKeyError(parsed.rule_key) from exc
 
     await emit_audit_event(
         session,
@@ -169,6 +177,11 @@ async def update_rule(
         },
     )
 
-    await session.commit()
+    try:
+        await session.commit()
+    except IntegrityError as exc:
+        # Same race as create_rule's, reachable here too when a rename collides.
+        await session.rollback()
+        raise DuplicateRuleKeyError(parsed.rule_key) from exc
     await session.refresh(rule)
     return rule
