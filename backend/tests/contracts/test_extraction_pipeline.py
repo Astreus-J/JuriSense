@@ -56,6 +56,7 @@ async def test_high_confidence_extraction_marks_analyzed_with_clauses(
     # min confidence across all fields, which is processes_personal_data (0.9)
     assert version["extraction_confidence"] == 0.9
     assert version["extracted_data"]["fields"]["contract_type"]["value"] == "saas_subscription"
+    assert version["needs_confirmation_paths"] == []
 
     clauses = (
         await client.get(
@@ -79,6 +80,9 @@ async def test_low_confidence_field_marks_needs_confirmation(
     version = await _upload_and_refetch(client, headers, supplier["id"])
     assert version["status"] == "needs_confirmation"
     assert version["extraction_confidence"] == 0.4
+    # needs_confirmation_paths (added for the frontend confirmation screen) names
+    # exactly the below-threshold field, not the high-confidence contract_type field.
+    assert version["needs_confirmation_paths"] == ["liability.type"]
 
 
 async def test_confidence_exactly_at_the_threshold_marks_analyzed(

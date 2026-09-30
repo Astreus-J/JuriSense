@@ -22,7 +22,10 @@ from app.contracts.domain.errors import (
     SupplierMismatchError,
     UnsupportedFileTypeError,
 )
+from app.contracts.domain.extracted_data import low_confidence_paths
+from app.contracts.infrastructure.models import ContractVersion
 from app.contracts.infrastructure.repositories import ClauseRepository
+from app.core.config import get_settings
 from app.core.db import SessionDep
 from app.core.storage import StorageDep
 from app.identity.api.deps import require_permission
@@ -30,6 +33,17 @@ from app.identity.domain.constants import Module
 from app.identity.infrastructure.models import User
 
 router = APIRouter(prefix="/contracts", tags=["contracts"])
+
+
+def _to_version_response(version: ContractVersion) -> ContractVersionResponse:
+    """See ContractVersionResponse.needs_confirmation_paths' docstring -- computed here,
+    once, so every route returns it consistently rather than each call site
+    re-deriving (or forgetting to derive) it."""
+    threshold = get_settings().contract_extraction_confidence_threshold
+    paths = low_confidence_paths(version.extracted_data.get("fields", {}), threshold=threshold)
+    response = ContractVersionResponse.model_validate(version)
+    response.needs_confirmation_paths = paths
+    return response
 
 CanCreateContracts = Annotated[User, Depends(require_permission(Module.CONTRACTS, "create"))]
 CanReadContracts = Annotated[User, Depends(require_permission(Module.CONTRACTS, "read"))]
@@ -79,7 +93,7 @@ async def upload_contract_version(
         )
     except tuple(_UPLOAD_ERROR_MAP) as exc:
         raise HTTPException(status_code=_UPLOAD_ERROR_MAP[type(exc)], detail=exc.message) from exc
-    return ContractVersionResponse.model_validate(version)
+    return _to_version_response(version)
 
 
 @router.get("", response_model=list[ContractResponse])
@@ -111,7 +125,7 @@ async def list_contract_versions(
         )
     except ContractNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.message) from exc
-    return [ContractVersionResponse.model_validate(v) for v in versions]
+    return [_to_version_response(v) for v in versions]
 
 
 @router.get(
@@ -130,7 +144,7 @@ async def get_contract_version(
         )
     except (ContractNotFoundError, ContractVersionNotFoundError) as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.message) from exc
-    return ContractVersionResponse.model_validate(version)
+    return _to_version_response(version)
 
 
 @router.get(
@@ -187,4 +201,4 @@ async def confirm_contract_version(
         )
     except ContractVersionNotReadyForConfirmationError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.message) from exc
-    return ContractVersionResponse.model_validate(confirmed)
+    return _to_version_response(confirmed)

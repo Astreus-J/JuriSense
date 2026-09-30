@@ -30,6 +30,14 @@ class ContractVersionResponse(BaseModel):
     extraction_confidence: float | None
     extraction_failure_reason: str | None
     created_at: datetime
+    # Not an ORM column -- populated by the route from `low_confidence_paths()` (see
+    # app.contracts.domain.extracted_data) using the same dotted-path format
+    # ConfirmContractVersionRequest.corrections expects as keys. Frontend detail/
+    # confirmation screens need this to know *which* fields to render a correction input
+    # for; without it they'd have to duplicate the threshold-walking logic client-side
+    # and would need Settings.contract_extraction_confidence_threshold exposed via API,
+    # which nothing else currently does.
+    needs_confirmation_paths: list[str] = Field(default_factory=list)
 
 
 class ClauseResponse(BaseModel):
