@@ -3,24 +3,15 @@ against an existing Contract creating a new, immutable ContractVersion (never mu
 prior one -- tested explicitly per the EPIC-3 brief).
 """
 
-import io
-
 import httpx
-import pypdf
 
+from app.contracts.infrastructure.repositories import ContractVersionRepository
 from tests.contracts.conftest import (
     HIGH_CONFIDENCE_ENVELOPE,
     create_supplier,
+    pdf_bytes_with_text,
     register_org_and_login,
 )
-
-
-def _pdf_bytes() -> bytes:
-    writer = pypdf.PdfWriter()
-    writer.add_blank_page(width=200, height=200)
-    buf = io.BytesIO()
-    writer.write(buf)
-    return buf.getvalue()
 
 
 async def test_upload_creates_new_contract_and_first_version(client: httpx.AsyncClient) -> None:
@@ -29,7 +20,7 @@ async def test_upload_creates_new_contract_and_first_version(client: httpx.Async
 
     response = await client.post(
         "/api/contracts/upload",
-        files={"file": ("contract.pdf", _pdf_bytes(), "application/pdf")},
+        files={"file": ("contract.pdf", pdf_bytes_with_text(), "application/pdf")},
         data={
             "supplier_id": supplier["id"],
             "title": "Master Service Agreement",
@@ -56,7 +47,7 @@ async def test_upload_without_contract_id_requires_title_and_type(
 
     response = await client.post(
         "/api/contracts/upload",
-        files={"file": ("contract.pdf", _pdf_bytes(), "application/pdf")},
+        files={"file": ("contract.pdf", pdf_bytes_with_text(), "application/pdf")},
         data={"supplier_id": supplier["id"]},
         headers=headers,
     )
@@ -73,7 +64,7 @@ async def test_reupload_against_existing_contract_creates_new_version(
     first = (
         await client.post(
             "/api/contracts/upload",
-            files={"file": ("v1.pdf", _pdf_bytes(), "application/pdf")},
+            files={"file": ("v1.pdf", pdf_bytes_with_text(), "application/pdf")},
             data={
                 "supplier_id": supplier["id"],
                 "title": "Renewal Contract",
@@ -98,7 +89,7 @@ async def test_reupload_against_existing_contract_creates_new_version(
     second = (
         await client.post(
             "/api/contracts/upload",
-            files={"file": ("v2.pdf", _pdf_bytes(), "application/pdf")},
+            files={"file": ("v2.pdf", pdf_bytes_with_text(), "application/pdf")},
             data={"supplier_id": supplier["id"], "contract_id": contract_id},
             headers=headers,
         )
@@ -126,7 +117,7 @@ async def test_reupload_with_different_supplier_rejected(client: httpx.AsyncClie
     first = (
         await client.post(
             "/api/contracts/upload",
-            files={"file": ("v1.pdf", _pdf_bytes(), "application/pdf")},
+            files={"file": ("v1.pdf", pdf_bytes_with_text(), "application/pdf")},
             data={"supplier_id": supplier_a["id"], "title": "MSA", "contract_type": "msa"},
             headers=headers,
         )
@@ -134,7 +125,7 @@ async def test_reupload_with_different_supplier_rejected(client: httpx.AsyncClie
 
     response = await client.post(
         "/api/contracts/upload",
-        files={"file": ("v2.pdf", _pdf_bytes(), "application/pdf")},
+        files={"file": ("v2.pdf", pdf_bytes_with_text(), "application/pdf")},
         data={"supplier_id": supplier_b["id"], "contract_id": first["contract_id"]},
         headers=headers,
     )
@@ -154,13 +145,101 @@ async def test_upload_rejects_type_spoofed_file(client: httpx.AsyncClient) -> No
     assert response.status_code == 422
 
 
+async def test_new_contract_rejects_another_organizations_supplier_id(
+    client: httpx.AsyncClient,
+) -> None:
+    """Security review (2026-09-29): confirmed live that a new Contract previously
+    accepted any real supplier_id regardless of which organization it belonged to --
+    the FK constraint only caught a *nonexistent* one. Org B's supplier_id must be
+    rejected when Org A tries to create a contract against it, even though it's a real,
+    existing supplier row."""
+    headers_a = await register_org_and_login(client, "idor-a@example.com")
+    headers_b = await register_org_and_login(client, "idor-b@example.com")
+    supplier_b = await create_supplier(client, headers_b, tax_id="00000000000191")
+
+    response = await client.post(
+        "/api/contracts/upload",
+        files={"file": ("contract.pdf", pdf_bytes_with_text(), "application/pdf")},
+        data={
+            "supplier_id": supplier_b["id"],
+            "title": "Cross-tenant attempt",
+            "contract_type": "msa",
+        },
+        headers=headers_a,
+    )
+    assert response.status_code == 422
+
+    # Confirm no contract was actually created for Org A against Org B's supplier.
+    contracts_a = (await client.get("/api/contracts", headers=headers_a)).json()
+    assert contracts_a == []
+
+
+async def test_concurrent_reuploads_yield_one_success_and_one_clean_conflict(
+    client: httpx.AsyncClient, monkeypatch
+) -> None:
+    """QA review (2026-09-29): the ContractVersion flush previously had no
+    IntegrityError handler (unlike the equivalent handler on Contract creation), so the
+    losing side of a concurrent re-upload race -- two requests computing the same "next"
+    version_number before either commits -- surfaced as an unhandled 500 instead of a
+    clean 409.
+
+    True concurrency can't be reproduced hermetically here: the test DB is SQLite over a
+    single shared `StaticPool` connection, which doesn't support two genuinely
+    concurrent transactions the way the real asyncpg/Postgres pool does. Instead this
+    deterministically forces the exact collision a race would produce, by making
+    `get_next_version_number` return an already-used number on the second call -- the
+    same effect two simultaneous requests reading a stale "next" value would have.
+    """
+    headers = await register_org_and_login(client, "race@example.com")
+    supplier = await create_supplier(client, headers, tax_id="00000000000191")
+
+    first = (
+        await client.post(
+            "/api/contracts/upload",
+            files={"file": ("v1.pdf", pdf_bytes_with_text(), "application/pdf")},
+            data={"supplier_id": supplier["id"], "title": "MSA", "contract_type": "msa"},
+            headers=headers,
+        )
+    ).json()
+    contract_id = first["contract_id"]
+
+    real_get_next = ContractVersionRepository.get_next_version_number
+    call_count = {"n": 0}
+
+    async def _stale_get_next(self, contract_id):
+        call_count["n"] += 1
+        if call_count["n"] == 1:
+            return await real_get_next(self, contract_id)
+        # Second call: pretend it computed "2" before the first re-upload committed --
+        # exactly what a genuine race would produce.
+        return 2
+
+    monkeypatch.setattr(ContractVersionRepository, "get_next_version_number", _stale_get_next)
+
+    first_response = await client.post(
+        "/api/contracts/upload",
+        files={"file": ("v2a.pdf", pdf_bytes_with_text(), "application/pdf")},
+        data={"supplier_id": supplier["id"], "contract_id": contract_id},
+        headers=headers,
+    )
+    second_response = await client.post(
+        "/api/contracts/upload",
+        files={"file": ("v2b.pdf", pdf_bytes_with_text(), "application/pdf")},
+        data={"supplier_id": supplier["id"], "contract_id": contract_id},
+        headers=headers,
+    )
+
+    assert first_response.status_code == 201
+    assert second_response.status_code == 409  # not 500, and not a silent duplicate
+
+
 async def test_cross_tenant_contract_access_denied(client: httpx.AsyncClient) -> None:
     headers_a = await register_org_and_login(client, "tenant-a@example.com")
     supplier_a = await create_supplier(client, headers_a, tax_id="00000000000191")
     version = (
         await client.post(
             "/api/contracts/upload",
-            files={"file": ("v1.pdf", _pdf_bytes(), "application/pdf")},
+            files={"file": ("v1.pdf", pdf_bytes_with_text(), "application/pdf")},
             data={"supplier_id": supplier_a["id"], "title": "MSA", "contract_type": "msa"},
             headers=headers_a,
         )

@@ -45,10 +45,20 @@ class SupplierMismatchError(ContractsError):
 
 
 class InvalidSupplierReferenceError(ContractsError):
-    """`Contract.supplier_id` is a plain foreign-key value, never a cross-context query
-    (`docs/04-architecture/components.md` rule 2) -- an unknown supplier_id therefore
-    only surfaces as a database FK-constraint violation, translated here into a domain
-    error rather than a raw 500."""
+    """`supplier_id` doesn't resolve to a real supplier owned by the caller's own
+    organization -- checked via `app.suppliers.application.supplier_service
+    .supplier_belongs_to_organization` (an application-layer call, the rule-2-sanctioned
+    way to reach Suppliers without a cross-context ORM query) before anything is
+    created, plus the DB FK constraint as a defense-in-depth backstop for the race
+    window between that check and the insert.
+
+    Security review (2026-09-29): this previously only caught a *nonexistent*
+    supplier_id via the FK constraint -- a real supplier belonging to a *different*
+    organization satisfied that FK and was silently accepted. Deliberately reused for
+    both "doesn't exist" and "belongs to another organization" (never a distinct
+    error/message for the latter), matching this codebase's established avoid-
+    existence-leak pattern for cross-tenant lookups elsewhere (e.g.
+    `app.identity.application.user_service.get_user`)."""
 
     def __init__(self) -> None:
         super().__init__("supplier_id does not reference an existing supplier")
@@ -57,6 +67,22 @@ class InvalidSupplierReferenceError(ContractsError):
 class MissingContractMetadataError(ContractsError):
     """Creating a *new* Contract (no `contract_id` given) requires `title` and
     `contract_type`; re-uploading against an existing `contract_id` does not."""
+
+
+class ConcurrentVersionConflictError(ContractsError):
+    """QA review (2026-09-29): two simultaneous uploads against the same `contract_id`
+    both computed the same next `version_number` before either committed; the DB unique
+    index (`contract_id`, `version_number`) catches the losing insert, which used to
+    surface as an unhandled 500 (no `IntegrityError` handler existed on this flush,
+    unlike the equivalent handler on `Contract` creation just above it in
+    `contract_service.upload_contract_version`). The client should simply retry the
+    upload."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "Another upload to this contract just completed -- retry to get the next "
+            "version number"
+        )
 
 
 class InvalidClauseProvenanceError(ContractsError):

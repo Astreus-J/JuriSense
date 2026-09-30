@@ -103,6 +103,29 @@ async def list_suppliers(
     return await SupplierRepository(session).list_by_organization(organization_id, status=status)
 
 
+async def supplier_belongs_to_organization(
+    session: AsyncSession, *, organization_id: uuid.UUID, supplier_id: uuid.UUID
+) -> bool:
+    """Cross-context ownership check for other bounded contexts that receive a caller-
+    supplied `supplier_id` and need to confirm it actually belongs to the caller's own
+    organization before attaching anything to it (e.g. `Contracts & Documents` creating
+    a new `Contract`). Returns a bare `bool`, never the `Supplier` ORM row -- per
+    `docs/04-architecture/components.md` rule 2, `Contracts & Documents` must not
+    import/query Suppliers' ORM models directly; this is the sanctioned application-
+    layer call instead.
+
+    Security review (2026-09-29): `Contract` creation previously trusted the caller-
+    supplied `supplier_id` outright, relying only on the FK constraint to catch a
+    *nonexistent* id -- a supplier that exists but belongs to a *different* organization
+    satisfied that FK just fine, letting any org attach a contract to another org's
+    supplier. Confirmed live before this fix existed.
+    """
+    supplier = await SupplierRepository(session).get_by_id_and_organization(
+        supplier_id, organization_id
+    )
+    return supplier is not None
+
+
 async def get_supplier(
     session: AsyncSession, *, organization_id: uuid.UUID, supplier_id: uuid.UUID
 ) -> Supplier:

@@ -11,6 +11,7 @@ from app.contracts.api.schemas import (
 )
 from app.contracts.application import confirmation_service, contract_service
 from app.contracts.domain.errors import (
+    ConcurrentVersionConflictError,
     ContractNotFoundError,
     ContractVersionNotFoundError,
     ContractVersionNotReadyForConfirmationError,
@@ -42,6 +43,7 @@ _UPLOAD_ERROR_MAP = {
     SupplierMismatchError: status.HTTP_409_CONFLICT,
     InvalidSupplierReferenceError: status.HTTP_422_UNPROCESSABLE_CONTENT,
     ContractNotFoundError: status.HTTP_404_NOT_FOUND,
+    ConcurrentVersionConflictError: status.HTTP_409_CONFLICT,
 }
 
 

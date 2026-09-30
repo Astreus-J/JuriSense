@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.contracts.application import document_service, extraction_orchestration
 from app.contracts.domain.constants import ContractStatus, ContractVersionStatus
 from app.contracts.domain.errors import (
+    ConcurrentVersionConflictError,
     ContractNotFoundError,
     ContractVersionNotFoundError,
     InvalidSupplierReferenceError,
@@ -25,6 +26,7 @@ from app.contracts.infrastructure.models import Contract, ContractVersion
 from app.contracts.infrastructure.repositories import ContractRepository, ContractVersionRepository
 from app.core.storage import StoragePort
 from app.evidence.application.audit_service import emit_audit_event
+from app.suppliers.application.supplier_service import supplier_belongs_to_organization
 
 
 async def upload_contract_version(
@@ -40,6 +42,16 @@ async def upload_contract_version(
     title: str | None = None,
     contract_type: str | None = None,
 ) -> ContractVersion:
+    # Security review (2026-09-29): checked before anything is created/uploaded --
+    # previously a new Contract trusted `supplier_id` outright and only the DB's FK
+    # constraint caught a *nonexistent* one, letting a real supplier belonging to a
+    # *different* organization through (confirmed live). Checked up front, ahead of the
+    # storage write below, so a rejected request never wastes a document upload either.
+    if not await supplier_belongs_to_organization(
+        session, organization_id=organization_id, supplier_id=supplier_id
+    ):
+        raise InvalidSupplierReferenceError()
+
     document = await document_service.upload_document(
         session,
         storage=storage,
@@ -93,7 +105,17 @@ async def upload_contract_version(
         extraction_confidence=None,
     )
     version_repo.add(version)
-    await session.flush()
+    try:
+        await session.flush()
+    except IntegrityError as exc:
+        await session.rollback()
+        # QA review (2026-09-29): the just-uploaded Document (and its two audit events)
+        # is now orphaned -- no ContractVersion ever references it. Not cleaned up here:
+        # Document is documented as immutable/never-deleted (domain-model.md's
+        # `uploaded -> processed -> (archived)` lifecycle has no delete state), so an
+        # unreferenced-but-retained row is the accepted trade-off for a rare race,
+        # consistent with this codebase's append-only philosophy elsewhere.
+        raise ConcurrentVersionConflictError() from exc
     await session.refresh(version)
 
     await emit_audit_event(
