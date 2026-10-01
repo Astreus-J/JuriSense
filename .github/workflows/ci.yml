@@ -25,7 +25,16 @@ jobs:
         ports:
           - 9090:9090
         env:
-          initialBuckets: jurisense-dev
+          # Live-verified (2026-10-01): the env var docker-compose.yml used
+          # (`initialBuckets`) does NOT create the bucket on this image's current
+          # "latest" tag (S3Mock 5.x) -- confirmed by running the image fresh and listing
+          # buckets, which came back empty, causing every storage-backed test to fail
+          # with `NoSuchBucket` instead of connecting cleanly. The correct variable,
+          # confirmed to actually create the bucket, is documented at
+          # https://github.com/adobe/S3Mock as `COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS`
+          # (comma-separated bucket list) -- docker-compose.yml is fixed to match in the
+          # same commit.
+          COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS: jurisense-dev
         options: >-
           --health-cmd "wget --spider -q http://localhost:9090/ || exit 1"
           --health-interval 5s

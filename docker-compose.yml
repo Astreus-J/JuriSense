@@ -92,7 +92,14 @@ services:
     image: adobe/s3mock:latest
     container_name: jurisense-s3mock
     environment:
-      initialBuckets: ${STORAGE_BUCKET:-jurisense-dev}
+      # Live-verified (2026-10-01): `initialBuckets` does NOT create the bucket on this
+      # image's current "latest" tag (S3Mock 5.x) -- a fresh container came up with zero
+      # buckets despite this var, which only went unnoticed because the long-running dev
+      # container already had its bucket from before this was ever tested fresh. The
+      # correct variable (confirmed live) is documented at
+      # https://github.com/adobe/S3Mock as `COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS`.
+      # A fresh `docker compose down -v && up` needs this to get a usable bucket at all.
+      COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS: ${STORAGE_BUCKET:-jurisense-dev}
     ports:
       - "9090:9090"
     healthcheck:
