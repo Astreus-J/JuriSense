@@ -58,6 +58,9 @@ jobs:
       - name: Lint (ruff)
         run: uv run ruff check .
 
+      - name: Dependency scan (pip-audit)
+        run: uv run --with pip-audit pip-audit
+
       - name: Test (pytest)
         run: uv run pytest
 
@@ -83,5 +86,34 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Dependency scan (npm audit)
+        run: npm audit --audit-level=high
+
       - name: Build
         run: npm run build
+
+  secret-scan:
+    name: Secret scanning (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history, not just this push's diff -- #111's acceptance criterion wants
+          # the full git history scanned, not only new commits. Re-scanning the whole
+          # (currently small) history on every push is simpler and strictly stronger than
+          # a diff-only scan plus a separate scheduled full-history job, at a cost that's
+          # negligible at this repo's current size.
+          fetch-depth: 0
+
+      - name: Run gitleaks
+        # The `gitleaks/gitleaks-action` Marketplace Action requires a free license key
+        # for organization-owned repos (this one is -- confirmed via `gh api
+        # orgs/Astreus-J`); the underlying `gitleaks` CLI itself is plain MIT-licensed
+        # with no key/account requirement for anyone, on any repo -- running the official
+        # image directly sidesteps the Action wrapper's licensing gate entirely.
+        # `.gitleaksignore` at the repo root suppresses one confirmed false positive
+        # (a `token=body.token` password-reset-token parameter, not a real secret) found
+        # while verifying this step live before adding it.
+        run: |
+          docker run --rm -v "$GITHUB_WORKSPACE:/repo" ghcr.io/gitleaks/gitleaks:latest \
+            git /repo --redact -v
