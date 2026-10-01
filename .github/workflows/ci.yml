@@ -11,6 +11,26 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    # Postgres and Redis are faked in-process by the test suite (sqlite+aiosqlite,
+    # fakeredis -- see tests/conftest.py), so neither needs a service here. Object
+    # storage is not: contract-upload tests make real boto3 calls against
+    # `settings.storage_endpoint_url` (default `http://localhost:9090`, same as
+    # docker-compose.yml's `s3mock` service) -- without this service, every test that
+    # touches storage fails with `EndpointConnectionError` (confirmed live: 29 failures,
+    # GitHub Actions run 36800916271, 2026-10-01, after this gap went unnoticed through
+    # several pushes once EPIC-3 added storage-backed contract tests).
+    services:
+      s3mock:
+        image: adobe/s3mock:latest
+        ports:
+          - 9090:9090
+        env:
+          initialBuckets: jurisense-dev
+        options: >-
+          --health-cmd "wget --spider -q http://localhost:9090/ || exit 1"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
 
