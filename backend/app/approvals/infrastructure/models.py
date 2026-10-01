@@ -2,7 +2,17 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, String, Text, func
+from sqlalchemy import (
+    JSON,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, validates
 
 from app.approvals.domain.constants import ApprovalRequestStatus
@@ -80,10 +90,28 @@ class ApprovalRequest(Base):
     Immutable once resolved (`status != "pending"`) -- the `@validates` guard below
     mirrors `app.policies.infrastructure.models.Rule._guard_frozen`'s exact pattern,
     guarding every field a resolution touches (`status`/`justification`/`resolved_by`/
-    `resolved_at`). As with `Rule`, this is a Python-level, defense-in-depth guard on top
-    of the application layer's own explicit `status != PENDING` check
-    (`approval_service.approve_request`/`reject_request`) -- not a database constraint,
-    and not a guard against bulk/raw-SQL updates.
+    `resolved_at`).
+
+    QA review (2026-10-01): this guard is correctness-*dependent* on every caller setting
+    these four fields in a specific order (every other field before `status` itself,
+    last) -- get that order wrong in any new call site and the guard spuriously raises
+    `ApprovalRequestAlreadyResolvedError` on a request's first-ever resolution, not just
+    on a genuine second attempt (see `_guard_resolved`'s own docstring for exactly why).
+    Partly as a response to that fragility, and partly because a plain `@validates` guard
+    was *also* found to be insufficient against two concurrent resolution attempts (a
+    Python-level check that races two readers against each other, not a database-level
+    one -- see the QA/security review round this same date), the actual resolution path
+    (`approval_service.approve_request`/`reject_request`, and the SLA-expiry task) no
+    longer mutates these attributes directly at all: they call
+    `ApprovalRequestRepository.resolve_if_pending`/`expire_pending_if_pending`, an atomic
+    `UPDATE ... WHERE status = 'pending'` executed via SQLAlchemy Core, which bypasses
+    this `@validates` hook entirely (Core-level bulk updates never touch ORM instance
+    attributes) and is what actually serializes concurrent callers now, via the
+    database's own row locking. This guard remains as defense-in-depth against a
+    *different* mistake -- some future code reaching for `request.status = ...`
+    directly instead of the repository's atomic method -- and that is also why its
+    ordering-sensitivity, while real, is now a secondary concern rather than the primary
+    correctness mechanism it used to be.
     """
 
     __tablename__ = "approval_requests"
@@ -147,14 +175,18 @@ class Decision(Base):
     (docs/03-domain/domain-model.md "Decision"; DEC-001/DEC-002; BR-DEC-001/BR-DEC-003/
     BR-DEC-004; FEATURE-6.3).
 
-    One-to-one with `ComplianceReview` *in this round* -- `compliance_review_id` is
-    indexed but deliberately **not** given a unique constraint: FEATURE-6.4
-    (re-evaluation, explicitly out of scope this round) will eventually let a new
-    `Decision` supersede an old one for the *same* review via `supersedes_decision_id`,
-    at which point a hard DB-level uniqueness constraint on `compliance_review_id` would
-    have to be dropped again. Nothing in this round's code path ever creates a second
-    `Decision` for one review (no re-evaluation trigger exists yet), so the invariant
-    holds in practice without a DB constraint enforcing it prematurely.
+    One-to-one with `ComplianceReview` *in this round* -- enforced by a hard unique
+    constraint on `compliance_review_id` (QA/security review, 2026-10-01: added as
+    defense-in-depth after both reviews independently found that an unguarded race on
+    `ApprovalRequest` resolution could otherwise let two concurrent `approve_request`/
+    `reject_request` calls on the same final step each create their own `Decision` for
+    the same review -- see `approval_service`'s `resolve_if_pending` for the primary fix,
+    this constraint for the backstop). FEATURE-6.4 (re-evaluation, explicitly out of scope
+    this round) will eventually let a new `Decision` supersede an old one for the *same*
+    review via `supersedes_decision_id` -- at that point this constraint must become a
+    partial unique index (e.g. scoped to "not yet superseded") rather than a plain one;
+    that migration is future work, not a problem introduced by adding the plain
+    constraint now.
 
     `overridden`/`override_justification` are the one documented exception to "never
     edited in place" (domain-model.md's invariant is about *re-evaluation*, not override;
@@ -165,6 +197,9 @@ class Decision(Base):
     __tablename__ = "decisions"
     __table_args__ = (
         Index("ix_decisions_org_review", "organization_id", "compliance_review_id"),
+        UniqueConstraint(
+            "compliance_review_id", name="uq_decisions_one_per_compliance_review"
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)

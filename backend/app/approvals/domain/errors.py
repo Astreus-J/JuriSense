@@ -55,3 +55,16 @@ class EmptyJustificationError(ApprovalsError):
 class DecisionNotFoundError(ApprovalsError):
     def __init__(self) -> None:
         super().__init__("Decision not found")
+
+
+class DecisionAlreadyExistsError(ApprovalsError):
+    """QA/security review (2026-10-01): defense-in-depth backstop for
+    `decisions.uq_decisions_one_per_compliance_review` -- raised if a concurrent-write
+    race somehow reaches `decision_service.create_decision_for_review` twice for the same
+    `compliance_review_id` despite `approval_service.resolve_if_pending`'s atomic
+    conditional UPDATE (the primary fix) already serializing concurrent
+    `approve_request`/`reject_request` calls. Should be effectively unreachable in
+    practice; handled cleanly regardless, never a raw 500."""
+
+    def __init__(self) -> None:
+        super().__init__("A Decision already exists for this compliance review")

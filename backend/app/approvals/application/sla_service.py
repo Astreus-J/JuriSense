@@ -13,7 +13,6 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.approvals.domain.constants import ApprovalRequestStatus
 from app.approvals.infrastructure.repositories import ApprovalRequestRepository
 from app.core.config import get_settings
 from app.evidence.application.audit_service import emit_audit_event
@@ -28,10 +27,18 @@ async def expire_stale_approval_requests(session: AsyncSession) -> int:
     (not built this round) -- so this function simply leaves the review without a
     `Decision`, same as a still-pending chain.
 
-    `approval.expired` is not yet catalogued in docs/03-domain/audit.md's event list
-    (only `approval.requested`/`approval.approved`/`approval.rejected` are) -- named here
-    following that catalog's existing `<context>.<action>` convention; adding it to the
-    catalog is tracked as a documentation follow-up, not a behavioral gap.
+    `approval.expired` is catalogued in docs/03-domain/audit.md's event list, following
+    that catalog's existing `<context>.<action>` convention.
+
+    QA/security review (2026-10-01): a human's `approve_request`/`reject_request` call
+    landing between this function's own `list_pending_requested_before` SELECT and its
+    commit used to be silently clobbered -- this loaded each row, mutated `status` in
+    Python, and committed unconditionally, with no awareness that a concurrent human
+    resolution might have already committed first. Each row is now transitioned via
+    `ApprovalRequestRepository.expire_pending_if_pending`'s atomic conditional UPDATE
+    (mirroring `resolve_if_pending`'s fix on the human side) -- if a human won the race
+    for a given row, this function's own attempt simply does nothing for that row (no
+    audit event, no error) rather than overwriting their resolution.
 
     Commits itself -- this is the Celery task's own entry point
     (`app.approvals.infrastructure.tasks.expire_stale_approval_requests_task`), run via
@@ -39,10 +46,16 @@ async def expire_stale_approval_requests(session: AsyncSession) -> int:
     """
     settings = get_settings()
     cutoff = datetime.now(UTC) - timedelta(hours=settings.approval_request_sla_hours)
-    stale_requests = await ApprovalRequestRepository(session).list_pending_requested_before(cutoff)
+    repository = ApprovalRequestRepository(session)
+    stale_requests = await repository.list_pending_requested_before(cutoff)
 
+    expired_count = 0
     for request in stale_requests:
-        request.status = ApprovalRequestStatus.EXPIRED.value
+        won = await repository.expire_pending_if_pending(request.id)
+        if not won:
+            continue
+        expired_count += 1
+        expired_at = datetime.now(UTC)
         await emit_audit_event(
             session,
             event_type="approval.expired",
@@ -54,9 +67,9 @@ async def expire_stale_approval_requests(session: AsyncSession) -> int:
                 "approver_role": request.approver_role,
                 "step_number": request.step_number,
                 "requested_at": request.requested_at.isoformat(),
-                "expired_at": datetime.now(UTC).isoformat(),
+                "expired_at": expired_at.isoformat(),
             },
         )
 
     await session.commit()
-    return len(stale_requests)
+    return expired_count

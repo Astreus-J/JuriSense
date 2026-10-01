@@ -22,6 +22,7 @@ from app.approvals.infrastructure.repositories import (
     ApprovalWorkflowRepository,
 )
 from app.evidence.application.audit_service import emit_audit_event
+from app.identity.domain.constants import MembershipStatus
 from app.identity.infrastructure.repositories import MembershipRepository
 
 
@@ -98,12 +99,24 @@ async def _resolve_actor_role(
     `Membership.role` as the authoritative per-organization role (see e.g.
     `user_service.update_user`'s own `MembershipRepository.get_by_user_and_organization`
     call), rather than inventing a new lookup. Returns `None` if the user has no
-    (accepted) `Membership` in this organization at all -- treated as a role mismatch by
-    the caller, never a crash."""
+    (accepted) `Membership` in this organization at all, OR that membership is no longer
+    `active` -- either way treated as a role mismatch by the caller, never a crash.
+
+    Security review (2026-10-01): `get_by_user_and_organization` itself has no `status`
+    filter (it's a generic lookup reused elsewhere for cases that want that), so this
+    function adds the check explicitly rather than relying on it. Today a revoked
+    `Membership` always coincides with `User.is_active=False` (`user_service.
+    deactivate_user` sets both together) which already 401s a revoked user long before
+    this function ever runs -- but `Membership` exists specifically to support a future
+    multi-org-per-user model (domain-model.md) where a user could be revoked from ONE
+    organization while remaining active in another; this function must not depend on
+    that current, incidental correlation to stay correct once that ships."""
     membership = await MembershipRepository(session).get_by_user_and_organization(
         user_id, organization_id
     )
-    return membership.role if membership is not None else None
+    if membership is None or membership.status != MembershipStatus.ACTIVE.value:
+        return None
+    return membership.role
 
 
 async def get_request(
@@ -202,8 +215,6 @@ async def approve_request(
     `decision_service.override_decision` commit at the end of theirs.
     """
     request = await get_request(session, organization_id=organization_id, request_id=request_id)
-    if request.status != ApprovalRequestStatus.PENDING.value:
-        raise ApprovalRequestAlreadyResolvedError()
 
     actor_role = await _resolve_actor_role(
         session, user_id=actor_id, organization_id=organization_id
@@ -212,14 +223,20 @@ async def approve_request(
         raise ApproverRoleMismatchError()
 
     now = datetime.now(UTC)
-    # Order matters: every other field is set first, while `status` is still "pending" --
-    # only the final assignment below flips it to the terminal value. See
-    # `ApprovalRequest._guard_resolved`'s docstring for why this order is required.
-    request.justification = justification
-    request.resolved_by = actor_id
-    request.resolved_at = now
-    request.status = ApprovalRequestStatus.APPROVED.value
-    await session.flush()
+    # QA/security review (2026-10-01): the old "load, check status in Python, mutate ORM
+    # attributes, flush" sequence raced two concurrent callers against each other (see
+    # ApprovalRequestRepository.resolve_if_pending's docstring for the exact scenario).
+    # This atomic conditional UPDATE is what actually serializes them now.
+    won = await ApprovalRequestRepository(session).resolve_if_pending(
+        request.id,
+        status=ApprovalRequestStatus.APPROVED.value,
+        justification=justification,
+        resolved_by=actor_id,
+        resolved_at=now,
+    )
+    if not won:
+        raise ApprovalRequestAlreadyResolvedError()
+    await session.refresh(request)
 
     await emit_audit_event(
         session,
@@ -275,8 +292,6 @@ async def reject_request(
         raise EmptyJustificationError()
 
     request = await get_request(session, organization_id=organization_id, request_id=request_id)
-    if request.status != ApprovalRequestStatus.PENDING.value:
-        raise ApprovalRequestAlreadyResolvedError()
 
     actor_role = await _resolve_actor_role(
         session, user_id=actor_id, organization_id=organization_id
@@ -285,11 +300,18 @@ async def reject_request(
         raise ApproverRoleMismatchError()
 
     now = datetime.now(UTC)
-    request.justification = justification
-    request.resolved_by = actor_id
-    request.resolved_at = now
-    request.status = ApprovalRequestStatus.REJECTED.value
-    await session.flush()
+    # Same atomic-conditional-UPDATE race fix as approve_request -- see
+    # ApprovalRequestRepository.resolve_if_pending's docstring.
+    won = await ApprovalRequestRepository(session).resolve_if_pending(
+        request.id,
+        status=ApprovalRequestStatus.REJECTED.value,
+        justification=justification,
+        resolved_by=actor_id,
+        resolved_at=now,
+    )
+    if not won:
+        raise ApprovalRequestAlreadyResolvedError()
+    await session.refresh(request)
 
     await emit_audit_event(
         session,

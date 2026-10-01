@@ -15,6 +15,7 @@ from app.approvals.domain.errors import (
     ApprovalRequestAlreadyResolvedError,
     ApprovalRequestNotFoundError,
     ApproverRoleMismatchError,
+    DecisionAlreadyExistsError,
     DecisionNotFoundError,
     EmptyJustificationError,
 )
@@ -59,6 +60,11 @@ async def approve_request(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.message) from exc
     except ApproverRoleMismatchError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=exc.message) from exc
+    except DecisionAlreadyExistsError as exc:
+        # QA/security review (2026-10-01): defense-in-depth backstop, should be
+        # effectively unreachable given resolve_if_pending's atomic UPDATE -- see that
+        # error's own docstring.
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.message) from exc
     return ApprovalRequestResponse.model_validate(request)
 
 
@@ -84,6 +90,8 @@ async def reject_request(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=exc.message
         ) from exc
+    except DecisionAlreadyExistsError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.message) from exc
     return ApprovalRequestResponse.model_validate(request)
 
 

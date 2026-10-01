@@ -6,6 +6,9 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
+from app.approvals.infrastructure import (
+    models as approvals_models,  # noqa: F401 — registers tables on Base
+)
 from app.contracts.infrastructure import (
     models as contracts_models,  # noqa: F401 — registers tables on Base
 )

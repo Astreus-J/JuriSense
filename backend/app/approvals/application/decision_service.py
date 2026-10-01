@@ -5,9 +5,14 @@ BR-DEC-003; docs/03-domain/domain-model.md "Decision").
 import uuid
 from datetime import UTC, datetime, timedelta
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.approvals.domain.errors import DecisionNotFoundError, EmptyJustificationError
+from app.approvals.domain.errors import (
+    DecisionAlreadyExistsError,
+    DecisionNotFoundError,
+    EmptyJustificationError,
+)
 from app.approvals.infrastructure.models import Decision
 from app.approvals.infrastructure.repositories import DecisionRepository
 from app.core.config import get_settings
@@ -43,6 +48,13 @@ async def create_decision_for_review(
     `settings.approval_request_sla_hours` (BR-APR-003's own TBD).
 
     Does not commit -- the caller commits once at the end of its own use case.
+
+    QA/security review (2026-10-01): `decisions.compliance_review_id` now carries a
+    unique constraint (`Decision`'s own docstring) as defense-in-depth against two
+    concurrent `approve_request` calls on the same chain's final step both reaching this
+    function -- the primary fix is `approval_service.resolve_if_pending`'s atomic
+    conditional UPDATE, which should make this `IntegrityError` essentially unreachable
+    in practice, but it is handled cleanly (never a raw 500) regardless.
     """
     settings = get_settings()
     now = datetime.now(UTC)
@@ -53,7 +65,11 @@ async def create_decision_for_review(
         valid_until=now + timedelta(days=settings.decision_valid_days),
     )
     DecisionRepository(session).add(decision)
-    await session.flush()
+    try:
+        await session.flush()
+    except IntegrityError as exc:
+        await session.rollback()
+        raise DecisionAlreadyExistsError() from exc
 
     await emit_audit_event(
         session,
