@@ -44,6 +44,8 @@ export function RuleOutcomeBadge({ outcome }: { outcome: RuleOutcome }) {
   );
 }
 
+// Kept in lockstep with `RiskCard.tsx`'s `SEVERITY_CARD_CLASSES` — both must use the same
+// critical→danger, high→warning, medium→info, low→neutral ramp (QA review, 2026-10-01).
 const SEVERITY_TONE: Record<Severity, BadgeTone> = {
   critical: "danger",
   high: "warning",

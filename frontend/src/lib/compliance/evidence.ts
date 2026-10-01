@@ -13,8 +13,8 @@ import type { EvidenceRef } from "./types";
  * present and is a legitimate citation on its own (persona: "Evidence should be directly
  * connected to conclusions"). When the richer fields are present, add the document/page or
  * supplier-profile context. No document viewer exists yet (out of scope per this story's
- * brief), so this stays plain text — e.g. "contract.value.brl (document doc-1, page 2)" or
- * "supplier.sanctions_hit (supplier profile)".
+ * brief), so this stays plain text — e.g. "contract.value.brl (document doc-1, page 2,
+ * chars 120-145)" or "supplier.sanctions_hit (supplier profile)".
  */
 export function describeEvidenceRef(ref: EvidenceRef): string {
   const contextPath = typeof ref.context_path === "string" ? ref.context_path : "Unknown field";
@@ -23,9 +23,24 @@ export function describeEvidenceRef(ref: EvidenceRef): string {
   if (source === "contract_extracted_field") {
     const documentId = typeof ref.document_id === "string" ? ref.document_id : null;
     const page = typeof ref.page === "number" ? ref.page : null;
-    if (documentId && page !== null) return `${contextPath} (document ${documentId}, page ${page})`;
-    if (documentId) return `${contextPath} (document ${documentId})`;
-    return contextPath;
+    // QA review (2026-10-01): the backend computes a character-offset `text_span` for every
+    // contract-sourced ref specifically as part of this feature's WHY/EVIDENCE/POLICY/SOURCE
+    // explainability goal — it was being read into `EvidenceRef` but never rendered, silently
+    // dropping the most precise SOURCE citation available.
+    const textSpan =
+      ref.text_span &&
+      typeof ref.text_span === "object" &&
+      typeof (ref.text_span as Record<string, unknown>).start === "number" &&
+      typeof (ref.text_span as Record<string, unknown>).end === "number"
+        ? (ref.text_span as { start: number; end: number })
+        : null;
+
+    const parts: string[] = [];
+    if (documentId) parts.push(`document ${documentId}`);
+    if (page !== null) parts.push(`page ${page}`);
+    if (textSpan) parts.push(`chars ${textSpan.start}-${textSpan.end}`);
+
+    return parts.length > 0 ? `${contextPath} (${parts.join(", ")})` : contextPath;
   }
 
   if (source === "supplier_profile") {

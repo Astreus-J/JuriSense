@@ -69,8 +69,9 @@ export function ComplianceReviewResults({ detail }: { detail: ComplianceReviewDe
 
         {ruleEvaluations.length === 0 ? (
           <p className="rounded-xl border border-dashed border-border bg-surface px-6 py-10 text-center text-sm text-foreground-muted">
-            No rules were evaluated — no policy was published in this organization yet when
-            this review ran.
+            {review.policyVersionIds.length === 0
+              ? "No rules were evaluated — no policy was published in this organization yet when this review ran."
+              : "No rules were evaluated — the published policy version(s) in place when this review ran had no rules defined."}
           </p>
         ) : (
           <>
@@ -85,8 +86,12 @@ export function ComplianceReviewResults({ detail }: { detail: ComplianceReviewDe
             {quietEvaluations.length > 0 && (
               <details className="group rounded-xl border border-border bg-surface-muted">
                 <summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium text-foreground-muted hover:text-foreground">
+                  {/* QA review (2026-10-01): this previously said "Show all N evaluated
+                   * rules," overstating what the disclosure itself reveals — the REVIEW/BLOCK
+                   * rows above are already visible, so opening this only adds the
+                   * PASS/NOT_APPLICABLE ones. */}
                   <span className="group-open:hidden">
-                    Show all {ruleEvaluations.length} evaluated rules
+                    Show {quietEvaluations.length} more (passed / not applicable)
                   </span>
                   <span className="hidden group-open:inline">
                     Hide passed / not applicable rules

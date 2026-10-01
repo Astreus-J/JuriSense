@@ -5,11 +5,16 @@ import type { Risk, Severity } from "@/lib/compliance/types";
 
 /** Tints the card by severity, not by a flat "this is a risk" red — a `low`-severity risk
  * shouldn't visually read as alarming as a `critical` one (persona: "Never communicate status
- * by color alone", applied in reverse: don't let one color flatten a real severity range). */
+ * by color alone", applied in reverse: don't let one color flatten a real severity range).
+ * QA review (2026-10-01): this must stay in lockstep with `ComplianceStatusBadge.tsx`'s
+ * `SEVERITY_TONE` (the embedded `SeverityBadge` inside this same card uses it) — a prior
+ * version tinted `high` as `danger` here while `SeverityBadge` rendered `high` as `warning`,
+ * a visible contradiction between a card's chrome and its own badge for the same severity
+ * value. Both now share one critical→danger, high→warning, medium→info, low→neutral ramp. */
 const SEVERITY_CARD_CLASSES: Record<Severity, string> = {
   critical: "border-danger-border bg-danger-surface",
-  high: "border-danger-border bg-danger-surface",
-  medium: "border-warning-border bg-warning-surface",
+  high: "border-warning-border bg-warning-surface",
+  medium: "border-info-border bg-info-surface",
   low: "border-border bg-surface",
 };
 
