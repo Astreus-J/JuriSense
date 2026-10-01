@@ -6,14 +6,18 @@ import { ArrowLeft, Loader2, Plus } from "lucide-react";
 import { Alert } from "@/components/ui/Alert";
 import { buttonClasses } from "@/components/ui/Button";
 import { ClauseList } from "@/components/contracts/ClauseList";
+import { ComplianceReviewHistory } from "@/components/compliance/ComplianceReviewHistory";
 import { ConfirmationForm } from "@/components/contracts/ConfirmationForm";
 import { ContractStatusBadge } from "@/components/contracts/ContractStatusBadge";
 import { ContractVersionList } from "@/components/contracts/ContractVersionList";
 import { ContractVersionStatusBadge } from "@/components/contracts/ContractVersionStatusBadge";
 import { ExtractedDataView } from "@/components/contracts/ExtractedDataView";
+import { TriggerComplianceReviewButton } from "@/components/compliance/TriggerComplianceReviewButton";
 import { ApiError } from "@/lib/auth/backend";
 import { readAccessToken } from "@/lib/auth/cookies";
 import { requireSession } from "@/lib/auth/session";
+import { listComplianceReviews } from "@/lib/compliance/backend";
+import { getCompliancePermissions } from "@/lib/compliance/permissions";
 import {
   getContract,
   getContractVersion,
@@ -39,6 +43,7 @@ export default async function ContractDetailPage({ params, searchParams }: Contr
   const { version: versionParam } = await searchParams;
   const accessToken = (await readAccessToken())!;
   const permissions = getContractPermissions(user.role);
+  const compliancePermissions = getCompliancePermissions(user.role);
 
   let contract;
   try {
@@ -82,7 +87,7 @@ export default async function ContractDetailPage({ params, searchParams }: Contr
     versions.find((v) => v.versionNumber === requestedVersionNumber) ??
     versions.find((v) => v.versionNumber === currentVersionNumber)!;
 
-  const [version, clauses, supplierName] = await Promise.all([
+  const [version, clauses, supplierName, complianceReviews] = await Promise.all([
     getContractVersion(accessToken, id, selectedSummary.id),
     listContractVersionClauses(accessToken, id, selectedSummary.id),
     // Best-effort: every default role with Contracts read also has Suppliers read, but a
@@ -90,6 +95,12 @@ export default async function ContractDetailPage({ params, searchParams }: Contr
     getSupplier(accessToken, contract.supplierId)
       .then((supplier) => supplier.legalName)
       .catch(() => null),
+    // Same best-effort reasoning as `supplierName` above, for `compliance_reviews` instead of
+    // `suppliers` — the review-history list is a nice-to-have on this page, not load-bearing,
+    // so a narrowed per-user override degrades to "no history shown" rather than a 500.
+    compliancePermissions.canRead
+      ? listComplianceReviews(accessToken, selectedSummary.id).catch(() => [])
+      : Promise.resolve([]),
   ]);
 
   const fields = (version.extractedData as { fields?: ContractFields }).fields ?? {};
@@ -133,6 +144,19 @@ export default async function ContractDetailPage({ params, searchParams }: Contr
 
         <div className="space-y-6">
           <VersionSummary version={version} />
+
+          {compliancePermissions.canCreate && version.status === "analyzed" && (
+            <div className="flex justify-end">
+              <TriggerComplianceReviewButton
+                contractId={contract.id}
+                contractVersionId={version.id}
+              />
+            </div>
+          )}
+
+          {complianceReviews.length > 0 && (
+            <ComplianceReviewHistory contractId={contract.id} reviews={complianceReviews} />
+          )}
 
           {version.status === "extracted" && (
             <section className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border bg-surface px-6 py-16 text-center">
