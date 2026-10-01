@@ -254,6 +254,30 @@ async def trigger_review(
     return review
 
 
+async def list_reviews_for_contract_version(
+    session: AsyncSession, *, organization_id: uuid.UUID, contract_version_id: uuid.UUID
+) -> list[ComplianceReview]:
+    """#62: the review-history read-model a contract detail page needs -- every
+    `ComplianceReview` ever run against one `ContractVersion`, oldest first
+    (`ComplianceReviewRepository.list_by_contract_version`'s own ordering) -- to show a
+    review history / "already reviewed" state without the caller already knowing a
+    `review_id`.
+
+    Verifies tenant ownership of `contract_version_id` BEFORE listing, mirroring
+    `trigger_review`'s check above and the QA/security fix already applied to
+    `simulation_service.run_simulation` (2026-09-30): an empty list doesn't distinguish
+    "no reviews yet" from "you don't own this contract version" to anyone probing ids, so
+    a nonexistent or cross-tenant `contract_version_id` must 404, never silently return
+    `[]`."""
+    if not await contract_version_belongs_to_organization(
+        session, organization_id=organization_id, contract_version_id=contract_version_id
+    ):
+        raise ContractVersionNotFoundError()
+    return await ComplianceReviewRepository(session).list_by_contract_version(
+        contract_version_id, organization_id
+    )
+
+
 async def get_review_detail(
     session: AsyncSession, *, organization_id: uuid.UUID, review_id: uuid.UUID
 ) -> tuple[ComplianceReview, list[RuleEvaluation], list[Risk]]:

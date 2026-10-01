@@ -9,6 +9,7 @@ succeed, proving the dependency isn't over-blocking."""
 
 import httpx
 
+from tests.policies.conftest import create_supplier, pdf_bytes_with_text
 from tests.suppliers.conftest import register_org_and_login
 
 SANC_001_YAML = """
@@ -192,6 +193,52 @@ async def test_viewer_role_cannot_run_simulation(client: httpx.AsyncClient) -> N
         headers=viewer_headers,
     )
     assert response.status_code == 403
+
+
+async def test_viewer_role_can_list_compliance_reviews(client: httpx.AsyncClient) -> None:
+    """#62's review-history read-model is gated on `read`, not `create` -- a `viewer`
+    (read-only on `compliance_reviews` per `DEFAULT_ROLE_GRID`) must be able to call it,
+    proving the dependency isn't over-blocking a genuine read endpoint. Contract-version
+    extraction is left as the default no-op stub (`stub_contract_extraction_enqueue`,
+    autouse) since this test only needs the id to exist and belong to the org -- not a
+    real extraction outcome."""
+    admin_headers = await register_org_and_login(client, "admin-pol-rbac-8@example.com")
+    supplier = await create_supplier(client, admin_headers, tax_id="00000000000191")
+    upload = (
+        await client.post(
+            "/api/contracts/upload",
+            files={"file": ("contract.pdf", pdf_bytes_with_text(), "application/pdf")},
+            data={"supplier_id": supplier["id"], "title": "MSA", "contract_type": "msa"},
+            headers=admin_headers,
+        )
+    ).json()
+    contract_version_id = upload["id"]
+
+    # The viewer must be a member of the SAME organization that owns the contract version,
+    # so invite them through `admin_headers` rather than registering a fresh org (see
+    # `test_viewer_role_cannot_create_rule`'s identical pattern above).
+    await client.post(
+        "/api/users",
+        json={
+            "full_name": "Viewer",
+            "email": "viewer-pol-rbac-8@example.com",
+            "password": "StrongPass1",
+            "role": "viewer",
+        },
+        headers=admin_headers,
+    )
+    login = await client.post(
+        "/api/auth/login",
+        json={"email": "viewer-pol-rbac-8@example.com", "password": "StrongPass1"},
+    )
+    viewer_headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+
+    response = await client.get(
+        "/api/compliance/reviews",
+        params={"contract_version_id": contract_version_id},
+        headers=viewer_headers,
+    )
+    assert response.status_code == 200, response.text
 
 
 async def test_viewer_role_can_still_read_policies(client: httpx.AsyncClient) -> None:

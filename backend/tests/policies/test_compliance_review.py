@@ -434,6 +434,109 @@ async def test_compliance_reviews_are_scoped_to_the_caller_organization(
     assert response.status_code == 404
 
 
+async def test_list_reviews_returns_review_history_for_a_contract_version(
+    client: httpx.AsyncClient,
+    mock_openrouter,
+    mock_cnpj_registry,
+    seed_sanctions_index,
+    run_contract_extraction_inline,
+    run_supplier_checks_inline,
+) -> None:
+    """#62's review-history read-model: `GET /api/compliance/reviews?contract_version_id=`
+    returns every `ComplianceReview` run against that `ContractVersion` -- here, the one
+    triggered above -- in the `ComplianceReviewResponse` shape."""
+    mock_cnpj_registry(data=ACTIVE_CNPJ_RESPONSE)
+    await seed_sanctions_index(hit_document=TAX_ID)
+    mock_openrouter(payload=EVIDENCE_ENVELOPE)
+
+    headers = await register_org_and_login(client, "list-reviews-1@example.com")
+    supplier = await create_supplier(client, headers, tax_id=TAX_ID)
+    contract_version_id = await _upload_contract(client, headers, supplier["id"])
+    await _create_policy_with_rules(
+        client, headers, name="Vendor Policy", rule_yamls=[SANC_001_YAML, FIN_003_YAML]
+    )
+
+    triggered = await client.post(
+        "/api/compliance/reviews",
+        json={"contract_version_id": contract_version_id},
+        headers=headers,
+    )
+    assert triggered.status_code == 201, triggered.text
+    review_id = triggered.json()["id"]
+
+    response = await client.get(
+        "/api/compliance/reviews",
+        params={"contract_version_id": contract_version_id},
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert len(body) == 1
+    assert body[0]["id"] == review_id
+    assert body[0]["contract_version_id"] == contract_version_id
+    assert body[0]["status"] == "BLOCK"
+
+
+async def test_list_reviews_is_empty_for_a_contract_version_with_no_reviews_yet(
+    client: httpx.AsyncClient,
+    mock_openrouter,
+    run_contract_extraction_inline,
+) -> None:
+    """A real, owned `ContractVersion` that has never had `trigger_review` called on it
+    must come back as an empty list -- not a 404 -- distinguishing "no reviews yet" from
+    "you don't own this contract version" (the two negative cases below)."""
+    mock_openrouter(payload=EVIDENCE_ENVELOPE)
+    headers = await register_org_and_login(client, "list-reviews-2@example.com")
+    supplier = await create_supplier(client, headers, tax_id=TAX_ID)
+    contract_version_id = await _upload_contract(client, headers, supplier["id"])
+
+    response = await client.get(
+        "/api/compliance/reviews",
+        params={"contract_version_id": contract_version_id},
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+    assert response.json() == []
+
+
+async def test_list_reviews_unknown_contract_version_is_not_found(
+    client: httpx.AsyncClient,
+) -> None:
+    """Mirrors `test_trigger_review_unknown_contract_version_is_not_found` and
+    `test_simulate_unknown_contract_version_is_not_found`: a nonexistent
+    `contract_version_id` must 404, never a silent empty list."""
+    headers = await register_org_and_login(client, "list-reviews-404@example.com")
+    response = await client.get(
+        "/api/compliance/reviews",
+        params={"contract_version_id": "00000000-0000-0000-0000-000000000000"},
+        headers=headers,
+    )
+    assert response.status_code == 404
+
+
+async def test_list_reviews_cross_tenant_contract_version_is_not_found(
+    client: httpx.AsyncClient,
+    mock_openrouter,
+    run_contract_extraction_inline,
+) -> None:
+    """The actual security property (mirrors
+    `test_simulate_cross_tenant_contract_version_is_not_found`): a `contract_version_id`
+    that is real -- just owned by a different organization -- must 404, never leak that
+    the id exists via an empty-but-200 response."""
+    mock_openrouter(payload=EVIDENCE_ENVELOPE)
+    org_a_headers = await register_org_and_login(client, "list-reviews-cross-a@example.com")
+    supplier = await create_supplier(client, org_a_headers, tax_id=TAX_ID)
+    other_org_contract_version_id = await _upload_contract(client, org_a_headers, supplier["id"])
+
+    org_b_headers = await register_org_and_login(client, "list-reviews-cross-b@example.com")
+    response = await client.get(
+        "/api/compliance/reviews",
+        params={"contract_version_id": other_org_contract_version_id},
+        headers=org_b_headers,
+    )
+    assert response.status_code == 404
+
+
 async def test_rule_evaluation_repository_has_no_update_or_delete_path() -> None:
     """BR-CMP-003 (#126): no actor has any way to alter or remove a recorded
     RuleEvaluation -- enforced by the repository simply exposing no such method, mirroring

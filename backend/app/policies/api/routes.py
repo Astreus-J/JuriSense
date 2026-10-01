@@ -363,6 +363,24 @@ async def trigger_review(
     return ComplianceReviewResponse.model_validate(review)
 
 
+@compliance_router.get("/reviews", response_model=list[ComplianceReviewResponse])
+async def list_reviews(
+    contract_version_id: uuid.UUID, user: CanReadComplianceReviews, session: SessionDep
+) -> list[ComplianceReviewResponse]:
+    """#62: the review-history read-model a contract detail page needs -- lets the
+    frontend discover which `ComplianceReview`s exist for a given `ContractVersion` (e.g.
+    a review history / "already reviewed" state) without already knowing a `review_id`."""
+    try:
+        reviews = await compliance_review_service.list_reviews_for_contract_version(
+            session,
+            organization_id=user.organization_id,
+            contract_version_id=contract_version_id,
+        )
+    except ContractVersionNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.message) from exc
+    return [ComplianceReviewResponse.model_validate(r) for r in reviews]
+
+
 @compliance_router.get("/reviews/{review_id}", response_model=ComplianceReviewDetailResponse)
 async def get_review(
     review_id: uuid.UUID, user: CanReadComplianceReviews, session: SessionDep
