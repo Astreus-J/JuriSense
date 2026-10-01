@@ -119,6 +119,16 @@ class Settings(BaseSettings):
     # for the full malware/type-spoofing scope decision).
     document_max_size_bytes: int = 25_000_000  # 25 MB
 
+    # BR-APR-003's SLA duration is an explicit `TBD` pending customer discovery
+    # (docs/03-domain/approvals.md "SLA and escalation") -- a flat 48h (2 "business
+    # days", treated as flat wall-clock time rather than real business-day calendar
+    # arithmetic, which is out of scope this round) is the documented hackathon default.
+    approval_request_sla_hours: int = 48
+
+    # A Decision's `valid_until` duration is likewise a documented `TBD` (BR-DEC-004
+    # doesn't pin a number) -- 90 days is a plain, defensible default pending real data.
+    decision_valid_days: int = 90
+
     @model_validator(mode="after")
     def _normalize_database_url_field(self) -> "Settings":
         self.database_url = _normalize_database_url(self.database_url)

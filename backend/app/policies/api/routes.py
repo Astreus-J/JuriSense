@@ -3,6 +3,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
+from app.approvals.domain.errors import NoApprovalWorkflowConfiguredError
 from app.core.db import SessionDep
 from app.identity.api.deps import require_permission
 from app.identity.domain.constants import Module
@@ -360,6 +361,12 @@ async def trigger_review(
         )
     except ContractVersionNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.message) from exc
+    except NoApprovalWorkflowConfiguredError as exc:
+        # Shouldn't happen for an organization created after EPIC-6 (workflow_service.
+        # seed_default_workflows seeds medium/high/critical at registration) -- can for
+        # pre-epic data or the undocumented low-severity-reaches-REVIEW edge case
+        # (docs/03-domain/approvals.md's routing table leaves `low` unconfigured).
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.message) from exc
     return ComplianceReviewResponse.model_validate(review)
 
 

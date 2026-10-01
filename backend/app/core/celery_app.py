@@ -38,5 +38,6 @@ celery_app.conf.update(
         "app.suppliers.infrastructure.tasks",
         "app.integrations.infrastructure.tasks",
         "app.contracts.infrastructure.tasks",
+        "app.approvals.infrastructure.tasks",
     ),
 )

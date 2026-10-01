@@ -38,6 +38,8 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.approvals.application.approval_service import create_approval_requests_for_review
+from app.approvals.application.decision_service import create_decision_for_review
 from app.contracts.application.evidence_service import (
     contract_version_belongs_to_organization,
     get_evidence_refs_for_contract_version,
@@ -51,7 +53,12 @@ from app.policies.application.evaluation_service import (
     aggregate_preview,
     evaluate_policy_version,
 )
-from app.policies.domain.constants import ComplianceReviewStatus, RuleOutcome
+from app.policies.domain.constants import (
+    SEVERITY_ORDER,
+    ComplianceReviewStatus,
+    RuleOutcome,
+    Severity,
+)
 from app.policies.domain.errors import ComplianceReviewNotFoundError, ContractVersionNotFoundError
 from app.policies.domain.rule_dsl import referenced_paths_of
 from app.policies.infrastructure.models import ComplianceReview, Risk, Rule, RuleEvaluation
@@ -248,6 +255,41 @@ async def trigger_review(
             "rule_evaluation_count": len(results),
         },
     )
+
+    # EPIC-6 (docs/03-domain/approvals.md): this codebase's first write-side (not
+    # read-only "evidence port") cross-context call -- Policy & Compliance hands off this
+    # review's aggregate outcome to Approvals & Decisions, in the SAME transaction, before
+    # this function's own commit below. Only primitives cross the boundary (plain
+    # uuid.UUID/str), never a Severity enum instance or any ORM object. A REVIEW outcome
+    # routes to the workflow's first approval step (no Decision yet -- one is created
+    # later, from inside approval_service.approve_request/reject_request, once the chain
+    # reaches a terminal state); APPROVE/BLOCK need no human step at all, so their
+    # Decision is created immediately, right here, alongside this call rather than
+    # instead of it.
+    if aggregate.status == RuleOutcome.REVIEW.value:
+        # Same highest-triggered-REVIEW-severity tie-break `aggregate_preview` already
+        # uses internally to pick required_approver_roles -- recomputed here (as a plain
+        # str, not a Severity enum instance) because AggregatePreview only exposes the
+        # roles, not the tier itself. review_results is guaranteed non-empty: aggregate
+        # Preview only returns REVIEW when at least one REVIEW-outcome result exists.
+        review_results = [r for r in results if r.outcome == RuleOutcome.REVIEW.value]
+        severities_present = {Severity(r.severity) for r in review_results}
+        highest_review_severity = next(s for s in SEVERITY_ORDER if s in severities_present).value
+        await create_approval_requests_for_review(
+            session,
+            organization_id=organization_id,
+            actor_id=actor_id,
+            compliance_review_id=review.id,
+            highest_review_severity=highest_review_severity,
+        )
+    else:
+        await create_decision_for_review(
+            session,
+            organization_id=organization_id,
+            actor_id=actor_id,
+            compliance_review_id=review.id,
+            status=aggregate.status,
+        )
 
     await session.commit()
     await session.refresh(review)

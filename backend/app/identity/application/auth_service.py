@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 import redis.asyncio as aioredis
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.approvals.application.workflow_service import seed_default_workflows
 from app.core import security
 from app.core.config import get_settings
 from app.evidence.application.audit_service import emit_audit_event
@@ -111,6 +112,17 @@ async def register_organization(
         )
     )
     await seed_default_permissions(session, user=admin, role=Role.ADMIN)
+    # FEATURE-6.1: bootstraps this brand-new organization's default ApprovalWorkflow rows
+    # (medium/high/critical), the same "seed a sane default at registration time" shape as
+    # seed_default_permissions above. Identity & Organizations calling into Approvals &
+    # Decisions here is a deliberate exception to the usual dependency direction (other
+    # contexts call into Approvals & Decisions, not the reverse) -- organization
+    # registration is the one place a new organization's defaults are provisioned in one
+    # transaction, and without this call every organization would need an explicit admin
+    # setup step before its first REVIEW-outcome compliance review could be routed
+    # anywhere at all. See `app.approvals.application.workflow_service.seed_default_workflows`'s
+    # own docstring for the full rationale.
+    await seed_default_workflows(session, organization_id=organization.id)
     await emit_audit_event(
         session,
         event_type="organization.created",

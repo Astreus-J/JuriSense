@@ -1,6 +1,8 @@
 from fastapi import APIRouter
 
 from app.api.routes import health
+from app.approvals.api.routes import decisions_router
+from app.approvals.api.routes import router as approvals_router
 from app.contracts.api.routes import router as contracts_router
 from app.identity.api.routes import router as identity_router
 from app.identity.api.users import router as identity_users_router
@@ -18,3 +20,5 @@ api_router.include_router(suppliers_router)
 api_router.include_router(contracts_router)
 api_router.include_router(policies_router)
 api_router.include_router(compliance_router)
+api_router.include_router(approvals_router)
+api_router.include_router(decisions_router)

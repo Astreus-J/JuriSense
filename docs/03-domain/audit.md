@@ -376,6 +376,21 @@ implications**.
 - Audit implications: distinct from `expired` — proves a human actively reviewed and declined,
   which matters legally/commercially differently than "nobody got to it in time."
 
+**`approval.expired`**
+- Producer: `ApprovalRequest` aggregate, on SLA expiry (`BR-APR-003`), via the Celery task that
+  sweeps stale `pending` requests (`app.approvals.infrastructure.tasks`; ADR-006: time-based
+  transitions are a Celery task's job, never held in the request/response cycle).
+- Meaning: this approval step exceeded its configured SLA without a human resolving it — a
+  distinct failure mode from `approval.rejected` ("nobody got to it in time" vs. "a human actively
+  declined").
+- Payload: `approval_request_id`, `compliance_review_id`, `approver_role`, `step_number`,
+  `requested_at`, `expired_at`.
+- Consumers: none yet (no admin-intervention/re-routing path exists — tracked as future work); the
+  review simply has no `Decision` until one is built.
+- Audit implications: `actor_id` is always `null` on this event (system-initiated, no human actor)
+  — the Decision Passport must be able to show an SLA breach as its own distinct category, not
+  conflated with an active rejection.
+
 **`decision.created`**
 - Producer: `Decision` aggregate, once a `ComplianceReview` (and any required approval chain)
   reaches a terminal outcome (`DEC-001`).
