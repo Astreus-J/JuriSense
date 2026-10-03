@@ -40,4 +40,12 @@ celery_app.conf.update(
         "app.contracts.infrastructure.tasks",
         "app.approvals.infrastructure.tasks",
     ),
+    # FEATURE-6.4 (BR-DEC-004): the staleness sweep. Cadence is a TBD placeholder, see
+    # settings.decision_reevaluation_interval_seconds.
+    beat_schedule={
+        "approvals-reevaluate-stale-decisions": {
+            "task": "approvals.reevaluate_stale_decisions",
+            "schedule": _settings.decision_reevaluation_interval_seconds,
+        },
+    },
 )

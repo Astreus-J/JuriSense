@@ -211,6 +211,19 @@ class ComplianceReview(Base):
 
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    # FEATURE-6.4 (BR-DEC-002): set when this review is a re-evaluation of an earlier
+    # Decision; the Decision it produces carries the same link. Null for first-time reviews.
+    # use_alter: this FK closes a cycle (decisions.compliance_review_id -> compliance_reviews),
+    # which SQLAlchemy can only sort by emitting the constraint as a separate ALTER.
+    supersedes_decision_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey(
+            "decisions.id",
+            name="fk_compliance_reviews_supersedes_decision_id",
+            use_alter=True,
+        ),
+        index=True,
+        default=None,
+    )
 
 
 class RuleEvaluation(Base):

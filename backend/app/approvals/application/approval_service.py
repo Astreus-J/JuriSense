@@ -30,7 +30,7 @@ async def create_approval_requests_for_review(
     session: AsyncSession,
     *,
     organization_id: uuid.UUID,
-    actor_id: uuid.UUID,
+    actor_id: uuid.UUID | None,
     compliance_review_id: uuid.UUID,
     highest_review_severity: str,
 ) -> ApprovalRequest:
@@ -117,6 +117,25 @@ async def _resolve_actor_role(
     if membership is None or membership.status != MembershipStatus.ACTIVE.value:
         return None
     return membership.role
+
+
+async def _supersedes_for_review(
+    session: AsyncSession, *, organization_id: uuid.UUID, compliance_review_id: uuid.UUID
+) -> uuid.UUID | None:
+    """FEATURE-6.4: a REVIEW chain's Decision is created long after its review was
+    persisted, so the re-evaluation back-reference is read from the review row itself
+    (`compliance_review_service.get_review_supersedes_decision_id`). Imported inside the
+    function, not at module level: Policy & Compliance already imports this module at its
+    own top level, so a module-level import here would be a circular import. The
+    sanctioned surface (`tests/approvals/test_boundary_rules.py`) already allows this
+    module."""
+    from app.policies.application.compliance_review_service import (
+        get_review_supersedes_decision_id,
+    )
+
+    return await get_review_supersedes_decision_id(
+        session, organization_id=organization_id, compliance_review_id=compliance_review_id
+    )
 
 
 async def get_request(
@@ -261,6 +280,11 @@ async def approve_request(
             actor_id=actor_id,
             compliance_review_id=request.compliance_review_id,
             status=DecisionStatus.APPROVE.value,
+            supersedes_decision_id=await _supersedes_for_review(
+                session,
+                organization_id=organization_id,
+                compliance_review_id=request.compliance_review_id,
+            ),
         )
 
     await session.commit()
@@ -332,6 +356,11 @@ async def reject_request(
         actor_id=actor_id,
         compliance_review_id=request.compliance_review_id,
         status=DecisionStatus.BLOCK.value,
+        supersedes_decision_id=await _supersedes_for_review(
+            session,
+            organization_id=organization_id,
+            compliance_review_id=request.compliance_review_id,
+        ),
     )
 
     await session.commit()

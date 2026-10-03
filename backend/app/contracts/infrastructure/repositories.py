@@ -3,6 +3,7 @@ import uuid
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.contracts.domain.constants import ContractVersionStatus
 from app.contracts.infrastructure.models import Clause, Contract, ContractVersion, Document
 
 
@@ -78,6 +79,24 @@ class ContractVersionRepository:
             .order_by(ContractVersion.version_number.desc())
         )
         return list(result.scalars())
+
+    async def get_newest_analyzed_after(
+        self, contract_id: uuid.UUID, version_number: int
+    ) -> uuid.UUID | None:
+        """The highest-numbered `analyzed` ContractVersion of this Contract whose
+        `version_number` is strictly greater than `version_number` -- `None` if there is
+        none. Used by Policy & Compliance's re-evaluation staleness check (FEATURE-6.4)."""
+        result = await self._session.execute(
+            select(ContractVersion.id)
+            .where(
+                ContractVersion.contract_id == contract_id,
+                ContractVersion.status == ContractVersionStatus.ANALYZED.value,
+                ContractVersion.version_number > version_number,
+            )
+            .order_by(ContractVersion.version_number.desc())
+            .limit(1)
+        )
+        return result.scalars().first()
 
 
 class ClauseRepository:

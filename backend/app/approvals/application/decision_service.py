@@ -26,9 +26,15 @@ async def create_decision_for_review(
     actor_id: uuid.UUID | None,
     compliance_review_id: uuid.UUID,
     status: str,
+    supersedes_decision_id: uuid.UUID | None = None,
 ) -> Decision:
     """Creates the final, packaged `Decision` for one `ComplianceReview` (DEC-001,
     BR-DEC-001).
+
+    `supersedes_decision_id` (FEATURE-6.4, BR-DEC-002) is passed by the caller from the
+    review's own `supersedes_decision_id`: `None` for a first-time review, the replaced
+    Decision's id for a re-evaluation. This function never reads or modifies that prior
+    Decision -- it only records the back-reference on the new row.
 
     Two distinct call sites, per the epic's "critical timing nuance":
     - `app.policies.application.compliance_review_service.trigger_review` calls this
@@ -63,6 +69,7 @@ async def create_decision_for_review(
         compliance_review_id=compliance_review_id,
         status=status,
         valid_until=now + timedelta(days=settings.decision_valid_days),
+        supersedes_decision_id=supersedes_decision_id,
     )
     DecisionRepository(session).add(decision)
     try:
@@ -81,7 +88,9 @@ async def create_decision_for_review(
             "compliance_review_id": str(compliance_review_id),
             "status": decision.status,
             "valid_until": decision.valid_until.isoformat(),
-            "supersedes_decision_id": None,
+            "supersedes_decision_id": str(supersedes_decision_id)
+            if supersedes_decision_id is not None
+            else None,
             "created_at": now.isoformat(),
         },
     )

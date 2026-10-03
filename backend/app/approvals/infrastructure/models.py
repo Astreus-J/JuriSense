@@ -175,7 +175,7 @@ class Decision(Base):
     (docs/03-domain/domain-model.md "Decision"; DEC-001/DEC-002; BR-DEC-001/BR-DEC-003/
     BR-DEC-004; FEATURE-6.3).
 
-    One-to-one with `ComplianceReview` *in this round* -- enforced by a hard unique
+    One-to-one with `ComplianceReview` -- enforced by a hard unique
     constraint on `compliance_review_id` (QA/security review, 2026-10-01: added as
     defense-in-depth after both reviews independently found that an unguarded race on
     `ApprovalRequest` resolution could otherwise let two concurrent `approve_request`/
@@ -187,6 +187,9 @@ class Decision(Base):
     partial unique index (e.g. scoped to "not yet superseded") rather than a plain one;
     that migration is future work, not a problem introduced by adding the plain
     constraint now.
+
+    FEATURE-6.4 does NOT relax this constraint: a successor Decision always belongs to a
+    NEW `ComplianceReview` (its own id), so it never collides with the prior one.
 
     `overridden`/`override_justification` are the one documented exception to "never
     edited in place" (domain-model.md's invariant is about *re-evaluation*, not override;
@@ -209,12 +212,21 @@ class Decision(Base):
     )
     status: Mapped[str] = mapped_column(String(20))
     valid_until: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    # FEATURE-6.4 (deferred, out of scope this round): nothing populates this column yet.
+    # Set only on a successor created by re-evaluation (FEATURE-6.4, BR-DEC-002): the
+    # prior Decision is never edited, its successor points back here. Populated from the
+    # ComplianceReview's own `supersedes_decision_id` (see decision_service).
     supersedes_decision_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("decisions.id"), default=None
+        ForeignKey("decisions.id"), default=None, index=True
     )
     overridden: Mapped[bool] = mapped_column(default=False)
     override_justification: Mapped[str | None] = mapped_column(Text, default=None)
+    # BR-DEC-004 flag (FEATURE-6.4): set exactly once, atomically, by
+    # `DecisionRepository.flag_for_review_if_unflagged`. These two columns are the only
+    # mutation a re-evaluation ever makes to a prior Decision -- its content is untouched.
+    review_required_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), default=None
+    )
+    review_required_reason: Mapped[str | None] = mapped_column(String(30), default=None)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

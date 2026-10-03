@@ -3,6 +3,7 @@ from datetime import datetime
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from app.approvals.domain.constants import ApprovalRequestStatus
 from app.approvals.infrastructure.models import ApprovalRequest, ApprovalWorkflow, Decision
@@ -179,3 +180,47 @@ class DecisionRepository:
             )
         )
         return result.scalar_one_or_none()
+
+    async def list_reevaluation_candidates(self, *, limit: int) -> list[Decision]:
+        """FEATURE-6.4 sweep candidates, platform-wide (like the SLA sweep): every Decision
+        that has NOT already been flagged for review and has NO successor (no other
+        Decision points back at it via `supersedes_decision_id`). A flagged Decision is
+        excluded, which is what makes repeated sweeps idempotent; a superseded one is
+        excluded because it has already been replaced and must not be re-replaced."""
+        successor = aliased(Decision)
+        has_successor = (
+            select(successor.id).where(successor.supersedes_decision_id == Decision.id).exists()
+        )
+        result = await self._session.execute(
+            select(Decision)
+            .where(Decision.review_required_at.is_(None), ~has_successor)
+            .order_by(Decision.created_at)
+            .limit(limit)
+        )
+        return list(result.scalars())
+
+    async def flag_for_review_if_unflagged(
+        self,
+        decision_id: uuid.UUID,
+        *,
+        organization_id: uuid.UUID,
+        reason: str,
+        flagged_at: datetime,
+    ) -> bool:
+        """Atomically sets `review_required_at`/`review_required_reason` (BR-DEC-004),
+        only if still unset. Same atomic conditional-UPDATE pattern as
+        `ApprovalRequestRepository.resolve_if_pending` (see its docstring for the race
+        this closes): two overlapping sweeps both reading the same Decision as stale
+        cannot both win -- the database serializes the two UPDATEs, and only the first one
+        matches a row. Returns `True` only for the single caller that flagged it; that
+        caller alone may re-evaluate and emit `compliance.review_required`."""
+        result = await self._session.execute(
+            update(Decision)
+            .where(
+                Decision.id == decision_id,
+                Decision.organization_id == organization_id,
+                Decision.review_required_at.is_(None),
+            )
+            .values(review_required_at=flagged_at, review_required_reason=reason)
+        )
+        return result.rowcount > 0

@@ -90,6 +90,20 @@ class PolicyVersionRepository:
             .values(is_current=False)
         )
 
+    async def list_current_ids_among(self, version_ids: list[uuid.UUID]) -> set[uuid.UUID]:
+        """Which of the given PolicyVersion ids are still their Policy's current version
+        (BR-POL-002). Used by the re-evaluation staleness check (FEATURE-6.4): a
+        ComplianceReview's pooled version ids that are no longer in this set have been
+        superseded by a newer publish."""
+        if not version_ids:
+            return set()
+        result = await self._session.execute(
+            select(PolicyVersion.id).where(
+                PolicyVersion.id.in_(version_ids), PolicyVersion.is_current.is_(True)
+            )
+        )
+        return set(result.scalars())
+
     async def list_current_by_organization(self, organization_id: uuid.UUID) -> list[PolicyVersion]:
         """Every currently-published `PolicyVersion` across the whole organization -- one
         per `Policy` that has ever been published, at most, since `is_current` is only

@@ -129,6 +129,17 @@ class Settings(BaseSettings):
     # doesn't pin a number) -- 90 days is a plain, defensible default pending real data.
     decision_valid_days: int = 90
 
+    # BR-DEC-004 / FEATURE-6.4: cadence of the platform-wide sweep that flags stale
+    # Decisions for re-evaluation. Hourly is a placeholder, not a commercial decision --
+    # TBD alongside the Decision validity window above; see
+    # app/approvals/application/reevaluation_service.py for the staleness-window tradeoff.
+    decision_reevaluation_interval_seconds: int = 3600
+    # Security review (2026-10-03): the sweep is platform-wide and each stale Decision costs a
+    # full ComplianceReview, so one tenant's many live Decisions could otherwise monopolise a
+    # run. Capping candidates per run (oldest first, so the backlog still drains) bounds the
+    # worst-case run length regardless of any single tenant's volume.
+    decision_reevaluation_batch_size: int = 100
+
     @model_validator(mode="after")
     def _normalize_database_url_field(self) -> "Settings":
         self.database_url = _normalize_database_url(self.database_url)

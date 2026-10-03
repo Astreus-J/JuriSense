@@ -100,3 +100,23 @@ async def get_evidence_refs_for_contract_version(
     if not isinstance(fields, dict):
         return {}
     return contract_fields_to_evidence_refs(fields)
+
+
+async def get_newer_analyzed_contract_version_id(
+    session: AsyncSession, *, organization_id: uuid.UUID, contract_version_id: uuid.UUID
+) -> uuid.UUID | None:
+    """FEATURE-6.4 (BR-DEC-004): the newest `analyzed` ContractVersion of the same Contract
+    whose `version_number` is greater than the given one's -- `None` if there is none, or
+    if the given version or its Contract isn't in the caller's organization. Read-only;
+    never raises, same "missing evidence, not an error" contract as its siblings above."""
+    version = await ContractVersionRepository(session).get_by_id(contract_version_id)
+    if version is None:
+        return None
+    contract = await ContractRepository(session).get_by_id_and_organization(
+        version.contract_id, organization_id
+    )
+    if contract is None:
+        return None
+    return await ContractVersionRepository(session).get_newest_analyzed_after(
+        version.contract_id, version.version_number
+    )

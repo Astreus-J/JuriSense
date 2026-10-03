@@ -35,3 +35,22 @@ def expire_stale_approval_requests_task() -> int:
     count = asyncio.run(_expire_stale_requests())
     logger.info("Expired %d stale approval request(s)", count)
     return count
+
+
+async def _reevaluate_stale_decisions() -> int:
+    # Imported inside the function for the same cycle-breaking reason as
+    # `_expire_stale_requests` above.
+    from app.approvals.application.reevaluation_service import reevaluate_stale_decisions
+
+    async with task_session() as session:
+        return await reevaluate_stale_decisions(session)
+
+
+@celery_app.task(name="approvals.reevaluate_stale_decisions")
+def reevaluate_stale_decisions_task() -> int:
+    """FEATURE-6.4 (BR-DEC-004): scheduled by Celery beat at
+    `settings.decision_reevaluation_interval_seconds` (see `app.core.celery_app`). Returns
+    how many stale Decisions were re-evaluated in this run."""
+    count = asyncio.run(_reevaluate_stale_decisions())
+    logger.info("Re-evaluated %d stale decision(s)", count)
+    return count

@@ -33,16 +33,21 @@ schema doesn't hard-code 1:1.
 """
 
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.approvals.application.approval_service import create_approval_requests_for_review
-from app.approvals.application.decision_service import create_decision_for_review
+from app.approvals.application.decision_service import (
+    create_decision_for_review,
+    get_decision,
+)
 from app.contracts.application.evidence_service import (
     contract_version_belongs_to_organization,
     get_evidence_refs_for_contract_version,
+    get_newer_analyzed_contract_version_id,
     get_supplier_id_for_contract_version,
 )
 from app.evidence.application.audit_service import emit_audit_event
@@ -124,11 +129,50 @@ async def trigger_review(
     """#123: resolves every currently-published `PolicyVersion` in the organization,
     pools their Rules, evaluates them against the given `ContractVersion`'s normalized
     evidence (#60/#61's already-tested engine, reused verbatim), and persists the result
-    as one immutable `ComplianceReview` + its `RuleEvaluation`/`Risk` rows."""
+    as one immutable `ComplianceReview` + its `RuleEvaluation`/`Risk` rows.
+
+    Commits itself -- the entry use case for `POST /compliance/reviews`. Re-evaluation
+    (FEATURE-6.4) calls `execute_review` directly instead, so it can make its own
+    Decision-flag update and this review commit as one unit."""
+    review = await execute_review(
+        session,
+        organization_id=organization_id,
+        actor_id=actor_id,
+        contract_version_id=contract_version_id,
+    )
+    await session.commit()
+    await session.refresh(review)
+    return review
+
+
+async def execute_review(
+    session: AsyncSession,
+    *,
+    organization_id: uuid.UUID,
+    actor_id: uuid.UUID | None,
+    contract_version_id: uuid.UUID,
+    supersedes_decision_id: uuid.UUID | None = None,
+) -> ComplianceReview:
+    """The `trigger_review` body, minus the commit: evaluates and persists one
+    `ComplianceReview` (plus, for APPROVE/BLOCK, its `Decision`; for REVIEW, its approval
+    chain's first step) in the caller's transaction. The caller owns commit.
+
+    `actor_id` is `None` for system-initiated re-evaluation (the FEATURE-6.4 sweep has no
+    human actor; audit events accept `actor_id=None`). `supersedes_decision_id` links a
+    re-evaluation to the Decision it replaces (BR-DEC-002): it is stored on this review and
+    copied onto the Decision the review produces -- on the synchronous APPROVE/BLOCK path
+    here, and later, on the deferred path in `approval_service` for a REVIEW chain."""
     if not await contract_version_belongs_to_organization(
         session, organization_id=organization_id, contract_version_id=contract_version_id
     ):
         raise ContractVersionNotFoundError()
+    if supersedes_decision_id is not None:
+        # Security review (2026-10-03): a supersedes link must never cross tenants (it would
+        # silently suppress another organization's Decision from the staleness sweep forever).
+        # get_decision is org-scoped and raises DecisionNotFoundError for a foreign id.
+        await get_decision(
+            session, organization_id=organization_id, decision_id=supersedes_decision_id
+        )
 
     version_repo = PolicyVersionRepository(session)
     rule_repo = RuleRepository(session)
@@ -147,6 +191,7 @@ async def trigger_review(
         contract_version_id=contract_version_id,
         policy_version_ids=[str(pv.id) for pv in policy_versions],
         status=ComplianceReviewStatus.IN_PROGRESS.value,
+        supersedes_decision_id=supersedes_decision_id,
     )
     ComplianceReviewRepository(session).add(review)
     await session.flush()
@@ -289,11 +334,74 @@ async def trigger_review(
             actor_id=actor_id,
             compliance_review_id=review.id,
             status=aggregate.status,
+            supersedes_decision_id=supersedes_decision_id,
         )
 
-    await session.commit()
-    await session.refresh(review)
     return review
+
+
+@dataclass(frozen=True)
+class ReviewStaleness:
+    """Result of `assess_review_staleness` (FEATURE-6.4, BR-DEC-004). Contains only
+    primitives so approvals can consume it without importing this module's types.
+
+    `contract_version_id` is the version a fresh re-evaluation should run against: the
+    newest analyzed version of the same Contract when `contract_changed`, otherwise the
+    review's own version unchanged."""
+
+    contract_version_id: uuid.UUID
+    contract_changed: bool
+    policy_changed: bool
+
+
+async def assess_review_staleness(
+    session: AsyncSession, *, organization_id: uuid.UUID, compliance_review_id: uuid.UUID
+) -> ReviewStaleness:
+    """Read-only. Whether the inputs a review was computed from have been superseded:
+
+    - `contract_changed`: a newer `analyzed` ContractVersion of the same Contract exists.
+    - `policy_changed`: any PolicyVersion pooled into the review is no longer its Policy's
+      current version. This is deliberately conservative: ANY newer publish counts as
+      material, even one that changed no rule the review actually evaluated. A finer,
+      rule-level diff is future work -- the lean is toward re-evaluating.
+
+    Pooled policies that are NOT in the review (a brand-new Policy published after the
+    review) do not count: the review never evaluated them, so they cannot make it stale.
+
+    Raises `ComplianceReviewNotFoundError` if the review isn't in this organization."""
+    review = await ComplianceReviewRepository(session).get_by_id_and_organization(
+        compliance_review_id, organization_id
+    )
+    if review is None:
+        raise ComplianceReviewNotFoundError()
+
+    newer_contract_version_id = await get_newer_analyzed_contract_version_id(
+        session, organization_id=organization_id, contract_version_id=review.contract_version_id
+    )
+
+    pooled_ids = {uuid.UUID(policy_version_id) for policy_version_id in review.policy_version_ids}
+    still_current = await PolicyVersionRepository(session).list_current_ids_among(list(pooled_ids))
+    policy_changed = not pooled_ids <= still_current
+
+    return ReviewStaleness(
+        contract_version_id=newer_contract_version_id or review.contract_version_id,
+        contract_changed=newer_contract_version_id is not None,
+        policy_changed=policy_changed,
+    )
+
+
+async def get_review_supersedes_decision_id(
+    session: AsyncSession, *, organization_id: uuid.UUID, compliance_review_id: uuid.UUID
+) -> uuid.UUID | None:
+    """The `supersedes_decision_id` a review was created with (FEATURE-6.4) -- read by
+    `approval_service`'s deferred path, which creates a REVIEW chain's Decision long after
+    the review itself was persisted. `None` for any first-time review, or if the review
+    isn't in this organization (the caller only ever passes a review it already loaded
+    under the same organization, so a miss is a genuine inconsistency, not a tenant case)."""
+    review = await ComplianceReviewRepository(session).get_by_id_and_organization(
+        compliance_review_id, organization_id
+    )
+    return review.supersedes_decision_id if review is not None else None
 
 
 async def list_reviews_for_contract_version(
