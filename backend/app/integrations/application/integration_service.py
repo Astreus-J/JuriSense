@@ -6,10 +6,12 @@ operation, tenant-scoped to the caller's own organization.
 """
 
 import uuid
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.evidence.application.audit_service import emit_audit_event
 from app.integrations.domain.errors import IntegrationNotFoundError
 from app.integrations.infrastructure.models import Integration
 from app.integrations.infrastructure.repositories import IntegrationRepository
@@ -19,11 +21,27 @@ async def create_integration(
     session: AsyncSession,
     *,
     organization_id: uuid.UUID,
+    connected_by: uuid.UUID,
     provider: str,
     config: dict[str, Any],
 ) -> Integration:
     integration = Integration(organization_id=organization_id, provider=provider, config=config)
     IntegrationRepository(session).add(integration)
+    await session.flush()  # populate integration.id for the audit payload below
+    # Payload carries the provider only: `config` may hold connector credentials.
+    await emit_audit_event(
+        session,
+        event_type="integration.connected",
+        actor_id=connected_by,
+        organization_id=organization_id,
+        payload={
+            "integration_id": str(integration.id),
+            "organization_id": str(organization_id),
+            "provider": provider,
+            "connected_by": str(connected_by),
+            "connected_at": datetime.now(UTC).isoformat(),
+        },
+    )
     await session.commit()
     await session.refresh(integration)
     return integration

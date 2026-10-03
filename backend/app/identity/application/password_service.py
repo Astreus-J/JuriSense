@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import security
 from app.core.config import get_settings
+from app.evidence.application.audit_service import emit_audit_event
 from app.identity.domain.errors import InvalidPasswordResetTokenError
 from app.identity.domain.password import validate_password_strength
 from app.identity.domain.ports import EmailSender
@@ -84,6 +85,17 @@ async def reset_password(
 
     user.password_hash = security.hash_password(new_password)
     record.used = True
+    await emit_audit_event(
+        session,
+        event_type="user.password_reset",
+        actor_id=user.id,
+        organization_id=user.organization_id,
+        payload={
+            "user_id": str(user.id),
+            "initiated_via": "self_service",
+            "occurred_at": datetime.now(UTC).isoformat(),
+        },
+    )
     await session.commit()
 
     # Old sessions stop being valid (MED-001)

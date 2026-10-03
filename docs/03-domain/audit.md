@@ -70,6 +70,13 @@ Events are grouped by producing bounded context, in the order they appear in the
 For each: **Producer**, **Meaning**, **Payload** (key fields), **Consumers**, **Audit
 implications**.
 
+This catalog is checked against the code by `backend/tests/evidence/test_audit_catalog_coverage.py`:
+every entry must be emitted by `app/` and named by a test under `tests/` (a quoted reference, not
+proof of the assertion itself), or be marked "not yet emitted" and listed in that test's
+`PLANNED_NOT_YET_EMITTED`. Payloads are not compared by that test, and neither is the placement of
+the emission: that it shares its business transaction is covered only by the atomicity tests
+(for example `test_password_reset_is_atomic_with_its_audit_event`).
+
 ### Identity & Organizations
 
 **`organization.created`**
@@ -110,7 +117,8 @@ implications**.
 - Producer: `User` aggregate, on account creation.
 - Meaning: a new authenticated individual now exists in the system (may later hold memberships in
   multiple organizations, `BR-ORG-001`).
-- Payload: `user_id`, `email`, `registered_at`.
+- Payload: `user_id`, `email`. The email is plaintext personal data in this event: a known gap
+  from the security review of the Accounts context (finding M3), not yet remediated.
 - Consumers: welcome/verification email flow.
 - Audit implications: establishes the identity root that every `actor_id` elsewhere in the catalog
   ultimately resolves to.
@@ -132,26 +140,44 @@ implications**.
   the only record of that changing over time.
 
 **`user.login_succeeded`**
-- Producer: `User` aggregate / auth service, on successful authentication.
-- Meaning: a user successfully authenticated (credentials + 2FA where enabled).
-- Payload: `user_id`, `ip_address`, `user_agent`, `occurred_at`.
+- Producer: `User` aggregate / auth service (`app.identity.application.auth_service.login`), on
+  successful authentication. Emitted; 2FA is not built yet.
+- Meaning: a user successfully authenticated with credentials.
+- Payload: `user_id`, `occurred_at`. The client IP and user agent are not repeated here: they are
+  written to the `AccessLog` row in the same transaction, which is their record. This payload
+  carries ids and timestamps only, no personal data.
 - Consumers: session issuance, anomaly/security monitoring (`SEC-002`).
 - Audit implications: forms the access-pattern baseline needed to detect and later prove/disprove
   unauthorized access claims against a specific decision or approval.
 
 **`user.login_failed`**
-- Producer: `User` aggregate / auth service, on failed authentication attempt.
-- Meaning: an authentication attempt failed (wrong credentials, failed 2FA, locked account).
-- Payload: `user_id_attempted` (nullable if the email doesn't resolve to a user), `ip_address`,
-  `reason`, `occurred_at`.
+- Producer: `User` aggregate / auth service (`app.identity.application.auth_service.login`), on a
+  refused login where the credentials were checked: a wrong password, an address that is not a
+  user, or an inactive account presented with the correct password. Emitted; failed 2FA is not
+  built yet. Locked-out attempts are refused before the credential check and are not recorded
+  here, which matches `AccessLog` today.
+- Meaning: an authentication attempt was refused.
+- Payload: `user_id_attempted` (null if the address is not a user), `reason`
+  (`invalid_credentials` | `user_inactive`), `occurred_at`. The attempted address is not stored,
+  in plaintext or hashed: an unsalted hash of an address is still confirmable, so it is not a
+  pseudonym. A failed attempt against an address that is not a user can therefore be counted but
+  not correlated to the same address later.
+- `actor_id` is null (the caller is unauthenticated). `organization_id` is the matched user's
+  organization, or null when the address is not a user.
+- The HTTP response is unchanged by this event: the caller still receives `401 Invalid credentials`
+  for every refusal in this list.
 - Consumers: brute-force/lockout logic, security monitoring (`SEC-002`).
 - Audit implications: security-relevant on its own (attack-pattern detection); also matters for
   disputes about whether an actor's account was compromised around the time of a questioned action.
+  Known gap: the endpoint has no rate limit yet (security review M1), so an unauthenticated caller
+  can write one row per request. Until that is fixed, treat row volume here as attacker-controlled.
 
 **`user.password_reset`**
-- Producer: `User` aggregate, on completed password reset.
+- Producer: `User` aggregate (`app.identity.application.password_service.reset_password`), on
+  completed password reset. Emitted in the same transaction as the password change.
 - Meaning: a user's password was changed via the reset flow.
-- Payload: `user_id`, `initiated_via` (self-service/admin-forced), `occurred_at`.
+- Payload: `user_id`, `initiated_via` (`self_service`; the admin-forced path is not built yet),
+  `occurred_at`.
 - Consumers: session invalidation for all other active sessions, security notification email.
 - Audit implications: credential-change events are a standard forensic anchor point when
   investigating whether an account was compromised before or after a disputed action.
@@ -167,6 +193,7 @@ implications**.
   — every later `SupplierCheck` and `Decision` referencing this supplier traces back here.
 
 **`supplier.updated`**
+- Status: not yet emitted (feature not built: no manual edit route for core attributes exists).
 - Producer: `Supplier` aggregate, on manual edit of core attributes (`legal_name`, `jurisdiction`,
   etc. — not the profile, see `supplier.profile_updated` below).
 - Meaning: a user manually corrected/updated supplier record data.
@@ -221,6 +248,16 @@ implications**.
   `BR-EVD-003`'s append-only guarantee ensures it can never be quietly removed or altered after the
   fact.
 
+**`supplier.check.failed`**
+- Producer: `SupplierCheck` (`app.suppliers.application.check_service`), when a mandatory source (the
+  CNPJ registry or the sanctions index) was unavailable. The check is marked failed, and no
+  `SupplierProfile` is replaced.
+- Meaning: the check produced no usable outcome, and must not be read as a clean one.
+- Payload: `supplier_id`, `check_id`, `reason`.
+- Consumers: none beyond the audit trail. The supplier's status does not change.
+- Audit implications: `actor_id` is null (system-initiated). This is the record that an incomplete
+  verification never looked like a clean one (`supplier-compliance.md`, step 3).
+
 ### Contracts & Documents
 
 **`document.uploaded`**
@@ -240,6 +277,17 @@ implications**.
 - Consumers: `ContractVersion` extraction pipeline (only proceeds after this event).
 - Audit implications: proves the document was scanned before any content was trusted or extracted —
   relevant to `SEC-003` compliance evidence.
+
+**`document.processing_failed`**
+- Producer: `ContractVersion` extraction (`app.contracts.application.extraction_orchestration`), when
+  a document cannot be parsed or yields no extractable text, before any AI call. The `Document`
+  moves to `processing_failed` and the version to `extraction_failed` in the same transaction.
+- Meaning: the file could not be turned into text, so its contents were never extracted.
+- Payload: `document_id`, `contract_version_id`, `reason`.
+- Consumers: none beyond the audit trail; the failed version is visible through the Contracts API.
+- Audit implications: `actor_id` is null (system-initiated). An unreadable document is a different
+  outcome from a low-confidence extraction (`contract.analysis_needs_confirmation`), and a Decision
+  built on either would need to say so.
 
 **`contract.created`**
 - Producer: `Contract` aggregate, on first version of a new logical agreement.
@@ -269,6 +317,30 @@ implications**.
   relied on human-confirmed (vs. purely AI-extracted) data is a materially different evidentiary
   claim, and this event is where that distinction is captured.
 
+**`contract.analysis_needs_confirmation`**
+- Producer: `ContractVersion` extraction (`app.contracts.application.extraction_orchestration`), the
+  same emission site as `contract.analysis_completed`, selected by the outcome: extraction finished
+  below the `BR-CON-003` confidence threshold, or with no fields.
+- Meaning: extraction ran, but the version cannot be evaluated until a human confirms it.
+- Payload: `contract_id`, `contract_version_id`, `extraction_confidence`, `clause_count`.
+- Consumers: the Contracts API (`needs_confirmation` status); the confirmation endpoint then emits
+  `contract.version_confirmed` and `contract.analysis_completed`.
+- Audit implications: records that this version was not analyzed automatically. Without it the trail
+  shows only the upload, with no sign that a human decision was pending.
+
+**`contract.version_confirmed`**
+- Producer: `ContractVersion` aggregate (`app.contracts.application.confirmation_service`), on
+  `POST .../versions/{version_id}/confirm`. Emitted in the same transaction as
+  `contract.analysis_completed` (with `via_human_confirmation: true`).
+- Meaning: a human reviewed the extracted fields of a `needs_confirmation` version, optionally
+  correcting some, and marked it analyzed.
+- Payload: `contract_id`, `contract_version_id`, `corrected_fields` (sorted field paths the human
+  changed; empty when confirmed as-is).
+- Consumers: `Policy & Compliance` evaluation, via `contract.analysis_completed`.
+- Audit implications: `actor_id` is the confirming human. This is the record that a Decision built
+  on this version relied on human-confirmed data (`BR-CON-003`). The corrected values themselves
+  live in the version's `extracted_data`, not in this payload.
+
 ### Policy & Compliance
 
 **`policy.created`**
@@ -278,6 +350,36 @@ implications**.
 - Consumers: policy authoring UI, draft-state rule editor.
 - Audit implications: establishes who introduced a given policy area, relevant when a customer asks
   "who decided we needed a rule about X?"
+
+**`policy.rule_created`**
+- Producer: `Rule` (`app.policies.application.rule_service`), on adding a rule to a draft
+  `PolicyVersion` via `POST .../versions/{version_id}/rules`.
+- Meaning: a rule was authored into a draft version. Rules are mutable until publish.
+- Payload: `policy_id`, `policy_version_id`, `rule_id`, `rule_key`, `result_status`, `severity`.
+- Consumers: none beyond the audit trail; the rule is evaluated only once its version is published
+  (`policy.version_published`).
+- Audit implications: `actor_id` records who authored each rule before publish, so a published rule
+  set can be traced back to its authors.
+
+**`policy.rule_updated`**
+- Producer: `Rule` (`app.policies.application.rule_service`), on `PUT .../rules/{rule_id}` against a
+  draft version. A published version's rules are frozen, and the update is rejected.
+- Meaning: a draft rule was replaced with a revised definition.
+- Payload: `policy_id`, `policy_version_id`, `rule_id`, `rule_key` (the key after the edit).
+- Consumers: none beyond the audit trail.
+- Audit implications: draft rules are updated in place, not versioned, and the payload does not carry
+  the before or after definition. This event is the only record that a rule changed before publish.
+
+**`policy.version_draft_created`**
+- Producer: `PolicyVersion` (`app.policies.application.policy_service.create_draft_version`), on
+  `POST /api/policies/{policy_id}/versions` (`BR-POL-001` copy-modify path).
+- Meaning: a new draft version of an existing policy was opened, copying the rules of the version it
+  was based on.
+- Payload: `policy_id`, `policy_version_id`, `version_number`, `copied_from_version_id` (the version
+  whose rules were copied; null when there was none).
+- Consumers: none beyond the audit trail.
+- Audit implications: opens the change window that `policy.version_published` closes, so the two
+  events bracket every edit to a policy's rule set.
 
 **`policy.version_published`**
 - Producer: `PolicyVersion` aggregate, on publish (`POL-002`, `BR-POL-001`, `BR-POL-002`).
@@ -356,6 +458,7 @@ implications**.
 ### Approvals & Decisions
 
 **`approval_workflow.updated`**
+- Status: not yet emitted (feature not built: no route edits routing configuration).
 - Producer: `ApprovalWorkflow` aggregate, on admin edit of routing configuration.
 - Meaning: an organization's approval routing template changed.
 - Payload: `approval_workflow_id`, `organization_id`, `changed_fields`, `updated_by`.
@@ -445,6 +548,7 @@ implications**.
   deterministically recomputable later — full mechanics in `docs/03-domain/evidence.md`.
 
 **`evidence.anchored`**
+- Status: not yet emitted (feature not built: blockchain anchoring is EPIC-8).
 - Producer: `BlockchainAnchor` aggregate, on confirmed on-chain submission via the configured
   `AnchoringProvider` (`ADR-007`, `EVD-003`).
 - Meaning: the `EvidencePackage`'s Merkle root is now anchored on a public, tamper-evident ledger.
@@ -459,15 +563,18 @@ implications**.
 ### Integrations
 
 **`integration.connected`**
-- Producer: `Integration` aggregate, on admin configuration of an external system connection
-  (`INT-001`).
+- Producer: `Integration` aggregate (`app.integrations.application.integration_service`), on
+  `POST /api/integrations`, an admin configuring an external system connection (`INT-001`).
+  Emitted in the same transaction as the record.
 - Meaning: an external system (e.g. DocuSign, Slack) is now connected on behalf of the organization.
-- Payload: `integration_id`, `organization_id`, `provider`, `connected_by`, `connected_at`.
+- Payload: `integration_id`, `organization_id`, `provider`, `connected_by`, `connected_at`. The
+  `config` is deliberately not in the payload: it may hold connector credentials.
 - Consumers: the integration's own sync/webhook workers.
 - Audit implications: establishes when third-party access to organization data/events began —
   relevant to LGPD data-sharing accountability.
 
 **`integration.disconnected`**
+- Status: not yet emitted (feature not built: no disconnect or credential-revocation route exists).
 - Producer: `Integration` aggregate, on admin disconnection or credential revocation.
 - Meaning: the external system connection has been terminated.
 - Payload: `integration_id`, `organization_id`, `disconnected_by`, `reason`, `disconnected_at`.

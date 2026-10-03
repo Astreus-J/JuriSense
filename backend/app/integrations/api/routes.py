@@ -26,6 +26,7 @@ async def create_integration(
     integration = await integration_service.create_integration(
         session,
         organization_id=user.organization_id,
+        connected_by=user.id,
         provider=body.provider,
         config=body.config,
     )

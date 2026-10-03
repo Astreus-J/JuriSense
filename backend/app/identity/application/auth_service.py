@@ -42,6 +42,22 @@ def _normalize_email(email: str) -> str:
     return email.strip().lower()
 
 
+async def _record_login_failure(session: AsyncSession, *, user: User | None, reason: str) -> None:
+    # The attempted address is deliberately not recorded: a failed login may target an address
+    # that is not a user, and an unsalted hash of it would still be confirmable (audit.md).
+    await emit_audit_event(
+        session,
+        event_type="user.login_failed",
+        actor_id=None,
+        organization_id=user.organization_id if user is not None else None,
+        payload={
+            "user_id_attempted": str(user.id) if user is not None else None,
+            "reason": reason,
+            "occurred_at": datetime.now(UTC).isoformat(),
+        },
+    )
+
+
 def _build_lockout(redis: aioredis.Redis) -> LoginLockout:
     settings = get_settings()
     return LoginLockout(
@@ -178,6 +194,7 @@ async def login(
                 successful=False,
             )
         )
+        await _record_login_failure(session, user=user, reason="invalid_credentials")
         await session.commit()
 
     if user is None:
@@ -190,13 +207,26 @@ async def login(
         raise InvalidCredentialsError()
 
     if not user.is_active:
+        # Lockout and AccessLog are deliberately untouched for this path (unchanged behavior);
+        # only the audit trail records that a correct password was refused for an inactive account.
+        await _record_login_failure(session, user=user, reason="user_inactive")
+        await session.commit()
         raise UserInactiveError()
 
-    await lockout.reset(email)
     user.last_login_at = datetime.now(UTC)
     AccessLogRepository(session).add(
         AccessLog(user_id=user.id, email=email, ip=ip, user_agent=user_agent, successful=True)
     )
+    await emit_audit_event(
+        session,
+        event_type="user.login_succeeded",
+        actor_id=user.id,
+        organization_id=user.organization_id,
+        payload={"user_id": str(user.id), "occurred_at": datetime.now(UTC).isoformat()},
+    )
+    # Reset last: Redis is not part of the transaction, so if anything above fails the
+    # lockout counter must still be armed.
+    await lockout.reset(email)
     await session.commit()
     return await _issue_tokens(redis, user.id)
 
