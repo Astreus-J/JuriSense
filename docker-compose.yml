@@ -137,9 +137,46 @@ services:
       redis:
         condition: service_healthy
 
+
+  # Celery Beat: the scheduler that fires periodic tasks (FEATURE-6.4 re-evaluation sweep,
+  # EPIC-6 SLA expiry). It is a separate process from the worker, so a crashed scheduler
+  # cannot be hidden by a healthy worker. Its own venv volume for the same reason the worker
+  # has one: concurrent `uv sync` runs against one volume can corrupt it.
+  celery-beat:
+    build:
+      context: ./backend
+      target: dev
+    container_name: jurisense-celery-beat
+    command: sh -c "uv sync --frozen && uv run celery -A app.core.celery_app beat --loglevel=info --schedule=/tmp/celerybeat-schedule"
+    volumes:
+      - ./backend:/app
+      - celery_beat_venv:/app/.venv
+    env_file:
+      - ./backend/.env
+    environment:
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      DEBUG: ${DEBUG:-true}
+      REDIS_URL: redis://redis:6379/0
+      STORAGE_ENDPOINT_URL: http://s3mock:9090
+      STORAGE_ACCESS_KEY: ${DEV_STORAGE_ACCESS_KEY:-test}
+      STORAGE_SECRET_KEY: ${DEV_STORAGE_SECRET_KEY:-test}
+      STORAGE_BUCKET: ${STORAGE_BUCKET:-jurisense-dev}
+    healthcheck:
+      # The "[b]eat" pattern matches the running scheduler's command line but not this
+      # healthcheck's own, which contains the literal text "[b]eat" rather than "beat".
+      test: ["CMD-SHELL", "grep -qa '[b]eat' /proc/[0-9]*/cmdline"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    depends_on:
+      redis:
+        condition: service_healthy
+
 volumes:
   redis_data:
   frontend_node_modules:
   frontend_next:
   backend_venv:
   celery_venv:
+  celery_beat_venv:

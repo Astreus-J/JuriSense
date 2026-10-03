@@ -124,6 +124,8 @@ class Settings(BaseSettings):
     # days", treated as flat wall-clock time rather than real business-day calendar
     # arithmetic, which is out of scope this round) is the documented hackathon default.
     approval_request_sla_hours: int = 48
+    # How often the SLA-expiry sweep runs (cadence is a documented TBD like the SLA itself).
+    approval_expiry_sweep_interval_seconds: int = 900
 
     # A Decision's `valid_until` duration is likewise a documented `TBD` (BR-DEC-004
     # doesn't pin a number) -- 90 days is a plain, defensible default pending real data.

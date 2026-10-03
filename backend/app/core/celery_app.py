@@ -47,5 +47,9 @@ celery_app.conf.update(
             "task": "approvals.reevaluate_stale_decisions",
             "schedule": _settings.decision_reevaluation_interval_seconds,
         },
+        "approvals-expire-stale-approval-requests": {
+            "task": "approvals.expire_stale_approval_requests",
+            "schedule": _settings.approval_expiry_sweep_interval_seconds,
+        },
     },
 )
