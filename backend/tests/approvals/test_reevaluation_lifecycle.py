@@ -608,6 +608,7 @@ async def test_a_reevaluation_that_always_raises_stops_at_the_cap_with_one_alert
     """F4: a deterministic exception used to roll back to the same state every sweep, so it retried
     forever with no alert. Each raise is now recorded in its own committed transaction. At the cap
     the operator alert fires exactly once, and the Decision is never attempted again."""
+    mock_openrouter()
     headers = await register_org_and_login(client, "always-raises@example.com")
     await _zero_policy_decision(client, headers)
     organization_id = await _org_id(db_session_factory, "always-raises@example.com")
