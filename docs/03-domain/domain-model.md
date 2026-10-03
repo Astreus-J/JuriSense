@@ -268,12 +268,19 @@ Invariants, Lifecycle, Events, Versioning behavior, Tenant ownership.
 *Context: Approvals & Decisions*
 - **Purpose**: the final, packaged compliance outcome for a `ComplianceReview`.
 - **Identity**: `id` (UUID).
-- **Core attributes**: `compliance_review_id`, `status` (`APPROVE|REVIEW|BLOCK`), `valid_until`,
-  `supersedes_decision_id` (nullable), `overridden` (bool), `override_justification` (nullable).
+- **Core attributes**: `compliance_review_id`, `status` (`APPROVE|REVIEW|BLOCK`), `lifecycle`
+  (`ACTIVE|SUPERSEDED`), `valid_until`, `supersedes_decision_id` (nullable), `overridden` (bool),
+  `override_justification` (nullable).
 - **Relationships**: one-to-one with `ComplianceReview`; source for `EvidencePackage`.
 - **Invariants**: never edited in place once created — a re-evaluation creates a new `Decision`
-  with `supersedes_decision_id` set (`ADR-010` §4).
-- **Lifecycle**: `created → (expired|superseded)`.
+  with `supersedes_decision_id` set (`ADR-010` §4). At most one `ACTIVE` Decision per
+  ContractVersion (`BR-DEC-002`, enforced by a partial unique index). An override (`BR-DEC-003`)
+  is the one in-place change, and it is only possible while the Decision is `ACTIVE`.
+- **Lifecycle**: `lifecycle` goes `ACTIVE → SUPERSEDED`, one way. `SUPERSEDED` is set on the old
+  row only when a newer Decision replaces it, and that is the only change to the old row.
+  `status` is the outcome and never changes meaning. Staleness (`expired`, `contract_changed`,
+  `policy_changed`, `override_review_required`) is a flag on an `ACTIVE` row
+  (`review_required_at`), not a lifecycle state.
 - **Events**: `decision.created`, `decision.overridden`.
 - **Versioning**: immutable; superseding chain is the version history.
 - **Tenant ownership**: via `ComplianceReview`.

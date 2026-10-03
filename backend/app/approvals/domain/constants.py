@@ -46,14 +46,31 @@ class SeverityTier(StrEnum):
     LOW = "low"
 
 
+class DecisionLifecycle(StrEnum):
+    """`decisions.lifecycle` (FEATURE-6.5, BR-DEC-002). Deliberately separate from
+    `Decision.status`, which is the APPROVE|REVIEW|BLOCK outcome and never changes meaning.
+
+    `ACTIVE` marks the single effective Decision for a ContractVersion -- enforced by a
+    partial unique index on the database, not by application code. `SUPERSEDED` marks a
+    historical Decision that a newer one replaced. The transition is one-way and only the
+    lifecycle column ever changes on the old row."""
+
+    ACTIVE = "ACTIVE"
+    SUPERSEDED = "SUPERSEDED"
+
+
 class ReviewRequiredReason(StrEnum):
     """`decisions.review_required_reason` vocabulary (BR-DEC-004, FEATURE-6.4) -- the
     `reason` payload of `compliance.review_required` (docs/03-domain/audit.md). Precedence
     when several apply at once: expired, then contract_changed, then policy_changed (see
-    `app.approvals.application.reevaluation_service`). `supplier_changed` is catalogued in
-    audit.md but deliberately not implemented yet (supplier-profile triggers are a
-    follow-up, not part of this story's acceptance criteria)."""
+    `app.approvals.application.reevaluation_service`). `override_review_required` is used
+    instead of any of those when the Decision carries a human override: it is flagged for a
+    human to confirm or replace, never re-evaluated automatically (FEATURE-6.5).
+    `supplier_changed` is catalogued in audit.md but deliberately not implemented yet
+    (supplier-profile triggers are a follow-up, not part of this story's acceptance
+    criteria)."""
 
     EXPIRED = "expired"
     CONTRACT_CHANGED = "contract_changed"
     POLICY_CHANGED = "policy_changed"
+    OVERRIDE_REVIEW_REQUIRED = "override_review_required"

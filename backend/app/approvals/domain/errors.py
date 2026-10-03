@@ -58,13 +58,49 @@ class DecisionNotFoundError(ApprovalsError):
 
 
 class DecisionAlreadyExistsError(ApprovalsError):
-    """QA/security review (2026-10-01): defense-in-depth backstop for
-    `decisions.uq_decisions_one_per_compliance_review` -- raised if a concurrent-write
-    race somehow reaches `decision_service.create_decision_for_review` twice for the same
-    `compliance_review_id` despite `approval_service.resolve_if_pending`'s atomic
-    conditional UPDATE (the primary fix) already serializing concurrent
-    `approve_request`/`reject_request` calls. Should be effectively unreachable in
-    practice; handled cleanly regardless, never a raw 500."""
+    """Raised by `decision_service.create_decision_for_review` when the database refuses the
+    new Decision: either `decisions.uq_decisions_one_per_compliance_review` (QA/security review,
+    2026-10-01: a concurrent-write race reaching the same review twice, backstopping
+    `approval_service.resolve_if_pending`) or the partial unique index
+    `uq_decisions_one_active_per_contract_version` (FEATURE-6.5: a racing completion on the same
+    ContractVersion already made a newer Decision effective). Either way the transaction has
+    been rolled back, so no superseded predecessor is left without its successor. Handled
+    cleanly as a 409, never a raw 500."""
 
     def __init__(self) -> None:
         super().__init__("A Decision already exists for this compliance review")
+
+
+class DecisionReviewNotFoundError(ApprovalsError):
+    """FEATURE-6.5: raised by `decision_service.create_decision_for_review` when the review it
+    was asked to package is not in the caller's organization. Never reveals whether the id
+    exists elsewhere (ADR-003)."""
+
+    def __init__(self) -> None:
+        super().__init__("Compliance review not found")
+
+
+class DecisionNotEffectiveError(ApprovalsError):
+    """BR-DEC-002/BR-DEC-003: only the effective (`ACTIVE`) Decision can be overridden. A
+    `SUPERSEDED` Decision is historical -- overriding it would edit a record the lifecycle has
+    already closed, and the override would never reach anything a caller reads as current.
+    Raised by `decision_service.override_decision` when its conditional UPDATE matches no row
+    (the Decision exists in the caller's organization but is no longer ACTIVE)."""
+
+    def __init__(self) -> None:
+        super().__init__("Only the effective decision for this contract version can be overridden")
+
+
+class OverriddenDecisionSupersessionError(ApprovalsError):
+    """FEATURE-6.5 / BR-DEC-003: an automatic re-evaluation chain must never silently replace a
+    Decision a human overrode. Raised by `decision_service.create_decision_for_review` when a
+    re-evaluation (an explicit `supersedes_decision_id`) would move an overridden, ACTIVE Decision
+    to SUPERSEDED. Raised before any write, so the surrounding transaction rolls back. Replacing
+    an override is a human action: a manual review (no supersedes link) is still allowed to
+    supersede it."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "This decision was manually overridden. A human must replace it with a manual review; "
+            "an automatic re-evaluation cannot supersede it"
+        )

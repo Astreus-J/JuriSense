@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.policies.infrastructure.models import (
@@ -90,19 +90,13 @@ class PolicyVersionRepository:
             .values(is_current=False)
         )
 
-    async def list_current_ids_among(self, version_ids: list[uuid.UUID]) -> set[uuid.UUID]:
-        """Which of the given PolicyVersion ids are still their Policy's current version
-        (BR-POL-002). Used by the re-evaluation staleness check (FEATURE-6.4): a
-        ComplianceReview's pooled version ids that are no longer in this set have been
-        superseded by a newer publish."""
-        if not version_ids:
-            return set()
-        result = await self._session.execute(
-            select(PolicyVersion.id).where(
-                PolicyVersion.id.in_(version_ids), PolicyVersion.is_current.is_(True)
-            )
-        )
-        return set(result.scalars())
+    async def list_current_ids_by_organization(self, organization_id: uuid.UUID) -> set[uuid.UUID]:
+        """The ids of every currently-published PolicyVersion in the organization -- the same
+        pooling set `compliance_review_service.execute_review` evaluates against. Used by the
+        re-evaluation staleness check (FEATURE-6.4, FEATURE-6.5): a review is stale when this
+        set differs from the set it pooled, in either direction. Delegates to
+        `list_current_by_organization` so the two sets cannot drift apart."""
+        return {version.id for version in await self.list_current_by_organization(organization_id)}
 
     async def list_current_by_organization(self, organization_id: uuid.UUID) -> list[PolicyVersion]:
         """Every currently-published `PolicyVersion` across the whole organization -- one
@@ -192,6 +186,18 @@ class ComplianceReviewRepository:
             .order_by(ComplianceReview.started_at)
         )
         return list(result.scalars())
+
+    async def count_superseding(self, decision_id: uuid.UUID, organization_id: uuid.UUID) -> int:
+        """How many re-evaluation reviews were run against this Decision (FEATURE-6.5 attempt
+        count). Counts reviews carrying `supersedes_decision_id == decision_id`, so the first
+        re-evaluation counts too."""
+        result = await self._session.execute(
+            select(func.count(ComplianceReview.id)).where(
+                ComplianceReview.supersedes_decision_id == decision_id,
+                ComplianceReview.organization_id == organization_id,
+            )
+        )
+        return int(result.scalar_one())
 
 
 class RuleEvaluationRepository:

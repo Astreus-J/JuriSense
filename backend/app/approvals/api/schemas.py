@@ -44,6 +44,9 @@ class DecisionResponse(BaseModel):
     organization_id: uuid.UUID
     compliance_review_id: uuid.UUID
     status: str
+    # FEATURE-6.5: "ACTIVE" is the single effective Decision for its ContractVersion; "SUPERSEDED"
+    # is historical. `status` remains the APPROVE|REVIEW|BLOCK outcome.
+    lifecycle: str
     valid_until: datetime
     supersedes_decision_id: uuid.UUID | None
     overridden: bool

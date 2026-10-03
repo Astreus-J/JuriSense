@@ -331,10 +331,27 @@ implications**.
   affecting `PolicyVersion`/`ContractVersion`/`SupplierProfile` change (`BR-DEC-004`).
 - Meaning: an existing `Decision` can no longer be trusted as current and must be re-evaluated.
 - Payload: `decision_id` (the one being flagged), `reason`
-  (`expired`/`policy_changed`/`contract_changed`/`supplier_changed`), `flagged_at`.
+  (`expired`/`policy_changed`/`contract_changed`/`supplier_changed`/`override_review_required`),
+  `flagged_at`.
+- `override_review_required` (FEATURE-6.5): the flagged Decision carries a human override. It is
+  NOT re-evaluated and gets no successor; a human must confirm it or run a manual review.
 - Consumers: scheduling/notification for a fresh `ComplianceReview`.
 - Audit implications: proves the system never let a stale decision look current without flagging it
   — directly evidences `BR-DEC-004` compliance to an auditor.
+
+**`compliance.reevaluation_failed`** (FEATURE-6.5)
+- Producer: `reevaluation_service`, once per Decision, when its re-evaluation has been attempted the
+  configured maximum number of times and the latest attempt's approval chain expired without a
+  Decision.
+- Meaning: automatic re-evaluation of this Decision has stopped. It stays ACTIVE and flagged, and
+  needs a human (a manual review or an override decision).
+- Payload: `decision_id`, `attempts`, `last_review_id`, `failed_at`. Emitted at most once per Decision.
+  `attempts` counts the re-evaluation reviews whose approval chain expired (the retry path), or the
+  attempts that raised an exception (the execution-error path, FEATURE-6.5 review F4); `last_review_id`
+  is `null` when no review was produced.
+- Consumers: operator alert. A notification channel is future work; the event is the alert today.
+- Audit implications: the only record that automatic re-evaluation gave up on a Decision, so it can
+  never silently stay stale.
 
 ### Approvals & Decisions
 
@@ -396,7 +413,8 @@ implications**.
   reaches a terminal outcome (`DEC-001`).
 - Meaning: the final, packaged compliance outcome for a `ComplianceReview` now exists.
 - Payload: `decision_id`, `compliance_review_id`, `status` (`APPROVE|REVIEW|BLOCK`), `valid_until`,
-  `supersedes_decision_id` (nullable), `created_at`.
+  `supersedes_decision_id` (nullable), `superseded_decision_ids` (FEATURE-6.5: every Decision this
+  one moved to `SUPERSEDED` when it was created, possibly empty), `created_at`.
 - Consumers: `Evidence & Audit` (triggers `EvidencePackage` assembly, `EVD-001`); notification to
   requesting user; webhook (`INT-002`, `decision.completed`).
 - Audit implications: the terminal record every downstream evidence and verification artifact is

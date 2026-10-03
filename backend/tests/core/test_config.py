@@ -50,3 +50,11 @@ def test_production_refuses_missing_smtp_host() -> None:
 
 def test_development_does_not_require_any_of_these() -> None:
     Settings(environment="development")
+
+
+def test_reevaluation_attempt_cap_must_be_at_least_one() -> None:
+    """F6: a cap of zero would refuse every re-evaluation and alert on nothing, so it is rejected
+    at boot rather than silently disabling the retry path."""
+    with pytest.raises(ValidationError):
+        Settings(decision_reevaluation_max_attempts=0)
+    assert Settings(decision_reevaluation_max_attempts=1).decision_reevaluation_max_attempts == 1

@@ -21,16 +21,23 @@ from app.approvals.application.approval_service import approve_request
 from app.approvals.application.decision_service import create_decision_for_review
 from app.approvals.domain.constants import ApprovalRequestStatus, DecisionStatus
 from app.approvals.domain.errors import ApproverRoleMismatchError, DecisionAlreadyExistsError
-from app.approvals.infrastructure.models import ApprovalRequest
-from app.approvals.infrastructure.repositories import ApprovalRequestRepository
+from app.approvals.infrastructure.models import ApprovalRequest, Decision
+from app.approvals.infrastructure.repositories import ApprovalRequestRepository, DecisionRepository
 from app.identity.domain.constants import MembershipStatus
 from app.identity.infrastructure.models import Membership
 from app.identity.infrastructure.repositories import UserRepository
+from app.policies.infrastructure.models import ComplianceReview
 from tests.approvals.conftest import (
     ACTIVE_CNPJ_RESPONSE,
     create_supplier,
     create_user_and_login,
     register_org_and_login,
+)
+from tests.approvals.lifecycle_helpers import active_decisions_for_version, decision_row
+from tests.approvals.test_reevaluation import (
+    _decisions_of,
+    _org_id,
+    _zero_policy_decision,
 )
 from tests.policies.test_compliance_review import (
     EVIDENCE_ENVELOPE,
@@ -280,3 +287,87 @@ async def test_revoked_membership_cannot_resolve_an_approval_request(
                 request_id=request_id,
                 justification="should be refused",
             )
+
+
+async def test_racing_completions_on_one_version_leave_one_effective_decision(
+    client: httpx.AsyncClient,
+    db_session_factory: async_sessionmaker,
+    mock_openrouter,
+    mock_cnpj_registry,
+    seed_sanctions_index,
+    run_contract_extraction_inline,
+    run_supplier_checks_inline,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """FEATURE-6.5 concurrency (deterministic): two completions race to package a Decision for
+    the same ContractVersion. The winner commits first and supersedes the predecessor. The loser
+    had read the predecessor as still ACTIVE before the winner committed, so its supersede is a
+    no-op and its INSERT is the one that must be refused -- by the partial unique index, not by
+    any application check. The loser must surface DecisionAlreadyExistsError (409), and the
+    winner must stay the single effective Decision with the predecessor superseded exactly once.
+    """
+    mock_cnpj_registry(data=ACTIVE_CNPJ_RESPONSE)
+    await seed_sanctions_index(hit_document=TAX_ID)
+    mock_openrouter(payload=EVIDENCE_ENVELOPE)
+
+    headers = await register_org_and_login(client, "race-supersede@example.com")
+    _, contract_version_id = await _zero_policy_decision(client, headers)
+    version_id = uuid.UUID(contract_version_id)
+    organization_id = await _org_id(db_session_factory, "race-supersede@example.com")
+    [predecessor] = await _decisions_of(db_session_factory, organization_id)
+
+    async def _new_review(status: str) -> uuid.UUID:
+        async with db_session_factory() as session:
+            review = ComplianceReview(
+                organization_id=organization_id,
+                contract_version_id=version_id,
+                policy_version_ids=[],
+                status=status,
+            )
+            session.add(review)
+            await session.commit()
+            return review.id
+
+    winner_review_id = await _new_review("APPROVE")
+    loser_review_id = await _new_review("BLOCK")
+
+    async with db_session_factory() as session:
+        winner = await create_decision_for_review(
+            session,
+            organization_id=organization_id,
+            actor_id=None,
+            compliance_review_id=winner_review_id,
+            status=DecisionStatus.APPROVE.value,
+        )
+        await session.commit()
+        winner_id = winner.id
+
+    async def _stale_active_view(*_args, **_kwargs) -> list[Decision]:
+        return [predecessor]
+
+    monkeypatch.setattr(DecisionRepository, "list_active_for_contract_version", _stale_active_view)
+    async with db_session_factory() as session:
+        with pytest.raises(DecisionAlreadyExistsError):
+            await create_decision_for_review(
+                session,
+                organization_id=organization_id,
+                actor_id=None,
+                compliance_review_id=loser_review_id,
+                status=DecisionStatus.BLOCK.value,
+            )
+    monkeypatch.undo()
+
+    [effective] = await active_decisions_for_version(db_session_factory, version_id)
+    assert effective.id == winner_id
+    assert (await decision_row(db_session_factory, predecessor.id)).lifecycle == "SUPERSEDED"
+
+    async with db_session_factory() as session:
+        decisions = list(
+            (
+                await session.execute(
+                    select(Decision).where(Decision.organization_id == organization_id)
+                )
+            ).scalars()
+        )
+    assert [d.id for d in decisions if d.supersedes_decision_id == predecessor.id] == [winner_id]
+    assert all(d.compliance_review_id != loser_review_id for d in decisions)

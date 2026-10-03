@@ -1,7 +1,7 @@
 from functools import lru_cache
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _DEV_JWT_SECRET = "dev-only-insecure-secret-with-32-bytes-min"  # noqa: S105 -- development only
@@ -141,6 +141,11 @@ class Settings(BaseSettings):
     # run. Capping candidates per run (oldest first, so the backlog still drains) bounds the
     # worst-case run length regardless of any single tenant's volume.
     decision_reevaluation_batch_size: int = 100
+    # FEATURE-6.5 (BR-DEC-004): how many re-evaluation reviews a single flagged Decision may
+    # run in total, counting its first one. Once the latest one's approval chain has expired
+    # and this many have been spent, the Decision stops retrying and
+    # `compliance.reevaluation_failed` is emitted once as the operator alert.
+    decision_reevaluation_max_attempts: int = Field(default=3, ge=1)
 
     @model_validator(mode="after")
     def _normalize_database_url_field(self) -> "Settings":

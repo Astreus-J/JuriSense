@@ -63,9 +63,14 @@ functional requirements (*capabilities*) in `functional-requirements.md`.
 
 - **BR-DEC-001**: Every final `Decision` preserves the exact `PolicyVersion` used to generate it.
 - **BR-DEC-002**: A `Decision` is never edited in place; re-evaluation always creates a new
-  `Decision` with `supersedes_decision_id` set.
+  `Decision` with `supersedes_decision_id` set. Each `Decision` carries `lifecycle`: `ACTIVE` for
+  the single effective Decision of its ContractVersion, `SUPERSEDED` once a newer one replaces it.
+  Only `lifecycle` changes on the old row, and at most one `ACTIVE` row exists per ContractVersion
+  (enforced by the database). An automatic re-evaluation never silently supersedes an overridden
+  `ACTIVE` Decision; a human replaces it with a manual review.
 - **BR-DEC-003**: An override requires a mandatory, non-empty justification string and is itself
-  audited (`decision.overridden` event) — it can never be silent.
+  audited (`decision.overridden` event) — it can never be silent. Only an `ACTIVE` Decision can be
+  overridden; a `SUPERSEDED` one is refused (409).
 - **BR-DEC-004**: A `Decision`'s `valid_until` expiring, or a new `PolicyVersion`/`ContractVersion`
   affecting rules it used, triggers `compliance.review_required` — the system never lets a stale
   decision look current without flagging it.

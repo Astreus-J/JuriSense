@@ -16,8 +16,10 @@ from app.approvals.domain.errors import (
     ApprovalRequestNotFoundError,
     ApproverRoleMismatchError,
     DecisionAlreadyExistsError,
+    DecisionNotEffectiveError,
     DecisionNotFoundError,
     EmptyJustificationError,
+    OverriddenDecisionSupersessionError,
 )
 from app.core.db import SessionDep
 from app.identity.api.deps import require_permission
@@ -65,6 +67,10 @@ async def approve_request(
         # effectively unreachable given resolve_if_pending's atomic UPDATE -- see that
         # error's own docstring.
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.message) from exc
+    except OverriddenDecisionSupersessionError as exc:
+        # F1: an automatic re-evaluation chain may not replace a human's override (BR-DEC-003).
+        # Nothing was written; the request stays pending for a human to resolve by manual review.
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.message) from exc
     return ApprovalRequestResponse.model_validate(request)
 
 
@@ -91,6 +97,8 @@ async def reject_request(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=exc.message
         ) from exc
     except DecisionAlreadyExistsError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.message) from exc
+    except OverriddenDecisionSupersessionError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.message) from exc
     return ApprovalRequestResponse.model_validate(request)
 
@@ -162,6 +170,9 @@ async def override_decision(
         )
     except DecisionNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.message) from exc
+    except DecisionNotEffectiveError as exc:
+        # F1: only the effective (ACTIVE) Decision is overridable; a SUPERSEDED one is historical.
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.message) from exc
     except EmptyJustificationError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=exc.message

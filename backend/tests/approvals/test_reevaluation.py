@@ -240,6 +240,10 @@ async def test_flagging_a_decision_never_gives_it_a_second_compliance_review_row
             Decision(
                 organization_id=organization_id,
                 compliance_review_id=original.compliance_review_id,
+                contract_version_id=original.contract_version_id,
+                # SUPERSEDED, so the one-ACTIVE-per-version index cannot be the constraint that
+                # fires: this test exercises the one-Decision-per-review constraint only.
+                lifecycle="SUPERSEDED",
                 status="BLOCK",
                 valid_until=datetime.now(UTC) + timedelta(days=1),
             )

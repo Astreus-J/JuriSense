@@ -360,13 +360,13 @@ async def assess_review_staleness(
     """Read-only. Whether the inputs a review was computed from have been superseded:
 
     - `contract_changed`: a newer `analyzed` ContractVersion of the same Contract exists.
-    - `policy_changed`: any PolicyVersion pooled into the review is no longer its Policy's
-      current version. This is deliberately conservative: ANY newer publish counts as
-      material, even one that changed no rule the review actually evaluated. A finer,
-      rule-level diff is future work -- the lean is toward re-evaluating.
-
-    Pooled policies that are NOT in the review (a brand-new Policy published after the
-    review) do not count: the review never evaluated them, so they cannot make it stale.
+    - `policy_changed`: the organization's CURRENT set of published PolicyVersion ids differs
+      from the set the review pooled, in EITHER direction (FEATURE-6.5): a newly published
+      Policy (including the first policy ever, for a review that pooled none), a republished
+      one (its old version is no longer current), or a pooled one that is no longer current.
+      This is deliberately conservative: ANY change to the pooled set counts as material, even
+      one that touched no rule the review actually evaluated. A finer, rule-level diff is
+      future work -- the lean is toward re-evaluating.
 
     Raises `ComplianceReviewNotFoundError` if the review isn't in this organization."""
     review = await ComplianceReviewRepository(session).get_by_id_and_organization(
@@ -380,8 +380,10 @@ async def assess_review_staleness(
     )
 
     pooled_ids = {uuid.UUID(policy_version_id) for policy_version_id in review.policy_version_ids}
-    still_current = await PolicyVersionRepository(session).list_current_ids_among(list(pooled_ids))
-    policy_changed = not pooled_ids <= still_current
+    current_ids = await PolicyVersionRepository(session).list_current_ids_by_organization(
+        organization_id
+    )
+    policy_changed = current_ids != pooled_ids
 
     return ReviewStaleness(
         contract_version_id=newer_contract_version_id or review.contract_version_id,
@@ -402,6 +404,27 @@ async def get_review_supersedes_decision_id(
         compliance_review_id, organization_id
     )
     return review.supersedes_decision_id if review is not None else None
+
+
+async def get_review_contract_version_id(
+    session: AsyncSession, *, organization_id: uuid.UUID, compliance_review_id: uuid.UUID
+) -> uuid.UUID | None:
+    """The ContractVersion a review evaluated (FEATURE-6.5). Read by
+    `decision_service.create_decision_for_review` so a Decision can be denormalised onto its
+    ContractVersion. `None` if the review isn't in this organization -- the caller treats that
+    as a refusal, never as "no version"."""
+    review = await ComplianceReviewRepository(session).get_by_id_and_organization(
+        compliance_review_id, organization_id
+    )
+    return review.contract_version_id if review is not None else None
+
+
+async def count_reevaluation_attempts(
+    session: AsyncSession, *, organization_id: uuid.UUID, decision_id: uuid.UUID
+) -> int:
+    """FEATURE-6.5 attempt count for a flagged Decision: the number of ComplianceReviews whose
+    `supersedes_decision_id` is this Decision (BR-DEC-002). Tenant-scoped."""
+    return await ComplianceReviewRepository(session).count_superseding(decision_id, organization_id)
 
 
 async def list_reviews_for_contract_version(

@@ -12,10 +12,11 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, validates
 
-from app.approvals.domain.constants import ApprovalRequestStatus
+from app.approvals.domain.constants import ApprovalRequestStatus, DecisionLifecycle
 from app.approvals.domain.errors import ApprovalRequestAlreadyResolvedError
 from app.core.db import Base
 
@@ -173,23 +174,21 @@ class ApprovalRequest(Base):
 class Decision(Base):
     """The final, packaged compliance outcome for a `ComplianceReview`
     (docs/03-domain/domain-model.md "Decision"; DEC-001/DEC-002; BR-DEC-001/BR-DEC-003/
-    BR-DEC-004; FEATURE-6.3).
+    BR-DEC-004; FEATURE-6.3, FEATURE-6.4, FEATURE-6.5).
 
-    One-to-one with `ComplianceReview` -- enforced by a hard unique
-    constraint on `compliance_review_id` (QA/security review, 2026-10-01: added as
-    defense-in-depth after both reviews independently found that an unguarded race on
-    `ApprovalRequest` resolution could otherwise let two concurrent `approve_request`/
-    `reject_request` calls on the same final step each create their own `Decision` for
-    the same review -- see `approval_service`'s `resolve_if_pending` for the primary fix,
-    this constraint for the backstop). FEATURE-6.4 (re-evaluation, explicitly out of scope
-    this round) will eventually let a new `Decision` supersede an old one for the *same*
-    review via `supersedes_decision_id` -- at that point this constraint must become a
-    partial unique index (e.g. scoped to "not yet superseded") rather than a plain one;
-    that migration is future work, not a problem introduced by adding the plain
-    constraint now.
+    One-to-one with `ComplianceReview` -- a hard unique constraint on `compliance_review_id`.
+    A successor always belongs to a NEW review, so it never collides with its predecessor.
 
-    FEATURE-6.4 does NOT relax this constraint: a successor Decision always belongs to a
-    NEW `ComplianceReview` (its own id), so it never collides with the prior one.
+    ## Effective vs. historical (FEATURE-6.5, BR-DEC-002)
+    Decisions are immutable as historical records, but at most one Decision per
+    ContractVersion is effective at a time. `lifecycle` carries that: `ACTIVE` for the
+    effective one, `SUPERSEDED` once a newer Decision replaces it. Two properties enforce
+    this rather than leaving it to convention:
+    - A partial unique index on `contract_version_id` WHERE `lifecycle = 'ACTIVE'` makes two
+      effective Decisions for one ContractVersion impossible at the database level.
+    - `decision_service.create_decision_for_review` supersedes the old row and inserts the
+      new one in the same transaction, so the index is never violated by a legitimate call.
+    `lifecycle` is deliberately not `status`: `status` is the APPROVE|REVIEW|BLOCK outcome.
 
     `overridden`/`override_justification` are the one documented exception to "never
     edited in place" (domain-model.md's invariant is about *re-evaluation*, not override;
@@ -200,8 +199,13 @@ class Decision(Base):
     __tablename__ = "decisions"
     __table_args__ = (
         Index("ix_decisions_org_review", "organization_id", "compliance_review_id"),
-        UniqueConstraint(
-            "compliance_review_id", name="uq_decisions_one_per_compliance_review"
+        UniqueConstraint("compliance_review_id", name="uq_decisions_one_per_compliance_review"),
+        Index(
+            "uq_decisions_one_active_per_contract_version",
+            "contract_version_id",
+            unique=True,
+            sqlite_where=text("lifecycle = 'ACTIVE'"),
+            postgresql_where=text("lifecycle = 'ACTIVE'"),
         ),
     )
 
@@ -210,23 +214,54 @@ class Decision(Base):
     compliance_review_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("compliance_reviews.id"), index=True
     )
+    # Denormalised from the review (FEATURE-6.5) so the one-effective-per-version index can
+    # be expressed on this table alone. Backfilled from compliance_reviews by the migration.
+    contract_version_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("contract_versions.id"))
+    lifecycle: Mapped[str] = mapped_column(
+        String(20),
+        default=DecisionLifecycle.ACTIVE.value,
+        server_default=DecisionLifecycle.ACTIVE.value,
+    )
     status: Mapped[str] = mapped_column(String(20))
     valid_until: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    # Set only on a successor created by re-evaluation (FEATURE-6.4, BR-DEC-002): the
-    # prior Decision is never edited, its successor points back here. Populated from the
-    # ComplianceReview's own `supersedes_decision_id` (see decision_service).
+    # Set when this Decision was created as a successor (BR-DEC-002): the prior Decision is
+    # never edited, its successor points back here. Populated from the ComplianceReview's own
+    # `supersedes_decision_id` (see decision_service), or from the Decision that was ACTIVE for
+    # the same ContractVersion at creation time when the review carried none.
     supersedes_decision_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("decisions.id"), default=None, index=True
     )
     overridden: Mapped[bool] = mapped_column(default=False)
     override_justification: Mapped[str | None] = mapped_column(Text, default=None)
     # BR-DEC-004 flag (FEATURE-6.4): set exactly once, atomically, by
-    # `DecisionRepository.flag_for_review_if_unflagged`. These two columns are the only
-    # mutation a re-evaluation ever makes to a prior Decision -- its content is untouched.
+    # `DecisionRepository.flag_for_review_if_unflagged`.
     review_required_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), default=None
     )
     review_required_reason: Mapped[str | None] = mapped_column(String(30), default=None)
+    # FEATURE-6.5 retry bookkeeping, all written only by reevaluation_service:
+    # - last_reevaluation_review_id: the most recent re-evaluation review run for this
+    #   Decision; a retry looks at its approval chain to decide whether the last attempt failed.
+    # - reevaluation_generation: compare-and-swap token. Every retry claim does
+    #   `SET generation = generation + 1 WHERE generation = <observed>`, so two overlapping
+    #   sweeps cannot both start a retry from the same observed state.
+    # - reevaluation_failed_at: set once, when the attempt cap is reached and the operator alert
+    #   is emitted; a non-null value stops all further retries.
+    last_reevaluation_review_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("compliance_reviews.id"), default=None
+    )
+    reevaluation_generation: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    reevaluation_failed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), default=None
+    )
+    # Sweep rotation (FEATURE-6.5): stamped every time a sweep evaluates this Decision, in the same
+    # committed unit as that evaluation. The candidate query orders by it (oldest first), so a
+    # healthy Decision that was checked moves to the back of the queue instead of blocking it.
+    last_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    # Exception path (FEATURE-6.5): how many re-evaluation attempts raised before producing a
+    # review. Written in its own committed transaction after the rollback, so a deterministic
+    # failure cannot retry forever. Reaching the attempt cap sets `reevaluation_failed_at`.
+    reevaluation_failure_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
