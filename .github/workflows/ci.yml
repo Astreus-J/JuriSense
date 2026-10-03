@@ -86,8 +86,10 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Dependency scan (npm audit)
-        run: npm audit --audit-level=high
+      - name: Dependency scan (npm audit gate)
+        # Fails on high/critical advisories unless allowlisted with an expiry date
+        # (scripts/ci/npm-audit-allowlist.json). See that file before editing.
+        run: python3 ../scripts/ci/npm_audit_gate.py
 
       - name: Build
         run: npm run build

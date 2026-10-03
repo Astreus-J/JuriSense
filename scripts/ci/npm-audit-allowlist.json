@@ -1,0 +1,11 @@
+{
+  "entries": [
+    {
+      "advisory": "GHSA-vfj7-8cjw-p6xm",
+      "package": "braces",
+      "reason": "Transitive via eslint-config-next (build-time lint only). No non-breaking fix exists: braces@3.0.3 is the latest published version and still affected; eslint-config-next@16.3.8 keeps it too. Remove once the toolchain can drop braces.",
+      "expires": "2026-12-31",
+      "tracking": "Plane #182"
+    }
+  ]
+}
