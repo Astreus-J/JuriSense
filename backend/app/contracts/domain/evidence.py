@@ -3,8 +3,42 @@
 (docs/04-architecture/components.md rule 3). Mirrors
 `app.suppliers.domain.evidence.SupplierEvidenceDTO`'s role and rationale."""
 
+import uuid
 from dataclasses import dataclass
 from typing import Any
+
+
+@dataclass(frozen=True)
+class ContractFieldEvidenceDTO:
+    """One normalized `contract.*` field with its raw value and provenance. Consumed only by
+    `Evidence & Audit`, which commits to `value`+`provenance` with a hash and never stores
+    either one in the clear."""
+
+    context_path: str
+    value: Any
+    provenance: dict[str, Any] | None
+
+
+@dataclass(frozen=True)
+class ContractVersionEvidenceDTO:
+    """Everything `Evidence & Audit` needs to describe one ContractVersion. Plain values only:
+    the document's SHA-256 and the AI extraction run's metadata, plus the normalized fields
+    (raw values stay in memory and are hashed by the caller, never persisted in the clear)."""
+
+    contract_version_id: uuid.UUID
+    contract_id: uuid.UUID
+    supplier_id: uuid.UUID
+    version_number: int
+    document_id: uuid.UUID
+    document_content_hash: str
+    document_mime_type: str
+    document_size_bytes: int
+    extraction_run_id: str | None
+    extraction_provider: str | None
+    extraction_model_name: str | None
+    extraction_prompt_version: str | None
+    extracted_at: str | None
+    fields: tuple[ContractFieldEvidenceDTO, ...]
 
 
 @dataclass(frozen=True)
@@ -126,3 +160,21 @@ def contract_fields_to_evidence_dto(fields: dict[str, Any]) -> ContractEvidenceD
         dpa_present=_leaf_value(fields, "privacy", "dpa_present"),
         jurisdiction=_leaf_value(fields, "jurisdiction"),
     )
+
+
+def contract_fields_to_field_evidence(
+    fields: dict[str, Any],
+) -> tuple[ContractFieldEvidenceDTO, ...]:
+    """Every `contract.*` leaf the extraction produced, in `_EVIDENCE_REF_FIELD_PATHS`'
+    order. A leaf absent from the extraction (neither a value nor provenance) is omitted,
+    matching `contract_fields_to_evidence_refs`."""
+    out: list[ContractFieldEvidenceDTO] = []
+    for context_path, leaf_path in _EVIDENCE_REF_FIELD_PATHS.items():
+        value = _leaf_value(fields, *leaf_path)
+        provenance = _leaf_provenance(fields, *leaf_path)
+        if value is None and provenance is None:
+            continue
+        out.append(
+            ContractFieldEvidenceDTO(context_path=context_path, value=value, provenance=provenance)
+        )
+    return tuple(out)

@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, DateTime, String, func
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -29,3 +29,52 @@ class AuditEvent(Base):
     occurred_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), index=True
     )
+
+
+class EvidencePackage(Base):
+    """The complete, hashable bundle backing one `Decision` (docs/03-domain/domain-model.md
+    "EvidencePackage"; EVD-001/EVD-002; BR-EVD-001; docs/03-domain/evidence.md).
+
+    One package per Decision, enforced by `uq_evidence_packages_one_per_decision`. A
+    superseded Decision keeps its package: nothing here is ever deleted or updated after
+    creation. `merkle_root` is stored for fast reads and verification, and is always
+    recomputable from the `Evidence` rows (`evidence_package_service.recompute`).
+    """
+
+    __tablename__ = "evidence_packages"
+    __table_args__ = (
+        UniqueConstraint("decision_id", name="uq_evidence_packages_one_per_decision"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id"), index=True)
+    decision_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("decisions.id"))
+    merkle_root: Mapped[str] = mapped_column(String(64))
+    evidence_count: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Evidence(Base):
+    """One canonical leaf of an `EvidencePackage` (docs/03-domain/domain-model.md "Evidence").
+
+    `payload` holds only hashes, ids, versions and enum values -- never raw contract text or
+    personal data (BR-EVD-002). `content_hash` is the leaf hash (domain/merkle.py), stored
+    so a recomputation can point at the exact leaf that changed. `(type, ref_id)` is unique
+    per package: it is the canonical sort key and the identity of a leaf.
+    """
+
+    __tablename__ = "evidence"
+    __table_args__ = (
+        UniqueConstraint("evidence_package_id", "type", "ref_id", name="uq_evidence_one_per_ref"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id"), index=True)
+    evidence_package_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("evidence_packages.id"), index=True
+    )
+    type: Mapped[str] = mapped_column(String(40))
+    ref_id: Mapped[str] = mapped_column(String(128))
+    payload: Mapped[dict[str, Any]] = mapped_column(JSON)
+    content_hash: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

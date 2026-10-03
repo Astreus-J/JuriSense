@@ -9,8 +9,12 @@ import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.suppliers.domain.evidence import SupplierEvidenceDTO
-from app.suppliers.infrastructure.repositories import SupplierProfileRepository, SupplierRepository
+from app.suppliers.domain.evidence import SupplierCheckEvidenceDTO, SupplierEvidenceDTO
+from app.suppliers.infrastructure.repositories import (
+    SupplierCheckRepository,
+    SupplierProfileRepository,
+    SupplierRepository,
+)
 
 
 async def get_normalized_profile(
@@ -63,3 +67,25 @@ async def get_evidence_ref_for_supplier(
         "supplier_profile_id": str(profile.id),
         "supplier_check_id": str(profile.source_check_id),
     }
+
+
+async def get_supplier_check_evidence(
+    session: AsyncSession, *, organization_id: uuid.UUID, supplier_check_id: uuid.UUID
+) -> SupplierCheckEvidenceDTO | None:
+    """One SupplierCheck, for the Decision Passport. Returns `None` (never raises) when the
+    check does not exist or its Supplier is not in the caller's organization. Checks are
+    immutable once completed, so the result is the same whenever it is read."""
+    check = await SupplierCheckRepository(session).get_by_id(supplier_check_id)
+    if check is None:
+        return None
+    supplier = await SupplierRepository(session).get_by_id_and_organization(
+        check.supplier_id, organization_id
+    )
+    if supplier is None:
+        return None
+    return SupplierCheckEvidenceDTO(
+        supplier_check_id=check.id,
+        supplier_id=check.supplier_id,
+        sources_consulted=tuple(sorted(check.sources_consulted or [])),
+        raw_results=dict(check.raw_results or {}),
+    )

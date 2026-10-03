@@ -81,3 +81,19 @@ def test_approvals_only_imports_the_sanctioned_policies_surface() -> None:
         touched = {m for m in _imported_modules(path) if _starts_with_any(m, watched_prefixes)}
         offending = {m for m in touched if not _starts_with_any(m, allowed)}
         assert not offending, f"{path} imports an unsanctioned Policies surface: {offending}"
+
+
+def test_approvals_only_imports_the_sanctioned_evidence_surface() -> None:
+    """EVD-001: Approvals & Decisions hands each new Decision to Evidence & Audit in the same
+    transaction (`decision_service.create_decision_for_review` -> `evidence_package_service.
+    assemble_evidence_package`), and emits its audit events via `audit_service`. Those are the
+    only two Evidence modules Approvals may import. It must never reach Evidence's repositories
+    or models, which would let it bypass the package's one-per-decision rule."""
+    allowed = {
+        "app.evidence.application.audit_service",
+        "app.evidence.application.evidence_package_service",
+    }
+    for path in _python_files(APPROVALS_DIR):
+        touched = {m for m in _imported_modules(path) if _starts_with_any(m, {"app.evidence"})}
+        offending = {m for m in touched if not _starts_with_any(m, allowed)}
+        assert not offending, f"{path} imports an unsanctioned Evidence surface: {offending}"

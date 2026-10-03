@@ -18,10 +18,12 @@ from app.approvals.domain.errors import (
     EmptyJustificationError,
     OverriddenDecisionSupersessionError,
 )
+from app.approvals.domain.evidence import DecisionFacts
 from app.approvals.infrastructure.models import Decision
 from app.approvals.infrastructure.repositories import DecisionRepository
 from app.core.config import get_settings
 from app.evidence.application.audit_service import emit_audit_event
+from app.evidence.application.evidence_package_service import assemble_evidence_package
 
 
 async def create_decision_for_review(
@@ -54,6 +56,10 @@ async def create_decision_for_review(
        `DecisionAlreadyExistsError` is raised instead of a raw IntegrityError. Only those two
        known uniqueness constraints are mapped; any other integrity error (a foreign key, a
        NOT NULL) is a bug and is re-raised unchanged.
+
+    4. The Decision's EvidencePackage is assembled in the same unit (EVD-001,
+       `evidence_package_service.assemble_evidence_package`), so a Decision never exists without
+       its package. Assembly does not commit.
 
     F1 (BR-DEC-003, override is a human decision): when `supersedes_decision_id` is given (the
     automatic re-evaluation path), a Decision that is `overridden` and currently `ACTIVE` is never
@@ -134,6 +140,9 @@ async def create_decision_for_review(
         status=status,
         valid_until=now + timedelta(days=settings.decision_valid_days),
         supersedes_decision_id=supersedes_decision_id,
+        # Explicit (not the server default) so the EvidencePackage's decision leaf records the
+        # same instant this Decision carries.
+        created_at=now,
     )
     repository.add(decision)
     try:
@@ -160,6 +169,22 @@ async def create_decision_for_review(
             "superseded_decision_ids": sorted(str(i) for i in superseded_ids),
             "created_at": now.isoformat(),
         },
+    )
+
+    # EVD-001 (docs/03-domain/evidence.md): the Decision's EvidencePackage is assembled in this
+    # same unit, so a Decision never exists without its package. Assembly does not commit.
+    await assemble_evidence_package(
+        session,
+        facts=DecisionFacts(
+            organization_id=organization_id,
+            decision_id=decision.id,
+            compliance_review_id=compliance_review_id,
+            contract_version_id=contract_version_id,
+            status=decision.status,
+            supersedes_decision_id=supersedes_decision_id,
+            created_at=now,
+        ),
+        actor_id=actor_id,
     )
     return decision
 

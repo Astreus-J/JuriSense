@@ -5,7 +5,9 @@ Pydantic model, matching the low-ceremony style of a pure cross-context data car
 never gets exposed directly over HTTP (unlike the API-layer `SupplierProfileResponse`,
 which is a `BaseModel` because it *is* serialized as an HTTP response body)."""
 
+import uuid
 from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -22,3 +24,15 @@ class SupplierEvidenceDTO:
     activity_mismatch: bool
     address_flag: str
     cnae_code: str | None
+
+
+@dataclass(frozen=True)
+class SupplierCheckEvidenceDTO:
+    """One immutable SupplierCheck as `Evidence & Audit` needs it: which external sources it
+    consulted (names only) and its raw results, which the caller commits to with a hash and
+    never stores in the clear."""
+
+    supplier_check_id: uuid.UUID
+    supplier_id: uuid.UUID
+    sources_consulted: tuple[str, ...]
+    raw_results: dict[str, Any]

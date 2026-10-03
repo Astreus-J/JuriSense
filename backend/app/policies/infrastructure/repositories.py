@@ -47,6 +47,20 @@ class PolicyVersionRepository:
     async def get_by_id(self, version_id: uuid.UUID) -> PolicyVersion | None:
         return await self._session.get(PolicyVersion, version_id)
 
+    async def list_by_ids_and_organization(
+        self, version_ids: list[uuid.UUID], organization_id: uuid.UUID
+    ) -> list[PolicyVersion]:
+        """Tenant-scoped via the parent Policy (PolicyVersion carries no organization_id of its
+        own). Used by the Evidence & Audit policy port, never for user-facing listings."""
+        if not version_ids:
+            return []
+        result = await self._session.execute(
+            select(PolicyVersion)
+            .join(Policy, Policy.id == PolicyVersion.policy_id)
+            .where(PolicyVersion.id.in_(version_ids), Policy.organization_id == organization_id)
+        )
+        return list(result.scalars())
+
     async def get_by_id_and_policy(
         self, version_id: uuid.UUID, policy_id: uuid.UUID
     ) -> PolicyVersion | None:
