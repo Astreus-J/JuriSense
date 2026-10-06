@@ -46,6 +46,20 @@ async def _events(db_session_factory: async_sessionmaker, event_type: str) -> li
         return await AuditEventRepository(session).list(event_type=event_type)
 
 
+async def test_registration_emits_user_registered_without_the_plaintext_email(
+    client: httpx.AsyncClient, db_session_factory: async_sessionmaker
+) -> None:
+    """Security review M3 (2026-10-05): user.registered must not carry the email."""
+    await client.post("/api/auth/register", json=REGISTRATION)
+    user = await _user(db_session_factory, EMAIL)
+
+    [event] = await _events(db_session_factory, "user.registered")
+    assert event.actor_id == user.id
+    assert event.organization_id == user.organization_id
+    assert event.payload == {"user_id": str(user.id)}
+    assert EMAIL not in json.dumps(event.payload)
+
+
 async def test_successful_login_emits_user_login_succeeded(
     client: httpx.AsyncClient, db_session_factory: async_sessionmaker
 ) -> None:

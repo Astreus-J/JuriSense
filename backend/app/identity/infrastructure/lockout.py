@@ -22,8 +22,15 @@ class LoginLockout:
     async def register_failure(self, email: str) -> None:
         fail_key = self._fail_key(email)
         attempts = await self._redis.incr(fail_key)
-        if attempts == 1:
-            await self._redis.expire(fail_key, self._lockout_seconds)
+        # Security review (M2, 2026-10-03): INCR is atomic, so the count itself never races.
+        # What used to race was the TTL: `if attempts == 1: expire(...)` only arms the window
+        # on the call that happens to see attempts==1. If that one call's process is killed
+        # between INCR and EXPIRE, or a crash leaves the key behind from an earlier window,
+        # the key can end up counting failures with no TTL at all -- a lockout that, once
+        # triggered later, never clears. `EXPIRE ... NX` is itself atomic and a no-op once a
+        # TTL already exists, so calling it on every failure (not just the first) closes that
+        # gap without changing behavior for the common case.
+        await self._redis.expire(fail_key, self._lockout_seconds, nx=True)
         if attempts >= self._max_attempts:
             await self._redis.set(self._lock_key(email), "1", ex=self._lockout_seconds)
             await self._redis.delete(fail_key)

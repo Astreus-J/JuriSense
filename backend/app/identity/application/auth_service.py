@@ -157,7 +157,10 @@ async def register_organization(
         event_type="user.registered",
         actor_id=admin.id,
         organization_id=organization.id,
-        payload={"user_id": str(admin.id), "email": admin.email},
+        # Security review (M3, 2026-10-05): no longer carries the plaintext email. The
+        # email is reachable from `admin.id` via the Identity context for any caller
+        # permitted to look it up; the audit trail does not need its own copy of it.
+        payload={"user_id": str(admin.id)},
     )
 
     await session.commit()

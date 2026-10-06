@@ -117,8 +117,9 @@ the emission: that it shares its business transaction is covered only by the ato
 - Producer: `User` aggregate, on account creation.
 - Meaning: a new authenticated individual now exists in the system (may later hold memberships in
   multiple organizations, `BR-ORG-001`).
-- Payload: `user_id`, `email`. The email is plaintext personal data in this event: a known gap
-  from the security review of the Accounts context (finding M3), not yet remediated.
+- Payload: `user_id`. Carried the plaintext email until the security review (finding M3,
+  2026-10-05); removed because it is reachable from `user_id` by anyone permitted to look it up,
+  so the audit trail does not need its own copy.
 - Consumers: welcome/verification email flow.
 - Audit implications: establishes the identity root that every `actor_id` elsewhere in the catalog
   ultimately resolves to.
