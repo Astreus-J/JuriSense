@@ -9,7 +9,11 @@ import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.suppliers.domain.evidence import SupplierCheckEvidenceDTO, SupplierEvidenceDTO
+from app.suppliers.domain.evidence import (
+    SupplierCheckEvidenceDTO,
+    SupplierEvidenceDTO,
+    SupplierIdentityEvidenceDTO,
+)
 from app.suppliers.infrastructure.repositories import (
     SupplierCheckRepository,
     SupplierProfileRepository,
@@ -67,6 +71,22 @@ async def get_evidence_ref_for_supplier(
         "supplier_profile_id": str(profile.id),
         "supplier_check_id": str(profile.source_check_id),
     }
+
+
+async def get_supplier_identity(
+    session: AsyncSession, *, organization_id: uuid.UUID, supplier_id: uuid.UUID
+) -> SupplierIdentityEvidenceDTO | None:
+    """FEATURE-7.3: the Decision Passport's "supplier" field. Returns `None` (never raises)
+    when the supplier does not exist in the caller's organization -- same contract as every
+    other evidence port."""
+    supplier = await SupplierRepository(session).get_by_id_and_organization(
+        supplier_id, organization_id
+    )
+    if supplier is None:
+        return None
+    return SupplierIdentityEvidenceDTO(
+        supplier_id=supplier.id, legal_name=supplier.legal_name, tax_id=supplier.tax_id
+    )
 
 
 async def get_supplier_check_evidence(

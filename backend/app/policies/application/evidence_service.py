@@ -54,6 +54,7 @@ async def get_review_evidence(
                 rule_evaluation_id=evaluation.id,
                 rule_id=evaluation.rule_id,
                 rule_key=evaluation.rule_key,
+                rule_name=evaluation.rule_name,
                 outcome=evaluation.outcome,
                 severity=evaluation.severity,
                 approver_role=evaluation.approver_role,

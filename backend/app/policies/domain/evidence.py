@@ -19,6 +19,10 @@ class RuleEvaluationEvidenceDTO:
     rule_evaluation_id: uuid.UUID
     rule_id: uuid.UUID
     rule_key: str
+    # FEATURE-7.3: the Decision Passport's human-readable label for "rules triggered" --
+    # `RuleEvaluation.rule_name` is a denormalized snapshot of the evaluated Rule's own
+    # name at evaluation time (models.py), not a live join.
+    rule_name: str
     outcome: str
     severity: str
     approver_role: str | None

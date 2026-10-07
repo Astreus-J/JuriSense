@@ -4,10 +4,14 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.core.db import SessionDep
-from app.evidence.api.schemas import EvidencePackageResponse, RecomputeResponse
-from app.evidence.application import evidence_package_service
+from app.evidence.api.schemas import (
+    DecisionPassportResponse,
+    EvidencePackageResponse,
+    RecomputeResponse,
+)
+from app.evidence.application import decision_passport_service, evidence_package_service
 from app.evidence.application.evidence_package_service import PackageView
-from app.evidence.domain.errors import EvidencePackageNotFoundError
+from app.evidence.domain.errors import EvidenceError, EvidencePackageNotFoundError
 from app.identity.api.deps import require_permission
 from app.identity.domain.constants import Module
 from app.identity.infrastructure.models import User
@@ -89,3 +93,28 @@ async def get_decision_package(
     except EvidencePackageNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.message) from exc
     return _to_response(view)
+
+
+@decision_passport_router.get("/{decision_id}/passport", response_model=DecisionPassportResponse)
+async def get_decision_passport(
+    decision_id: uuid.UUID, user: CanReadEvidence, session: SessionDep
+) -> DecisionPassportResponse:
+    """STORY-7.3.1: the human-readable "why was this approved?" narrative for one Decision.
+    Same 404 contract as `get_decision_package` above: a missing Decision, one in another
+    organization, and one with no EvidencePackage yet are all indistinguishable (ADR-003).
+
+    Security review (2026-10-06): catches `EvidenceError`, not just its
+    `EvidencePackageNotFoundError` subclass. `decision_passport_service.get_decision_passport`
+    also raises the base `EvidenceError` for a handful of "should be unreachable" broken-
+    reference cases (its own Decision pointing at a review/contract version/supplier that no
+    longer resolves) -- today genuinely unreachable (no archival/soft-delete path exists yet
+    for any of those), but catching only the subclass would let a future one escape as an
+    unhandled 500 instead of this route's documented 404, the same ADR-003 guarantee every
+    other branch here already keeps."""
+    try:
+        passport = await decision_passport_service.get_decision_passport(
+            session, organization_id=user.organization_id, decision_id=decision_id
+        )
+    except EvidenceError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.message) from exc
+    return DecisionPassportResponse.model_validate(passport)

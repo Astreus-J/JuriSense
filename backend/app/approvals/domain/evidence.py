@@ -21,6 +21,26 @@ class DecisionFacts:
 
 
 @dataclass(frozen=True)
+class DecisionSummary:
+    """FEATURE-7.3: the fields of one Decision the Decision Passport displays as "final
+    decision", beyond what `DecisionFacts` records for `EvidencePackage` assembly --
+    `lifecycle`/`valid_until`/`overridden`/`override_justification` are never hashed into a
+    leaf (they describe the Decision's current standing, not a fact the package commits to),
+    so the Passport reads them fresh through this port instead."""
+
+    decision_id: uuid.UUID
+    compliance_review_id: uuid.UUID
+    contract_version_id: uuid.UUID
+    status: str
+    lifecycle: str
+    valid_until: datetime
+    overridden: bool
+    override_justification: str | None
+    supersedes_decision_id: uuid.UUID | None
+    created_at: datetime
+
+
+@dataclass(frozen=True)
 class ReviewerRecord:
     """One human approval step of a review's chain: who resolved it (`resolved_by`) and in what
     role/step. `resolved_by` / `resolved_at` are None while the step is still pending."""

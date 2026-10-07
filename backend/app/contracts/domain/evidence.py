@@ -27,6 +27,10 @@ class ContractVersionEvidenceDTO:
 
     contract_version_id: uuid.UUID
     contract_id: uuid.UUID
+    # FEATURE-7.3: the Decision Passport's "contract" field needs a human-readable label,
+    # not just an id -- `Contract.title` never changes after creation (no update path in
+    # `ContractRepository`), so it is safe to read live rather than snapshot per version.
+    contract_title: str
     supplier_id: uuid.UUID
     version_number: int
     document_id: uuid.UUID

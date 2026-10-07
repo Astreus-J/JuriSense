@@ -158,6 +158,7 @@ async def get_contract_version_evidence(
     return ContractVersionEvidenceDTO(
         contract_version_id=version.id,
         contract_id=contract.id,
+        contract_title=contract.title,
         supplier_id=contract.supplier_id,
         version_number=version.version_number,
         document_id=document.id,

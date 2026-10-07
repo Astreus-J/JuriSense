@@ -27,6 +27,20 @@ class SupplierEvidenceDTO:
 
 
 @dataclass(frozen=True)
+class SupplierIdentityEvidenceDTO:
+    """FEATURE-7.3: the Decision Passport's "supplier" field -- `Supplier.legal_name`/
+    `tax_id` identify the counterparty itself, not a point-in-time check result, so unlike
+    `SupplierEvidenceDTO` this is read live from `Supplier` rather than from the
+    `SupplierProfile` current as of the review (`docs/03-domain/evidence.md`'s "Supplier"
+    row: "`Supplier.id`, `legal_name`, `tax_id`, plus the SupplierProfile/SupplierCheck
+    current as of the review")."""
+
+    supplier_id: uuid.UUID
+    legal_name: str
+    tax_id: str
+
+
+@dataclass(frozen=True)
 class SupplierCheckEvidenceDTO:
     """One immutable SupplierCheck as `Evidence & Audit` needs it: which external sources it
     consulted (names only) and its raw results, which the caller commits to with a hash and

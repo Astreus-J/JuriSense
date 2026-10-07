@@ -107,6 +107,49 @@ async def test_decision_passport_is_404_for_another_tenant(
     assert foreign.json() == missing.json()
 
 
+async def test_decision_passport_endpoint_is_404_for_another_tenant(
+    client: httpx.AsyncClient,
+    db_session_factory: async_sessionmaker,
+    mock_openrouter,
+    run_contract_extraction_inline,
+) -> None:
+    """FEATURE-7.3: the narrative read-model follows the same contract as the raw
+    evidence-package endpoint above -- a foreign decision id and a nonexistent one are
+    indistinguishable 404s."""
+    a, b = await _two_tenants(
+        client, db_session_factory, mock_openrouter, run_contract_extraction_inline
+    )
+    foreign = await client.get(f"/api/decisions/{a['decision_id']}/passport", headers=b["headers"])
+    missing = await client.get(f"/api/decisions/{uuid.uuid4()}/passport", headers=b["headers"])
+    assert foreign.status_code == 404, foreign.text
+    assert foreign.json() == missing.json()
+
+    own = await client.get(f"/api/decisions/{a['decision_id']}/passport", headers=a["headers"])
+    assert own.status_code == 200, own.text
+
+
+async def test_decision_passport_role_without_evidence_read_is_refused(
+    client: httpx.AsyncClient,
+    db_session_factory: async_sessionmaker,
+    mock_openrouter,
+    run_contract_extraction_inline,
+) -> None:
+    """Mirrors `test_role_without_evidence_read_is_refused` for the `/passport` route: the
+    permission gate runs before any lookup, so PROCUREMENT (Evidence = none) gets 403 even
+    for its own organization's Decision."""
+    a = await _tenant_with_package(
+        client,
+        db_session_factory,
+        email="iso-rbac-passport@example.com",
+        mock_openrouter=mock_openrouter,
+    )
+    procurement = await create_user_and_login(
+        client, a["headers"], email="procurement-iso-passport@example.com", role="procurement"
+    )
+    response = await client.get(f"/api/decisions/{a['decision_id']}/passport", headers=procurement)
+    assert response.status_code == 403, response.text
+
+
 async def test_recompute_is_404_for_another_tenant_and_writes_nothing(
     client: httpx.AsyncClient,
     db_session_factory: async_sessionmaker,

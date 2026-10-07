@@ -7,9 +7,9 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.approvals.domain.evidence import DecisionFacts, ReviewerRecord
+from app.approvals.domain.evidence import DecisionFacts, DecisionSummary, ReviewerRecord
 from app.approvals.infrastructure.models import Decision
-from app.approvals.infrastructure.repositories import ApprovalRequestRepository
+from app.approvals.infrastructure.repositories import ApprovalRequestRepository, DecisionRepository
 
 
 async def list_reviewers_for_review(
@@ -31,6 +31,32 @@ async def list_reviewers_for_review(
         )
         for request in requests
     ]
+
+
+async def get_decision_summary(
+    session: AsyncSession, *, organization_id: uuid.UUID, decision_id: uuid.UUID
+) -> DecisionSummary | None:
+    """FEATURE-7.3: the Decision Passport's "final decision" fields for one Decision.
+    Returns `None` (never raises) when the Decision does not exist in the caller's
+    organization -- same "missing evidence, not an error" contract as every other evidence
+    port, left to the caller (the Passport assembler) to turn into a 404."""
+    decision = await DecisionRepository(session).get_by_id_and_organization(
+        decision_id, organization_id
+    )
+    if decision is None:
+        return None
+    return DecisionSummary(
+        decision_id=decision.id,
+        compliance_review_id=decision.compliance_review_id,
+        contract_version_id=decision.contract_version_id,
+        status=decision.status,
+        lifecycle=decision.lifecycle,
+        valid_until=decision.valid_until,
+        overridden=decision.overridden,
+        override_justification=decision.override_justification,
+        supersedes_decision_id=decision.supersedes_decision_id,
+        created_at=decision.created_at,
+    )
 
 
 async def list_all_decision_facts(session: AsyncSession) -> list[DecisionFacts]:
