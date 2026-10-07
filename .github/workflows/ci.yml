@@ -58,8 +58,8 @@ jobs:
       - name: Lint (ruff)
         run: uv run ruff check .
 
-      - name: Dependency scan (pip-audit)
-        run: uv run --with pip-audit pip-audit
+      - name: Dependency scan (pip-audit gate)
+        run: python3 ../scripts/ci/pip_audit_gate.py
 
       - name: Test (pytest)
         run: uv run pytest

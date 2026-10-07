@@ -1,0 +1,11 @@
+{
+  "entries": [
+    {
+      "advisory": "PYSEC-2026-1325",
+      "package": "ecdsa",
+      "reason": "Transitive via constellation-digital-evidence-sdk -> constellation-metagraph-sdk (FEATURE-8.1, ADR-007's Constellation anchoring adapter). A Minerva timing side-channel on P-256/SECP256k1 signing; the python-ecdsa maintainers consider side-channel attacks out of scope and have no planned fix (no fix_versions at any version). Inert today: constellation_ded_private_key is unset, so this signing path never runs (Settings.anchoring_provider defaults to the transparency_log fallback, which uses Ed25519 via the `cryptography` package, not ecdsa). Re-evaluate before Plane #198 (Constellation credential provisioning) activates this path -- either confirm the SDK's own crypto backend by then, or pin ecdsa's usage behind a non-ecdsa SECP256k1 implementation.",
+      "expires": "2026-12-31",
+      "tracking": "Plane #198"
+    }
+  ]
+}
