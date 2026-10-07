@@ -79,5 +79,5 @@ for them.
   `provider` is `"transparency_log"` — every caller that renders this to a human (the Decision
   Passport, the public verification page) must show it as a labeled fallback, never as a
   blockchain anchor (`docs/09-planning/risks.md` risk 4's non-negotiable labeling requirement).
-  Flipping `Settings.anchoring_provider` to `"constellation"` the moment credentials arrive
+  Flipping `Settings.anchoring_provider` to `"constellation_digital_evidence"` the moment credentials arrive
   changes nothing above the `AnchoringProvider` interface.

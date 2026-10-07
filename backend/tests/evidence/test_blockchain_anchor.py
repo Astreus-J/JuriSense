@@ -16,6 +16,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
+from app.core.config import get_settings
 from app.evidence.application import anchoring_service
 from app.evidence.domain.anchoring import AnchorProof, AnchorStatus
 from app.evidence.domain.errors import AnchorAlreadySubmittedError
@@ -395,3 +396,38 @@ async def test_a_concurrent_submission_hits_the_unique_constraint_not_the_provid
                 actor_id=None,
                 provider=_UnreachableProvider(),
             )
+
+
+async def test_recheck_resolves_the_anchor_s_own_provider_not_the_current_default(
+    client: httpx.AsyncClient,
+    db_session_factory: async_sessionmaker,
+    mock_openrouter,
+    run_contract_extraction_inline,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression: `check_anchor_status` used to call `get_provider()` (the CURRENT default),
+    not the adapter this specific anchor was actually submitted through. Forces the exact
+    scenario that would break: the anchor is `transparency_log`, but the default has since
+    been flipped to `constellation` (with no real credentials configured) -- a recheck must
+    still resolve and use the transparency log, never attempt to build the Constellation
+    adapter at all."""
+    headers, package_id = await _package_id_for_simple_approval(
+        client,
+        email="anchor-provider-switch@example.com",
+        mock_openrouter=mock_openrouter,
+        db_session_factory=db_session_factory,
+    )
+    submitted = await client.post(f"/api/evidence-packages/{package_id}/anchor", headers=headers)
+    anchor_id = submitted.json()["id"]
+    assert submitted.json()["provider"] == "transparency_log"
+
+    settings = get_settings()
+    monkeypatch.setattr(settings, "anchoring_provider", "constellation_digital_evidence")
+    # No constellation_ded_* settings are configured -- if check_anchor_status ever again
+    # resolved the CURRENT default instead of this anchor's own provider, this call would
+    # raise AnchoringProviderError("...missing settings...") instead of succeeding.
+
+    response = await client.post(f"/api/blockchain-anchors/{anchor_id}/recheck", headers=headers)
+
+    assert response.status_code == 200, response.text
+    assert response.json()["provider"] == "transparency_log"

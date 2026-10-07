@@ -11,6 +11,8 @@ import type {
   PassportPolicyVersion,
   PassportReviewer,
   PassportRuleEvaluation,
+  PublicVerificationResult,
+  VerificationStatus,
 } from "./types";
 
 export { ApiError };
@@ -191,4 +193,31 @@ export async function getDecisionPassport(
     accessToken,
   });
   return toDecisionPassport(raw);
+}
+
+interface RawPublicVerificationResponse {
+  status: string;
+  evidence_hash: string | null;
+  provider: string | null;
+  confirmed_at: string | null;
+  reference_url: string | null;
+}
+
+/** STORY-8.3.1: the public, unauthenticated verification check
+ * (`GET /api/public/verify`) — no `accessToken`, by design: this is the one backend call in
+ * the app meant to work for a visitor with no session at all. Never throws for a malformed
+ * or unknown `reference` — the route always answers 200 with `status: "not_found"` for
+ * those, matching this function's own "never raises" contract for anything less than a
+ * genuine network/server failure. */
+export async function verifyPublicReference(reference: string): Promise<PublicVerificationResult> {
+  const raw = await request<RawPublicVerificationResponse>(
+    `/public/verify?ref=${encodeURIComponent(reference)}`,
+  );
+  return {
+    status: raw.status as VerificationStatus,
+    evidenceHash: raw.evidence_hash,
+    provider: raw.provider,
+    confirmedAt: raw.confirmed_at,
+    referenceUrl: raw.reference_url,
+  };
 }

@@ -49,7 +49,10 @@ class EvidencePackage(Base):
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id"), index=True)
     decision_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("decisions.id"))
-    merkle_root: Mapped[str] = mapped_column(String(64))
+    # FEATURE-8.3: indexed because the public verification page now looks packages up by
+    # this column directly (app.evidence.infrastructure.repositories.EvidencePackageRepository
+    # .get_by_merkle_root_any_organization) -- previously only ever read, never queried on.
+    merkle_root: Mapped[str] = mapped_column(String(64), index=True)
     evidence_count: Mapped[int] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

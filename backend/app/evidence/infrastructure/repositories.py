@@ -85,6 +85,34 @@ class EvidencePackageRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_by_decision_id_any_organization(
+        self, decision_id: uuid.UUID
+    ) -> EvidencePackage | None:
+        """FEATURE-8.3 (STORY-8.3.1): the one deliberate exception to this repository's
+        tenant scoping. Backs the PUBLIC, unauthenticated verification page
+        (`docs/06-blockchain/verification.md`) -- a visitor with no organization context at
+        all, by design (an external auditor, a counterparty, a hackathon judge), who already
+        holds the specific `Decision` id they want to check. Every caller of this method
+        MUST be that public verification path; nothing else in the product may read across
+        organizations like this. The method name says so on purpose, so a reviewer scanning
+        call sites never mistakes this for an oversight."""
+        result = await self._session.execute(
+            select(EvidencePackage).where(EvidencePackage.decision_id == decision_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def get_by_merkle_root_any_organization(self, merkle_root: str) -> EvidencePackage | None:
+        """Same deliberate exception as `get_by_decision_id_any_organization`, for a visitor
+        who pastes the raw hash instead of a Decision id. `merkle_root` has no uniqueness
+        constraint at the database level (two different packages sharing one would require a
+        SHA-256 collision) -- `.first()` rather than `scalar_one_or_none()` so that
+        astronomically unlikely case degrades to "resolves one of them" instead of an
+        unhandled exception on a public, unauthenticated path."""
+        result = await self._session.execute(
+            select(EvidencePackage).where(EvidencePackage.merkle_root == merkle_root)
+        )
+        return result.scalars().first()
+
 
 class EvidenceRepository:
     """Append-only, tenant-scoped repository for the Evidence leaves of a package."""
@@ -142,6 +170,19 @@ class BlockchainAnchorRepository:
             select(BlockchainAnchor).where(
                 BlockchainAnchor.evidence_package_id == evidence_package_id,
                 BlockchainAnchor.organization_id == organization_id,
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def get_by_package_id_any_organization(
+        self, evidence_package_id: uuid.UUID
+    ) -> BlockchainAnchor | None:
+        """FEATURE-8.3: the same deliberate, named exception to tenant scoping as
+        `EvidencePackageRepository.get_by_decision_id_any_organization` -- backs the public
+        verification page only."""
+        result = await self._session.execute(
+            select(BlockchainAnchor).where(
+                BlockchainAnchor.evidence_package_id == evidence_package_id
             )
         )
         return result.scalar_one_or_none()

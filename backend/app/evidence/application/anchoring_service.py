@@ -45,12 +45,28 @@ from app.evidence.infrastructure.repositories import BlockchainAnchorRepository
 logger = logging.getLogger("jurisense.evidence.anchoring")
 
 
-def get_provider() -> AnchoringProvider:
-    """The one place a concrete `AnchoringProvider` is chosen, from `Settings.
-    anchoring_provider` -- never sniffed from which credentials happen to be set (see that
-    setting's own docstring)."""
+# The only two `provider_name` values any `AnchoringProvider` adapter in this codebase has
+# (`AnchoringProvider.provider_name`, confirmed in both concrete adapters) -- also the only
+# two values `BlockchainAnchor.provider`/`Settings.anchoring_provider` ever hold.
+_CONSTELLATION_PROVIDER_NAME = "constellation_digital_evidence"
+_TRANSPARENCY_LOG_PROVIDER_NAME = "transparency_log"
+
+
+def get_provider_by_name(provider_name: str) -> AnchoringProvider:
+    """Builds the concrete `AnchoringProvider` adapter named `provider_name`, regardless of
+    `Settings.anchoring_provider`'s CURRENT value.
+
+    FEATURE-8.3: this is the one a caller must use for an EXISTING `BlockchainAnchor` --
+    `check_anchor_status` and the public verification page both need the adapter that was
+    actually used to submit it, not whatever the default happens to be today. If the default
+    is ever flipped from `transparency_log` to `constellation` (once Plane #198's credentials
+    land), every anchor submitted before that flip must keep resolving through
+    `TransparencyLogAnchoringProvider` -- its `anchor_ref` is a git commit SHA, meaningless to
+    the Constellation adapter and vice versa. `get_provider()` below, for NEW submissions
+    only, is the one caller that should read `Settings.anchoring_provider` instead of being
+    told a name."""
     settings = get_settings()
-    if settings.anchoring_provider == "constellation":
+    if provider_name == _CONSTELLATION_PROVIDER_NAME:
         missing = [
             name
             for name, value in (
@@ -73,10 +89,20 @@ def get_provider() -> AnchoringProvider:
             private_key=settings.constellation_ded_private_key,
             timeout_seconds=settings.constellation_ded_timeout_seconds,
         )
-    return TransparencyLogAnchoringProvider(
-        repo_path=settings.transparency_log_repo_path,
-        signing_key_path=settings.transparency_log_signing_key_path,
-    )
+    if provider_name == _TRANSPARENCY_LOG_PROVIDER_NAME:
+        return TransparencyLogAnchoringProvider(
+            repo_path=settings.transparency_log_repo_path,
+            signing_key_path=settings.transparency_log_signing_key_path,
+        )
+    raise AnchoringProviderError(f"Unknown anchoring provider: {provider_name!r}")
+
+
+def get_provider() -> AnchoringProvider:
+    """The one place a NEW submission's `AnchoringProvider` is chosen, from `Settings.
+    anchoring_provider` -- never sniffed from which credentials happen to be set (see that
+    setting's own docstring). Only `submit_anchor` should call this; everything that acts on
+    an already-existing anchor must call `get_provider_by_name(anchor.provider)` instead."""
+    return get_provider_by_name(get_settings().anchoring_provider)
 
 
 @dataclass(frozen=True)
@@ -172,7 +198,12 @@ async def check_anchor_status(
 ) -> AnchorResult:
     """Re-checks a `submitted` anchor's current state against its provider. A no-op (no
     provider call, no write) once the anchor is already `confirmed`/`failed` -- settlement is
-    terminal, matching `AnchorStatus`'s own docstring. Entry-point use case: commits."""
+    terminal, matching `AnchorStatus`'s own docstring. Entry-point use case: commits.
+
+    Bug fix (2026-10-07, found while building FEATURE-8.3's public verification page):
+    resolves the provider by `anchor.provider` -- the adapter THIS anchor was actually
+    submitted through -- never `get_provider()`'s current default. See
+    `get_provider_by_name`'s own docstring for why those can differ."""
     repository = BlockchainAnchorRepository(session)
     anchor = await repository.get_by_id_and_organization(anchor_id, organization_id)
     if anchor is None:
@@ -180,7 +211,7 @@ async def check_anchor_status(
     if anchor.status != AnchorStatus.SUBMITTED.value:
         return AnchorResult(anchor=anchor, newly_confirmed=False)
 
-    active_provider = provider or get_provider()
+    active_provider = provider or get_provider_by_name(anchor.provider)
     newly_confirmed = await _refresh_from_provider(session, anchor=anchor, provider=active_provider)
     await session.commit()
     return AnchorResult(anchor=anchor, newly_confirmed=newly_confirmed)

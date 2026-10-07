@@ -149,11 +149,18 @@ class Settings(BaseSettings):
 
     # FEATURE-8.1/ADR-007 spike (2026-10-07): the AnchoringProvider's active implementation is
     # an explicit, named choice -- never sniffed from whether credentials happen to be set --
-    # same "config-only swap" shape as ai_extraction_primary_model's provider choice.
+    # same "config-only swap" shape as ai_extraction_primary_model's provider choice. Must be
+    # exactly one of AnchoringProvider.provider_name's two real values -- "transparency_log" or
+    # "constellation_digital_evidence" -- the same strings anchoring_service.get_provider_by_name
+    # matches against and BlockchainAnchor.provider stores, so there is only ever one naming
+    # scheme for a provider in this codebase. (Security review, 2026-10-07: an earlier version
+    # of this comment said the short form "constellation" activates it -- that string matches
+    # neither constant and would have made every new submission fail closed with "Unknown
+    # anchoring provider" the day this setting was actually changed.)
     # "transparency_log" needs no external credentials and is the honest default until a real
     # Constellation Digital Evidence Depository (DED) API key is provisioned (not self-service --
-    # see docs/06-blockchain/anchoring-providers.md's spike findings); "constellation" activates
-    # the real adapter once constellation_ded_* below are all set.
+    # see docs/06-blockchain/anchoring-providers.md's spike findings); "constellation_digital_
+    # evidence" activates the real adapter once constellation_ded_* below are all set.
     anchoring_provider: str = "transparency_log"
 
     # Constellation DED (docs/06-blockchain/anchoring-providers.md): org_id/tenant_id/api_key are

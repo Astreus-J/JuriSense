@@ -90,3 +90,20 @@ export interface DecisionPassport {
   merkleRoot: string;
   evidenceCount: number;
 }
+
+/** FEATURE-8.3: the four plain-language outcomes of the public verification check
+ * (docs/06-blockchain/verification.md) — "pending" is this product's own addition to the
+ * doc's original three (verified/not_found/mismatch), for a submission whose underlying
+ * network hasn't finalized yet. */
+export type VerificationStatus = "verified" | "mismatch" | "pending" | "not_found";
+
+/** STORY-8.3.1: the ENTIRE public surface of the verification page — deliberately just
+ * these fields, never a supplier/contract/organization identifier (see the backend's
+ * `verification_service` module docstring for the privacy boundary this shape enforces). */
+export interface PublicVerificationResult {
+  status: VerificationStatus;
+  evidenceHash: string | null;
+  provider: string | null;
+  confirmedAt: string | null;
+  referenceUrl: string | null;
+}

@@ -24,9 +24,10 @@ needs a credential handoff from Constellation -- almost certainly through the ha
 sponsor channel, since Constellation is a listed Legal Hack 2026 sponsor. Until
 `Settings.constellation_ded_*` are all set, `anchoring_service.get_provider` returns
 `TransparencyLogAnchoringProvider` instead; this class is fully implemented and tested against
-a mocked transport so flipping `anchoring_provider` to `"constellation"` the moment credentials
-arrive is a config-only change, per every other provider-swap precedent in this codebase
-(the AI Gateway's OpenRouter interim choice, ADR-005).
+a mocked transport so flipping `anchoring_provider` to `"constellation_digital_evidence"` (this
+class's own `provider_name`) the moment credentials arrive is a config-only change, per every
+other provider-swap precedent in this codebase (the AI Gateway's OpenRouter interim choice,
+ADR-005).
 """
 
 import logging

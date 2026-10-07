@@ -136,3 +136,18 @@ class BlockchainAnchorResponse(BaseModel):
     proof: dict[str, Any] | None
     submitted_at: datetime
     confirmed_at: datetime | None
+
+
+class PublicVerificationResponse(BaseModel):
+    """FEATURE-8.3: the ENTIRE public surface of the verification page
+    (docs/06-blockchain/verification.md) -- deliberately just these five fields, never a
+    supplier/contract/organization identifier. See `verification_service`'s own module
+    docstring for the privacy boundary this shape enforces."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    status: str
+    evidence_hash: str | None
+    provider: str | None
+    confirmed_at: str | None
+    reference_url: str | None

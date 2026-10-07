@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import Link from "next/link";
+import { ExternalLink } from "lucide-react";
 
 import { DecisionLookupForm } from "@/components/evidence/DecisionLookupForm";
 
@@ -8,6 +10,10 @@ export const metadata: Metadata = { title: "Evidence & Audit — JuriSense Gate"
  * STORY-7.3.1: the Decision Passport's one entry point from the nav shell. A full
  * audit-trail browser (`NAV_ITEMS.evidence`'s longer-term description) is out of this
  * story's scope — only the Decision Passport lookup ships here.
+ *
+ * STORY-8.3.1: also links to `/verify`, the public, unauthenticated verification page --
+ * reachable without a session on its own, but surfaced here too so a signed-in user can grab
+ * its shareable link (e.g. to hand to an external auditor) without leaving the app.
  */
 export default function EvidencePage() {
   return (
@@ -22,6 +28,15 @@ export default function EvidencePage() {
       <div className="rounded-xl border border-border bg-surface p-6">
         <DecisionLookupForm />
       </div>
+      <Link
+        href="/verify"
+        target="_blank"
+        rel="noreferrer"
+        className="inline-flex items-center gap-1.5 text-sm font-medium text-foreground-muted hover:text-foreground"
+      >
+        <ExternalLink className="size-4" aria-hidden="true" />
+        Open the public verification page (no login required, shareable)
+      </Link>
     </div>
   );
 }

@@ -113,7 +113,9 @@ selected per `ADR-007`).
 BlockchainAnchor {
   id:                  <uuid>
   evidence_package_id: <EvidencePackage.id for D-2026-00842>
-  provider:            "constellation" | "evm_l2_testnet" | "icp"   (TBD, ADR-007 Phase-8 spike)
+  provider:            "constellation_digital_evidence" | "transparency_log"   (ADR-007: Accepted --
+                       the chosen adapter and the active fallback, respectively; see
+                       anchoring-providers.md §3 for why the EVM L2/ICP candidates weren't built)
   anchor_ref:          <provider-specific reference, illustrative: "0x9a3f...e21b">
   submitted_at:        2026-09-27T14:32:11Z
   proof:               <provider-specific proof payload, opaque outside AnchoringProvider>
