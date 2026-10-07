@@ -1,13 +1,13 @@
-import { faqs } from "@/lib/landing-data";
+import type { LandingContent } from "@/lib/landing-content";
 import SectionTitle from "./SectionTitle";
 
-export default function Faq() {
+export default function Faq({ content }: { content: LandingContent }) {
   return (
     <section id="faq" className="py-20 bg-slate-50">
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-        <SectionTitle title="Perguntas frequentes" subtitle="Tire suas dúvidas sobre o JuriSense" />
+        <SectionTitle title={content.faq.title} subtitle={content.faq.subtitle} />
         <div className="mt-12 space-y-3">
-          {faqs.map((faq) => (
+          {content.faq.items.map((faq) => (
             <details
               key={faq.question}
               className="group rounded-xl border border-gray-200 bg-white p-5 open:shadow-md transition-shadow"

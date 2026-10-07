@@ -13,9 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "JuriSense — Gestão Jurídica Inteligente",
+  title: "JuriSense Gate — Vendor & Contract Compliance, With Evidence",
   description:
-    "Plataforma completa para escritórios de advocacia: gestão de processos, IA jurídica, jurimetria, prazos e financeiro em um só lugar.",
+    "JuriSense Gate turns contracts, supplier data, and your company's own policy into auditable, explainable compliance decisions — with AI, an executable policy engine, and blockchain-anchored evidence.",
 };
 
 export default function RootLayout({
@@ -23,9 +23,15 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // The root layout renders the single <html> for the whole app, including the English-only
+  // authenticated app, so `lang` stays "en" here even on the translated marketing routes
+  // (/pt, /es) -- `LandingPage.tsx` overrides it with a nested `lang` on its wrapping <div>,
+  // which modern assistive tech honors for in-body content. Accepted tradeoff, not an
+  // oversight: avoids wrapping the entire app (including /login, /(app)/*) in a locale
+  // segment just for this.
   return (
     <html
-      lang="pt-BR"
+      lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">{children}</body>
