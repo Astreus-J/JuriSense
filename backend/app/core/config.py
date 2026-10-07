@@ -147,6 +147,39 @@ class Settings(BaseSettings):
     # `compliance.reevaluation_failed` is emitted once as the operator alert.
     decision_reevaluation_max_attempts: int = Field(default=3, ge=1)
 
+    # FEATURE-8.1/ADR-007 spike (2026-10-07): the AnchoringProvider's active implementation is
+    # an explicit, named choice -- never sniffed from whether credentials happen to be set --
+    # same "config-only swap" shape as ai_extraction_primary_model's provider choice.
+    # "transparency_log" needs no external credentials and is the honest default until a real
+    # Constellation Digital Evidence Depository (DED) API key is provisioned (not self-service --
+    # see docs/06-blockchain/anchoring-providers.md's spike findings); "constellation" activates
+    # the real adapter once constellation_ded_* below are all set.
+    anchoring_provider: str = "transparency_log"
+
+    # Constellation DED (docs/06-blockchain/anchoring-providers.md): org_id/tenant_id/api_key are
+    # issued directly by Constellation, not self-service -- see the spike findings. private_key is
+    # a 64-hex-char SECP256K1 signing key (never the JWT/storage secret), generated once and kept
+    # outside version control; None until provisioned.
+    # Security review (2026-10-07): signing (constellation_provider.py, via the official SDK)
+    # goes through the `ecdsa` pure-Python package, which has a documented history of
+    # timing-side-channel concerns for SECP256k1. Inert today (this setting is None), but
+    # whoever provisions this key (Plane #198) should re-check that package's crypto backend
+    # first.
+    constellation_ded_base_url: str = "https://de-api.constellationnetwork.io/v1"
+    constellation_ded_api_key: str | None = None
+    constellation_ded_org_id: str | None = None
+    constellation_ded_tenant_id: str | None = None
+    constellation_ded_private_key: str | None = None
+    constellation_ded_timeout_seconds: float = 15.0
+
+    # Transparency-log fallback (docs/09-planning/risks.md risk 4): a local git repository that
+    # a real deployment pushes to a public remote (not done by this backend itself -- see that
+    # module's own docstring) so the log is genuinely third-party-checkable, not just locally
+    # inspectable. signing_key_path is deliberately NOT inside repo_path: repo_path's contents are
+    # meant to be published; the private key must never be.
+    transparency_log_repo_path: str = "./data/transparency-log"
+    transparency_log_signing_key_path: str = "./data/transparency-log-signing-key"
+
     @model_validator(mode="after")
     def _normalize_database_url_field(self) -> "Settings":
         self.database_url = _normalize_database_url(self.database_url)

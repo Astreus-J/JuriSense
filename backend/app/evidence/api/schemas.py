@@ -118,3 +118,21 @@ class DecisionPassportResponse(BaseModel):
     evidence_package_id: uuid.UUID
     merkle_root: str
     evidence_count: int
+
+
+class BlockchainAnchorResponse(BaseModel):
+    """FEATURE-8.2. `provider == "transparency_log"` must be rendered as a labeled fallback
+    by every caller, never presented as a blockchain anchor (docs/09-planning/risks.md risk 4)
+    -- this response carries the raw value verbatim; the labeling is a display-layer concern."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    organization_id: uuid.UUID
+    evidence_package_id: uuid.UUID
+    provider: str
+    anchor_ref: str
+    status: str
+    proof: dict[str, Any] | None
+    submitted_at: datetime
+    confirmed_at: datetime | None

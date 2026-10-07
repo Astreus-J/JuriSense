@@ -36,9 +36,6 @@ PLANNED_NOT_YET_EMITTED: dict[str, str] = {
         "no disconnect or credential-revocation route exists; Integrations is a "
         "configuration seam until EPIC-9"
     ),
-    "evidence.anchored": (
-        "blockchain anchoring is EPIC-8; no AnchoringProvider is implemented yet"
-    ),
 }
 
 _CATALOG_HEADING = re.compile(r"^\*\*`([a-z_]+(?:\.[a-z_]+)+)`\*\*", re.MULTILINE)

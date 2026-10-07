@@ -549,12 +549,16 @@ the emission: that it shares its business transaction is covered only by the ato
   deterministically recomputable later — full mechanics in `docs/03-domain/evidence.md`.
 
 **`evidence.anchored`**
-- Status: not yet emitted (feature not built: blockchain anchoring is EPIC-8).
-- Producer: `BlockchainAnchor` aggregate, on confirmed on-chain submission via the configured
-  `AnchoringProvider` (`ADR-007`, `EVD-003`).
-- Meaning: the `EvidencePackage`'s Merkle root is now anchored on a public, tamper-evident ledger.
-- Payload: `blockchain_anchor_id`, `evidence_package_id`, `provider`, `anchor_ref`, `submitted_at`,
-  `confirmed_at`.
+- Producer: `BlockchainAnchor` aggregate (`app.evidence.application.anchoring_service.
+  check_anchor_status`/`submit_anchor`), the first time a submission's status settles to
+  `confirmed` via the configured `AnchoringProvider` (`ADR-007`, `EVD-003`). Never emitted for
+  a `failed` settlement (visible on the row's own `status`, not a separate audited event yet)
+  or on a poll that finds the anchor still `submitted`.
+- Meaning: the `EvidencePackage`'s Merkle root is now anchored on a public, tamper-evident
+  ledger -- or, while `provider` is `transparency_log`, on the labeled fallback
+  (`docs/09-planning/risks.md` risk 4; not a blockchain anchor).
+- Payload: `blockchain_anchor_id`, `evidence_package_id`, `provider`, `anchor_ref`,
+  `submitted_at`, `confirmed_at`.
 - Consumers: public verification page (`docs/06-blockchain/verification.md`); customer-facing
   Decision Passport UI.
 - Audit implications: the final, externally-checkable link in the chain — an auditor or counterparty

@@ -41,6 +41,11 @@ anchored under different provider decisions over time remain independently verif
 the default provider in a future release does not invalidate anchors already issued under a prior
 one.
 
+**Implementation** (FEATURE-8.1/8.2): `app.evidence.domain.anchoring.AnchoringProvider` (a
+`Protocol`, not an ABC), `AnchorProof`, `AnchorStatus` are this interface in code, unchanged from
+the pseudocode above. `app.evidence.application.anchoring_service.get_provider` is the one place
+that picks a concrete implementation from `Settings.anchoring_provider`.
+
 ## 2. Candidate providers
 
 Per `ADR-007`, research on 2026-09-27 established that the **BLI Legal Tech Hackathon 2 / Legal Hack
@@ -63,19 +68,40 @@ does not fit the `submit_hash` / `get_proof` / `verify` shape this interface nee
 
 ## 3. Final provider selection
 
-**Status: TBD**
-**Current preferred option:** Constellation Network first, a generic EVM-compatible L2 testnet
-(Base Sepolia or Polygon Amoy) as fallback, and ICP/Caffeine AI only if the spike shows unusually
-low integration effort — in that order, per `ADR-007`.
-**Why undecided:** the comparison above is based on positioning and public documentation, not
-hands-on integration experience; SDK maturity, actual integration effort within the remaining
-hackathon timeline, real transaction-cost behavior, and exact proof/verification ergonomics for each
-candidate can only be established by building and benchmarking at least one concrete adapter against
-each interface method above.
-**Resolution:** a technical spike in **Phase 8** of the roadmap (`docs/09-planning/roadmap.md`) will
-implement and benchmark at least one concrete `AnchoringProvider` adapter, evaluate the criteria in
-the table above with real code, and select the default provider for the hackathon demo. The
-`AnchoringProvider` interface itself, and everything above it in the stack (Evidence & Audit context,
-Decision Passport, verification page), does not change regardless of which candidate is selected.
-**Decision artifact:** `ADR-007` (status moves from Proposed to Accepted once the spike concludes;
-the spike's findings and final adapter choice will be recorded there and referenced from this file).
+**Status: Accepted** (spike concluded 2026-10-07, `ADR-007`, STORY-8.1.1).
+
+**Chosen: Constellation Network, via its Digital Evidence Depository (DED) product** —
+`https://de-api.constellationnetwork.io/v1`. This is not the generic Hypergraph/Metagraph path §2
+above describes in the abstract; the spike found a purpose-built product for exactly this use case
+("create, sign, and submit cryptographic fingerprints for document notarization"), with a
+first-party Python SDK (`constellation-digital-evidence-sdk`) and a REST API confirmed live by
+hand. `GET /fingerprints/{hash}` requires **no authentication** — confirmed by a direct request
+against the production endpoint, which returned the documented 404 JSON shape for an unknown hash.
+That single property is what makes the "public, JuriSense-independent" half of
+`docs/06-blockchain/verification.md`'s requirement concretely true for this adapter, not just
+asserted.
+
+**What the spike actually found, as a real integration-effort result (not positioning):** the SDK
+and wire format are low-effort — signing and submission were built and tested end to end against
+a mocked transport (`app/evidence/infrastructure/anchoring/constellation_provider.py`,
+`tests/evidence/test_anchoring_providers.py`). The blocker is **provisioning, not engineering**:
+submission (`POST /fingerprints`) needs an `X-API-Key` plus an `org_id`/`tenant_id` Constellation
+issues directly — no self-service signup exists. This is tracked as Plane #198 (request through
+the Legal Hack 2026 sponsor channel), not as further spike work.
+
+**Active default until #198 resolves: the transparency-log fallback**
+(`docs/09-planning/risks.md` risk 4) — `app.evidence.infrastructure.anchoring.
+transparency_log_provider.TransparencyLogAnchoringProvider`. Fully implemented and tested (real
+local `git` operations, Ed25519-signed entries), and the one the project ships with today
+(`Settings.anchoring_provider` defaults to `"transparency_log"`). Every caller renders this as a
+labeled fallback, never as a blockchain anchor — see that module's own docstring for exactly what
+"public" still requires (pushing its repo to a public remote, a deliberately separate,
+outward-facing step this backend does not perform on its own).
+
+**The EVM L2 and ICP/Caffeine AI candidates were not built.** The spike's own order (Constellation
+first) did not need to fall back to them — Constellation's integration effort was low, and its
+blocker is a credential handoff the EVM/ICP paths would not avoid either (a funded testnet wallet
+and a canister's cycles funding are the same category of "needs something only a human can
+provision" blocker). Both remain documented, interface-compatible options (§2,
+`docs/06-blockchain/smart-contracts.md`) if Constellation's credentials do not materialize in time.
+**Decision artifact:** `ADR-007` (Accepted; full spike findings recorded there).

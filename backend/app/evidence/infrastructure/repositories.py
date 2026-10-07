@@ -3,7 +3,12 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.evidence.infrastructure.models import AuditEvent, Evidence, EvidencePackage
+from app.evidence.infrastructure.models import (
+    AuditEvent,
+    BlockchainAnchor,
+    Evidence,
+    EvidencePackage,
+)
 
 
 class AuditEventRepository:
@@ -102,3 +107,41 @@ class EvidenceRepository:
             .order_by(Evidence.type, Evidence.ref_id)
         )
         return list(result.scalars())
+
+
+class BlockchainAnchorRepository:
+    """Tenant-scoped repository for BlockchainAnchor (FEATURE-8.2). Exposes `add` and
+    organization-scoped reads only -- unlike `Evidence`/`EvidencePackage`, an anchor's
+    `status`/`proof`/`confirmed_at` legitimately change in place as the underlying network
+    settles (`anchoring_service._refresh_from_provider` does this directly on the ORM
+    object it already holds, via the session's own change tracking, rather than through a
+    dedicated update method here), so this repository is not append-only in spirit even
+    though it has no update method of its own."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    def add(self, anchor: BlockchainAnchor) -> None:
+        self._session.add(anchor)
+
+    async def get_by_id_and_organization(
+        self, anchor_id: uuid.UUID, organization_id: uuid.UUID
+    ) -> BlockchainAnchor | None:
+        result = await self._session.execute(
+            select(BlockchainAnchor).where(
+                BlockchainAnchor.id == anchor_id,
+                BlockchainAnchor.organization_id == organization_id,
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def get_by_package_and_organization(
+        self, evidence_package_id: uuid.UUID, organization_id: uuid.UUID
+    ) -> BlockchainAnchor | None:
+        result = await self._session.execute(
+            select(BlockchainAnchor).where(
+                BlockchainAnchor.evidence_package_id == evidence_package_id,
+                BlockchainAnchor.organization_id == organization_id,
+            )
+        )
+        return result.scalar_one_or_none()

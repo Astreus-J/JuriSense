@@ -78,3 +78,42 @@ class Evidence(Base):
     payload: Mapped[dict[str, Any]] = mapped_column(JSON)
     content_hash: Mapped[str] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class BlockchainAnchor(Base):
+    """The on-chain (or transparency-log) reference proving an `EvidencePackage`'s
+    `merkle_root` was anchored at a point in time (docs/03-domain/domain-model.md
+    "BlockchainAnchor"; `ADR-007`; EVD-003/EVD-004; BR-EVD-002).
+
+    One anchor per package (`uq_blockchain_anchors_one_per_package`) -- a package is either
+    not yet submitted, or has exactly one anchor; a failed submission is still the one anchor
+    for that package (`status="failed"`), never retried by inserting a second row, so a
+    retry's own service-layer logic (not built in this pass -- see FEATURE-8.2's own
+    docstring for the manual-only scope call) would need to update this row in place rather
+    than create a new one.
+
+    `provider` is `AnchoringProvider.provider_name` (`app.evidence.domain.anchoring`) --
+    `"transparency_log"` must always be rendered as a labeled fallback, never presented as a
+    blockchain anchor (docs/09-planning/risks.md risk 4's non-negotiable labeling
+    requirement). `proof` is `None` until a `get_proof` call populates it; its shape is
+    provider-opaque (`AnchorProof.raw`), never inspected by SQL.
+    """
+
+    __tablename__ = "blockchain_anchors"
+    __table_args__ = (
+        UniqueConstraint("evidence_package_id", name="uq_blockchain_anchors_one_per_package"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id"), index=True)
+    evidence_package_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("evidence_packages.id"), index=True
+    )
+    provider: Mapped[str] = mapped_column(String(40))
+    anchor_ref: Mapped[str] = mapped_column(String(255))
+    status: Mapped[str] = mapped_column(String(20))
+    proof: Mapped[dict[str, Any] | None] = mapped_column(JSON, default=None)
+    submitted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)

@@ -6,3 +6,9 @@ __pycache__/
 .env
 .env.*
 !.env.example
+
+# FEATURE-8.1/8.2: the transparency-log fallback AnchoringProvider's local git repo and
+# signing key (app/evidence/infrastructure/anchoring/transparency_log_provider.py) --
+# dev-local state, never committed to THIS repo. A real deployment pushes repo_path's
+# contents to its own, separate public remote instead.
+/data/

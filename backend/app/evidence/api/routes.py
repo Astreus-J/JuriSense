@@ -1,3 +1,4 @@
+import logging
 import uuid
 from typing import Annotated
 
@@ -5,21 +6,41 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.core.db import SessionDep
 from app.evidence.api.schemas import (
+    BlockchainAnchorResponse,
     DecisionPassportResponse,
     EvidencePackageResponse,
     RecomputeResponse,
 )
-from app.evidence.application import decision_passport_service, evidence_package_service
+from app.evidence.application import (
+    anchoring_service,
+    decision_passport_service,
+    evidence_package_service,
+)
 from app.evidence.application.evidence_package_service import PackageView
-from app.evidence.domain.errors import EvidenceError, EvidencePackageNotFoundError
+from app.evidence.domain.errors import (
+    AnchorAlreadySubmittedError,
+    AnchoringProviderError,
+    BlockchainAnchorNotFoundError,
+    EvidenceError,
+    EvidencePackageNotFoundError,
+)
 from app.identity.api.deps import require_permission
 from app.identity.domain.constants import Module
 from app.identity.infrastructure.models import User
 
+logger = logging.getLogger("jurisense.evidence.api")
+
 router = APIRouter(prefix="/evidence-packages", tags=["evidence"])
 decision_passport_router = APIRouter(prefix="/decisions", tags=["evidence"])
+blockchain_anchor_router = APIRouter(prefix="/blockchain-anchors", tags=["evidence"])
 
 CanReadEvidence = Annotated[User, Depends(require_permission(Module.EVIDENCE, "read"))]
+# FEATURE-8.2 (2026-10-07): submitting for anchoring is gated on the "update" permission --
+# under today's DEFAULT_ROLE_GRID (backend/app/identity/domain/rbac.py) that is ADMIN-only,
+# since every other role's Evidence grant is read-only. Deliberately the narrowest default
+# for a new, externally-facing, costs-a-real-request action; widening it to
+# COMPLIANCE/LEGAL is a product call for the user, not made here.
+CanUpdateEvidence = Annotated[User, Depends(require_permission(Module.EVIDENCE, "update"))]
 
 
 def _to_response(view: PackageView) -> EvidencePackageResponse:
@@ -118,3 +139,70 @@ async def get_decision_passport(
     except EvidenceError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.message) from exc
     return DecisionPassportResponse.model_validate(passport)
+
+
+@router.post("/{package_id}/anchor", response_model=BlockchainAnchorResponse, status_code=201)
+async def submit_anchor(
+    package_id: uuid.UUID, user: CanUpdateEvidence, session: SessionDep
+) -> BlockchainAnchorResponse:
+    """FEATURE-8.1/8.2 (ADR-007): submits this package's `merkle_root` for anchoring via the
+    configured `AnchoringProvider`. One anchor per package -- a second call for an
+    already-submitted package is a 409, not a silent duplicate."""
+    try:
+        result = await anchoring_service.submit_anchor(
+            session,
+            organization_id=user.organization_id,
+            evidence_package_id=package_id,
+            actor_id=user.id,
+        )
+    except EvidencePackageNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.message) from exc
+    except AnchorAlreadySubmittedError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.message) from exc
+    except AnchoringProviderError as exc:
+        # Security review (2026-10-07): exc.message can carry a third party's raw response
+        # body or local git stderr -- logged for an operator to read, never echoed to the
+        # caller (who, by definition, already holds this package's update permission, so
+        # this is not a cross-tenant concern, just unnecessary detail in an HTTP response).
+        logger.warning("Anchor submission failed for package %s: %s", package_id, exc.message)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="The anchoring provider could not be reached. Try again shortly.",
+        ) from exc
+    return BlockchainAnchorResponse.model_validate(result.anchor)
+
+
+@router.get("/{package_id}/anchor", response_model=BlockchainAnchorResponse | None)
+async def get_package_anchor(
+    package_id: uuid.UUID, user: CanReadEvidence, session: SessionDep
+) -> BlockchainAnchorResponse | None:
+    """`null` (not a 404) when the package exists but has not been submitted for anchoring
+    yet -- a legitimate, common state distinct from the package itself not existing."""
+    try:
+        await evidence_package_service.get_package(
+            session, organization_id=user.organization_id, package_id=package_id
+        )
+    except EvidencePackageNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.message) from exc
+    anchor = await anchoring_service.get_anchor_for_package(
+        session, organization_id=user.organization_id, evidence_package_id=package_id
+    )
+    return BlockchainAnchorResponse.model_validate(anchor) if anchor else None
+
+
+@blockchain_anchor_router.post("/{anchor_id}/recheck", response_model=BlockchainAnchorResponse)
+async def recheck_anchor(
+    anchor_id: uuid.UUID, user: CanReadEvidence, session: SessionDep
+) -> BlockchainAnchorResponse:
+    """Re-polls the provider for a `submitted` anchor's current state. Read-only from the
+    caller's point of view (no new submission), so it requires only the read permission --
+    mirrors `recompute_package`'s identical rationale."""
+    try:
+        result = await anchoring_service.check_anchor_status(
+            session, organization_id=user.organization_id, anchor_id=anchor_id
+        )
+    except BlockchainAnchorNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.message) from exc
+    except AnchoringProviderError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=exc.message) from exc
+    return BlockchainAnchorResponse.model_validate(result.anchor)

@@ -1,22 +1,25 @@
 # On-Chain Anchoring Primitives
 
 > Related: `docs/06-blockchain/anchoring-providers.md` (the `AnchoringProvider` interface and
-> candidate comparison), `ADR-007` (provider selection still TBD, Phase-8 spike),
-> `docs/06-blockchain/evidence-model.md` (what value gets anchored — always a Merkle root, never
-> content).
+> candidate comparison), `ADR-007` (Accepted: Constellation DED chosen, transparency-log fallback
+> active pending Plane #198), `docs/06-blockchain/evidence-model.md` (what value gets anchored —
+> always a Merkle root, never content).
 
 The `AnchoringProvider` interface (`docs/06-blockchain/anchoring-providers.md`) is intentionally
-provider-agnostic. This document describes what sits *behind* that interface for each of the three
-candidates under evaluation in `ADR-007`, so that whichever one the Phase-8 spike selects, the
-underlying primitive is already understood and documented. In every case the requirement is the
-same, deliberately minimal one: **prove that a specific 32-byte hash existed at a specific point in
-time, and let anyone check that without JuriSense's involvement.** Nothing about token balances,
-ownership transfer, or complex on-chain state is needed, and none is built.
+provider-agnostic. This document describes what sits *behind* that interface for each candidate the
+Phase-8 spike considered — Path B (Constellation) and Path B′ (the transparency-log fallback) are
+both built and tested; Paths A and C remain documented, interface-compatible options that were not
+needed. In every case the requirement is the same, deliberately minimal one: **prove that a
+specific 32-byte hash existed at a specific point in time, and let anyone check that without
+JuriSense's involvement.** Nothing about token balances, ownership transfer, or complex on-chain
+state is needed, and none is built.
 
 ## Path A — Generic EVM-compatible L2 testnet (Base Sepolia or Polygon Amoy)
 
-This is the best-understood path (`docs/06-blockchain/anchoring-providers.md`) and the one with the
-most concrete design already sketched. The entire on-chain footprint is a single, small contract.
+Not built: the spike reached Constellation first and found it low-effort, so this fallback was not
+needed (`ADR-007`). Documented here, at the same level of concreteness as the chosen path, so it
+remains a real option if Constellation's credentials (Plane #198) don't materialize. The entire
+on-chain footprint would be a single, small contract.
 
 ### Contract sketch
 
@@ -89,29 +92,58 @@ contract HashAnchor {
   anchor, which is why testnet deployment (free, faucet-funded) is sufficient for the hackathon
   demo, and why a future production deployment's per-anchor cost is easy to estimate.
 
-## Path B — Constellation Network
+## Path B — Constellation Network (chosen, `ADR-007`)
 
-Constellation does not use a general-purpose smart-contract virtual machine in the same sense as an
-EVM chain; its anchoring primitive comes from its own Hypergraph / Metagraph architecture and its L0
-consensus layer, which is built specifically around ordering and finalizing data submissions (a
-closer conceptual match to "anchor a hash" than to "run arbitrary contract logic"). The equivalent of
-the `HashAnchor` contract above is:
+The Phase-8 spike (2026-10-07) found that Constellation does not need the generic Hypergraph/
+Metagraph integration this section originally anticipated: **Digital Evidence Depository (DED)**,
+a purpose-built notarization product, already exposes exactly the primitive this interface needs,
+over plain REST.
 
-- **Submission**: a JuriSense evidence hash is submitted as a data update to a Constellation
-  Metagraph (or directly to L0, depending on what the Phase-8 spike finds to be the appropriate
-  integration point). Constellation's consensus process orders and finalizes this submission the
-  way a block finalizes a transaction on an EVM chain.
-- **Proof**: instead of a transaction receipt, the "proof" is Constellation's own snapshot-based
-  inclusion proof — evidence that the submitted hash was included in a specific, consensus-finalized
-  snapshot at a specific time. This is what `get_proof(anchor_ref)` would return for this adapter.
-- **Verification**: a third party checks the inclusion proof against Constellation's public
-  explorer/API, independent of JuriSense, in the same spirit as reading an EVM event log from a
-  block explorer — the mechanism differs, but the trust property (public, JuriSense-independent,
-  consensus-backed existence-at-time-T) is the same.
+- **Submission**: `app.evidence.infrastructure.anchoring.constellation_provider.
+  ConstellationAnchoringProvider.submit_hash` signs the evidence hash (as `document_ref`, never
+  re-hashed) with the first-party `constellation-digital-evidence-sdk`
+  (SECP256K1 signature, RFC 8785 canonical JSON — the SDK's own `SECP256K1_RFC8785_V1` algorithm
+  tag) and `POST`s it to `https://de-api.constellationnetwork.io/v1/fingerprints` with an
+  `X-API-Key` header. The response's `hash` field is the `anchor_ref`.
+- **Proof**: `get_proof(anchor_ref)` calls `GET /fingerprints/{anchor_ref}` — confirmed live,
+  **no authentication required**. The response's `status` field
+  (`UNASSIGNED|ASSIGNED|FINALIZED_COMMITMENT|ERRORED_COMMITMENT` — the installed SDK's own
+  `FingerprintStatus` type, the authoritative vocabulary) maps onto
+  `AnchorStatus`: `FINALIZED_COMMITMENT` → `confirmed`, `ERRORED_COMMITMENT` → `failed`, anything
+  else → still `submitted`.
+- **Verification**: any third party can call the same public `GET /fingerprints/{hash}` endpoint
+  directly — no JuriSense backend involvement, exactly `docs/06-blockchain/verification.md`'s
+  requirement. `verify(evidence_hash, proof)` is `proof.status == confirmed and proof's
+  documentRef == evidence_hash` — **not** the response's `hash` field, which is a distinct,
+  server-computed identifier for the whole signed envelope (confirmed from the SDK's own
+  `FingerprintDetail` type, which carries both as separate fields).
 
-The exact submission API, proof format, and SDK ergonomics for this path are not yet implemented;
-per `ADR-007` and `docs/06-blockchain/anchoring-providers.md`, this is exactly what the Phase-8 spike
-will establish before this path can be documented at the same level of concreteness as Path A.
+**Not yet true end to end**: submission requires Constellation-issued credentials (`org_id`/
+`tenant_id`/`X-API-Key`) with no self-service signup — tracked as Plane #198, a credential handoff,
+not further engineering. Until resolved, Path B′ below is this project's active default.
+
+## Path B′ — Transparency-log fallback (active default, `docs/09-planning/risks.md` risk 4)
+
+Not a blockchain path at all — the documented last-resort if a real chain integration misses the
+deadline, and the one the project ships with today while Plane #198 is open.
+`app.evidence.infrastructure.anchoring.transparency_log_provider.TransparencyLogAnchoringProvider`:
+
+- **Submission**: signs `{evidence_hash, timestamp}` with an Ed25519 key JuriSense holds (generated
+  once, persisted outside the published repo), appends one JSON line to `entries.jsonl` in a local
+  git repository, and commits. The `anchor_ref` is the commit SHA.
+- **Proof**: reads the entry back from that commit (`git show {sha}:entries.jsonl`) plus the
+  commit's own timestamp (`git show -s --format=%aI {sha}`).
+- **Verification**: re-checks the Ed25519 signature over `{evidence_hash, timestamp}` against the
+  published public key (committed into the repo as `PUBLIC_KEY.txt` the first time it's created) —
+  no network call at all for this adapter.
+
+This gives the tamper-evidence property a git history provides (rewriting a past commit changes
+every descendant's hash) and a verifiable signature, but **not** third-party, consensus-backed
+finality — the repository must still be pushed to a public remote for "anyone can check this
+independently" to be concretely true, which this backend deliberately does not do on its own (an
+outward-facing action, not a per-request side effect). `provider == "transparency_log"` on every
+`BlockchainAnchor` is the non-negotiable signal every caller (Decision Passport, public
+verification page) must render as a labeled fallback, never as a blockchain anchor.
 
 ## Path C — ICP / Caffeine AI
 
@@ -131,14 +163,14 @@ its own state, running on an IC subnet — that plays the same role as the `Hash
   call` or the IC's HTTP gateway) and, for the strongest guarantee, validates the certificate against
   the IC's public root key — again, no JuriSense backend involvement required.
 
-As with Path B, the concrete canister code, certification approach, and integration effort are not
-yet built; `ADR-007` explicitly scopes ICP/Caffeine AI as the third-preference candidate, evaluated
-only if the Phase-8 spike shows unusually low integration effort relative to Paths A and B.
+Not built: `ADR-007`'s spike reached Constellation first, found it low-effort, and did not need to
+evaluate ICP/Caffeine AI as its own "unusually low integration effort" escape hatch required. This
+path remains documented and interface-compatible if that changes.
 
-## Common ground across all three paths
+## Common ground across every path
 
-Regardless of which path the Phase-8 spike selects as the default (`docs/06-blockchain/anchoring-providers.md`
-§3, still `TBD`):
+Regardless of which `AnchoringProvider` is active (`docs/06-blockchain/anchoring-providers.md` §3,
+Accepted):
 
 - Only a 32-byte hash (the `EvidencePackage.merkle_root`) is ever submitted — never contract text,
   personal data, or any other confidential content (`BR-EVD-002`,

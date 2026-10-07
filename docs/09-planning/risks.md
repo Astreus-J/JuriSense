@@ -75,10 +75,18 @@ context, not a separate list.
 
 ## 4. Blockchain integration risk
 
-- **Description**: `ADR-007` is "Proposed — pending technical spike (Phase 8)." All three candidate
-  `AnchoringProvider` adapters — Constellation Network, a generic EVM L2 testnet, ICP/Caffeine AI —
-  are unvalidated against this codebase today, and Phase 8 is the last phase before the Hackathon
-  Cut line, meaning there is minimal schedule slack left to absorb a spike that goes badly.
+- **Update (2026-10-07)**: played out exactly as anticipated below, and the mitigation already
+  written here is the reason it did not become a schedule problem. `ADR-007`'s spike built and
+  tested a real Constellation DED adapter (low engineering effort, confirmed) but hit a real
+  provisioning blocker (credentials are not self-service, tracked as Plane #198) — not an SDK or
+  integration-effort failure. The fallback below is accordingly the project's **active default
+  today**, not a hypothetical. See `ADR-007` and `docs/06-blockchain/anchoring-providers.md` §3 for
+  the full findings.
+- **Original description**: `ADR-007` is "Proposed — pending technical spike (Phase 8)." All three
+  candidate `AnchoringProvider` adapters — Constellation Network, a generic EVM L2 testnet,
+  ICP/Caffeine AI — are unvalidated against this codebase today, and Phase 8 is the last phase
+  before the Hackathon Cut line, meaning there is minimal schedule slack left to absorb a spike
+  that goes badly.
 - **Likelihood**: medium-high, precisely because this risk was already anticipated when `ADR-007`
   was written (the ADR itself frames Constellation as "current preferred," not "confirmed working").
 - **Impact**: critical for the blockchain-track narrative specifically, but **not** critical for the
