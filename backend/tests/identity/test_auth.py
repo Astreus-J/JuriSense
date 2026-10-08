@@ -2,7 +2,7 @@ import httpx
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from app.identity.infrastructure.models import AccessLog
+from app.identity.infrastructure.models import AccessLog, Organization
 
 REGISTRATION = {
     "organization_name": "Example Corp",
@@ -61,6 +61,31 @@ async def test_register_weak_password(client: httpx.AsyncClient) -> None:
 
     assert response.status_code == 422
     assert "security policy" in response.json()["detail"]
+
+
+async def test_register_enterprise_plan_persists_unlimited_limits(
+    client: httpx.AsyncClient, db_session_factory: async_sessionmaker
+) -> None:
+    """Regression test (bug found 2026-10-08): `Organization`'s four plan-limit columns
+    previously had a Python-side `mapped_column(default=...)`, which SQLAlchemy silently
+    substitutes for an explicitly-set `None` at flush time -- so every Enterprise
+    organization got Starter's numeric limits instead of the unlimited (`None`) sentinel
+    `PLAN_LIMITS[Plan.ENTERPRISE]` actually specifies. Asserts directly against the
+    persisted row, not just the API response, since `/auth/me` doesn't surface these fields."""
+    await _register(client, email="enterprise@example.com", plan="enterprise")
+
+    async with db_session_factory() as session:
+        organization = (
+            await session.execute(
+                select(Organization).where(Organization.name == "Example Corp")
+            )
+        ).scalar_one()
+
+    assert organization.plan == "enterprise"
+    assert organization.user_limit is None
+    assert organization.supplier_limit is None
+    assert organization.storage_limit_gb is None
+    assert organization.ai_execution_limit is None
 
 
 # ---- Login ----

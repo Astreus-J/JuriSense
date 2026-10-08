@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, Request, status
 
+from app.core.config import get_settings
 from app.core.db import SessionDep
 from app.core.redis import RedisDep
 from app.identity.api.deps import AccessPayload, CurrentUser, EmailDep
@@ -15,6 +16,7 @@ from app.identity.api.schemas import (
     UserResponse,
 )
 from app.identity.application import auth_service, password_service
+from app.identity.domain.constants import Plan
 from app.identity.domain.errors import (
     AccountLockedError,
     EmailAlreadyRegisteredError,
@@ -35,7 +37,21 @@ _REGISTRATION_RECEIVED = "Registration received; check your email for next steps
 async def register(
     body: RegisterRequest, session: SessionDep, email_sender: EmailDep
 ) -> MessageResponse:
-    """Identical response whether or not the email exists (MED-002: avoids enumeration)."""
+    """Identical response whether or not the email exists (MED-002: avoids enumeration).
+
+    SEC (2026-10-08): `plan` is otherwise attacker-controlled on this public, unauthenticated
+    endpoint, with no payment/entitlement gate anywhere in the codebase (`ADR-014` defers the
+    real payment gateway) -- self-service registration could request `plan=enterprise` and
+    get genuinely unlimited `user_limit`/`supplier_limit`/`storage_limit_gb`/
+    `ai_execution_limit` (`None`, per `PLAN_LIMITS`) for free. `go-to-market.md`'s business
+    model is explicitly founder-led sales, never self-serve, for any paid tier -- so
+    self-registration in production must only ever produce a Starter organization; a
+    sales-closed upgrade happens out-of-band (an operator calling `register_organization`
+    directly, as today, until a proper internal tool exists). Dev/test keep `plan` flexible
+    since fixtures across the suite legitimately need non-Starter orgs to test plan-limit
+    enforcement.
+    """
+    plan = body.plan if get_settings().environment != "production" else Plan.STARTER
     try:
         await auth_service.register_organization(
             session,
@@ -44,7 +60,7 @@ async def register(
             email=body.email,
             password=body.password,
             phone=body.phone,
-            plan=body.plan,
+            plan=plan,
         )
     except WeakPasswordError as exc:
         raise HTTPException(

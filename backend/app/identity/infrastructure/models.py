@@ -32,11 +32,18 @@ class Organization(Base):
 
     # Commercial plan and its limits, derived at creation time (None = unlimited).
     # See PlanLimits/PLAN_LIMITS (domain/constants.py) for the dimension definitions.
+    # Deliberately NO Python-side `default=` on the four limit columns below: SQLAlchemy
+    # substitutes a configured scalar default whenever the attribute's value is `None` at
+    # flush time, even when `None` was set explicitly -- which silently overwrote every
+    # Enterprise organization's "unlimited" (`None`) limits with Starter's numbers (bug
+    # found 2026-10-08, registering a real Enterprise org). `register_organization` is the
+    # only place that ever constructs an `Organization`, and it always supplies all four
+    # fields explicitly from `PLAN_LIMITS[plan]`, so no caller relies on a default here.
     plan: Mapped[str] = mapped_column(String(20), default=Plan.STARTER.value)
-    user_limit: Mapped[int | None] = mapped_column(default=1)
-    supplier_limit: Mapped[int | None] = mapped_column(default=250)
-    storage_limit_gb: Mapped[int | None] = mapped_column(default=15)
-    ai_execution_limit: Mapped[int | None] = mapped_column(default=50)
+    user_limit: Mapped[int | None] = mapped_column()
+    supplier_limit: Mapped[int | None] = mapped_column()
+    storage_limit_gb: Mapped[int | None] = mapped_column()
+    ai_execution_limit: Mapped[int | None] = mapped_column()
 
     is_active: Mapped[bool] = mapped_column(default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
