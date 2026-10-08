@@ -76,6 +76,33 @@ async def test_get_my_organization_enterprise_plan_reports_unlimited_as_null(
     assert body["ai_execution_limit"] is None
 
 
+async def test_security_role_can_read_organization_settings_per_rbac_grid(
+    client: httpx.AsyncClient,
+) -> None:
+    """DEFAULT_ROLE_GRID (`rbac.py`) grants `security` read access to
+    `organization_settings`, unlike every other non-admin role -- this endpoint must
+    follow that real grid, not a hardcoded admin-only check."""
+    admin_headers = await _admin_headers(client, "security-org-admin@example.com")
+    await client.post(
+        "/api/users",
+        json={
+            "full_name": "Security User",
+            "email": "security-reader@example.com",
+            "password": "StrongPass2",
+            "role": "security",
+        },
+        headers=admin_headers,
+    )
+    login = await client.post(
+        "/api/auth/login",
+        json={"email": "security-reader@example.com", "password": "StrongPass2"},
+    )
+    security_headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+
+    response = await client.get("/api/organizations/me", headers=security_headers)
+    assert response.status_code == 200, response.text
+
+
 async def test_non_admin_cannot_read_organization_settings(client: httpx.AsyncClient) -> None:
     admin_headers = await _admin_headers(client, "viewer-admin@example.com")
     await client.post(
