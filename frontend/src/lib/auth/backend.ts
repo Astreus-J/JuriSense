@@ -35,10 +35,40 @@ export class ApiError extends Error {
   }
 }
 
+interface FastApiValidationError {
+  loc: unknown[];
+  msg: string;
+  type: string;
+}
+
+function isFastApiValidationError(value: unknown): value is FastApiValidationError {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as { msg?: unknown }).msg === "string"
+  );
+}
+
+/**
+ * QA review (2026-10-08): this used to only unwrap `detail` when it was already a plain
+ * string, falling back to a generic message for FastAPI's own 422 shape --
+ * `detail: {loc, msg, type}[]`, returned whenever a Pydantic field validator (not an
+ * application-level error like `EmptyJustificationError`) rejects the request body (e.g.
+ * `CreatePolicyRequest.name`'s `max_length`, `RejectRequestBody.justification`'s
+ * `min_length=1`). That blind spot is exactly why `app/api/approvals/requests/[id]/reject/
+ * route.ts` had to normalize an empty justification to `" "` -- to dodge Pydantic's
+ * `min_length` check and hit the application-level `EmptyJustificationError` instead,
+ * which does return a plain string. Unwrapping the array shape here fixes that blind spot
+ * for every caller at once, not just that one route.
+ */
 async function parseErrorDetail(response: Response): Promise<string> {
   try {
     const body = (await response.json()) as { detail?: unknown };
     if (typeof body.detail === "string") return body.detail;
+    if (Array.isArray(body.detail) && body.detail.length > 0) {
+      const messages = body.detail.filter(isFastApiValidationError).map((error) => error.msg);
+      if (messages.length > 0) return messages.join(" ");
+    }
   } catch {
     // Non-JSON error body — fall through to a generic message.
   }

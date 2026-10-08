@@ -72,16 +72,12 @@ export const NAV_ITEMS: Record<ModuleKey, NavItem> = {
     label: "Policies",
     href: "/policies",
     icon: Gavel,
-    comingSoonDescription:
-      "Author and version the rules that turn your company's policy into an executable decision.",
   },
   approvals: {
     key: "approvals",
     label: "Approvals",
     href: "/approvals",
     icon: ShieldCheck,
-    comingSoonDescription:
-      "Resolve the approval requests routed to your role, with the evidence behind each one.",
   },
   evidence: {
     key: "evidence",
@@ -104,8 +100,6 @@ export const NAV_ITEMS: Record<ModuleKey, NavItem> = {
     label: "Settings",
     href: "/settings/organization",
     icon: Settings,
-    comingSoonDescription:
-      "Manage your team, roles, plan usage, and organization details.",
   },
 };
 
