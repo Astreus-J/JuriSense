@@ -22,7 +22,21 @@ export async function generateMetadata({ params }: LocalizedLandingPageProps): P
   const { locale } = await params;
   if (!isLocale(locale) || locale === "en") return {};
   const { meta } = getLandingContent(locale);
-  return { title: meta.title, description: meta.description };
+  const ogLocale = locale === "pt" ? "pt_BR" : "es_ES";
+  return {
+    title: meta.title,
+    description: meta.description,
+    alternates: {
+      canonical: `/${locale}`,
+      languages: { en: "/", pt: "/pt", es: "/es" },
+    },
+    openGraph: {
+      title: meta.title,
+      description: meta.description,
+      locale: ogLocale,
+      type: "website",
+    },
+  };
 }
 
 export default async function LocalizedLandingPage({ params }: LocalizedLandingPageProps) {

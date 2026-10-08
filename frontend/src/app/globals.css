@@ -117,3 +117,11 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Smooth in-page anchor scrolling (landing nav -> #features/#pricing/#faq) for users who
+   haven't asked for reduced motion; everyone else keeps the instant jump. */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}

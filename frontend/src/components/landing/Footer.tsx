@@ -6,27 +6,23 @@ export default function Footer({ content }: { content: LandingContent }) {
   const { footer } = content;
 
   return (
-    <footer className="w-full bg-slate-900 text-slate-400 py-12 px-6 border-t border-slate-800">
-      <div className="max-w-7xl mx-auto">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-12">
+    <footer className="border-t border-slate-800 bg-slate-950 py-12 text-slate-400">
+      <div className="mx-auto max-w-7xl px-6">
+        <div className="grid grid-cols-1 gap-10 md:grid-cols-3">
           <div className="space-y-5">
-            <div className="flex items-center gap-2 text-white text-2xl font-bold">
-              <Image
-                src="/img/logo.jpg"
-                alt="JuriSense logo"
-                width={48}
-                height={48}
-                className="rounded-xl"
-              />
-              <span>JuriSense</span>
+            <div className="flex items-center gap-2 text-lg font-bold text-white">
+              <Image src="/img/logo.png" alt="" width={32} height={32} className="rounded-lg" />
+              <span>
+                JuriSense <span className="font-medium text-slate-400">Gate</span>
+              </span>
             </div>
-            <p>{footer.tagline}</p>
+            <p className="text-sm leading-relaxed">{footer.tagline}</p>
             <div className="flex gap-3">
               <a
                 href={contact.social.linkedin}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="px-3 py-2 bg-slate-800 rounded-xl text-white hover:bg-slate-700 text-sm"
+                className="rounded-lg bg-slate-800 px-3 py-2 text-sm text-white hover:bg-slate-700"
               >
                 LinkedIn
               </a>
@@ -34,7 +30,7 @@ export default function Footer({ content }: { content: LandingContent }) {
                 href={contact.social.instagram}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="px-3 py-2 bg-slate-800 rounded-xl text-white hover:bg-slate-700 text-sm"
+                className="rounded-lg bg-slate-800 px-3 py-2 text-sm text-white hover:bg-slate-700"
               >
                 Instagram
               </a>
@@ -42,7 +38,7 @@ export default function Footer({ content }: { content: LandingContent }) {
                 href={contact.social.twitter}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="px-3 py-2 bg-slate-800 rounded-xl text-white hover:bg-slate-700 text-sm"
+                className="rounded-lg bg-slate-800 px-3 py-2 text-sm text-white hover:bg-slate-700"
               >
                 X
               </a>
@@ -50,69 +46,49 @@ export default function Footer({ content }: { content: LandingContent }) {
           </div>
 
           <div>
-            <h3 className="text-white font-semibold mb-5 text-lg">{footer.productLabel}</h3>
-            <ul className="space-y-3">
+            <h3 className="mb-5 text-sm font-semibold text-white">{footer.productLabel}</h3>
+            <ul className="space-y-3 text-sm">
               <li>
-                <a href="#features" className="hover:text-white transition-colors">
+                <a href="#features" className="transition-colors hover:text-white">
                   {content.nav.features}
                 </a>
               </li>
               <li>
-                <a href="#pricing" className="hover:text-white transition-colors">
+                <a href="#how-it-works" className="transition-colors hover:text-white">
+                  {content.nav.howItWorks}
+                </a>
+              </li>
+              <li>
+                <a href="#pricing" className="transition-colors hover:text-white">
                   {content.nav.pricing}
                 </a>
               </li>
               <li>
-                <a href="#how-it-works" className="hover:text-white transition-colors">
-                  {content.nav.howItWorks}
-                </a>
-              </li>
-            </ul>
-          </div>
-
-          <div>
-            <h3 className="text-white font-semibold mb-5 text-lg">{footer.resourcesLabel}</h3>
-            <ul className="space-y-3">
-              <li>
-                <a href="#faq" className="hover:text-white transition-colors">
+                <a href="#faq" className="transition-colors hover:text-white">
                   {footer.faqHelp}
                 </a>
               </li>
-              <li>
-                <a href="#" className="hover:text-white transition-colors">
-                  {footer.privacy}
-                </a>
-              </li>
-              <li>
-                <a href="#" className="hover:text-white transition-colors">
-                  {footer.terms}
-                </a>
-              </li>
             </ul>
           </div>
 
           <div>
-            <h3 className="text-white font-semibold mb-5 text-lg">{footer.contactLabel}</h3>
-            <ul className="space-y-3">
-              <li className="break-all">{contact.email}</li>
+            <h3 className="mb-5 text-sm font-semibold text-white">{footer.contactLabel}</h3>
+            <ul className="space-y-3 text-sm">
+              <li className="break-all">
+                <a href={`mailto:${contact.email}`} className="transition-colors hover:text-white">
+                  {contact.email}
+                </a>
+              </li>
               <li>{contact.phone}</li>
               <li>{contact.location}</li>
             </ul>
           </div>
         </div>
 
-        <div className="pt-8 border-t border-slate-800 flex flex-col md:flex-row justify-between gap-4 text-sm">
+        <div className="mt-12 border-t border-slate-800 pt-8 text-sm">
           <p>
             © {currentYear} JuriSense. {footer.rights}
           </p>
-          <div className="flex gap-6">
-            <a href="#" className="hover:text-white transition-colors">
-              {footer.terms}
-            </a>
-            <a href="#" className="hover:text-white transition-colors">
-              {footer.privacy}
-            </a>
-          </div>
         </div>
       </div>
     </footer>

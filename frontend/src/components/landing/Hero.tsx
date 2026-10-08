@@ -1,137 +1,156 @@
+import { ArrowRight, FileSearch, Gavel, Scale, ShieldCheck, Sparkles, Zap } from "lucide-react";
 import { contact, type LandingContent } from "@/lib/landing-content";
-import { ArrowRightIcon, BoltIcon, ShieldIcon, SparklesIcon } from "./Icons";
+import { primaryButton, secondaryButton } from "./buttonStyles";
 
-const trustIcons = { shield: ShieldIcon, bolt: BoltIcon, sparkles: SparklesIcon };
+const TRUST_ICONS = { shield: ShieldCheck, bolt: Zap, sparkles: Sparkles };
+
+const OUTCOME_STYLES: Record<"review" | "approve", string> = {
+  review: "bg-amber-500 text-white",
+  approve: "bg-emerald-600 text-white",
+};
 
 export default function Hero({ content }: { content: LandingContent }) {
   const { hero } = content;
+  const { mockup } = hero;
 
   return (
-    <section id="hero" className="py-16 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
-        <div className="space-y-8">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-full text-sm">
-            <SparklesIcon className="w-4 h-4 text-blue-600" />
+    <section id="hero" className="relative overflow-hidden">
+      {/* Faint brand texture: a soft radial wash plus a few hairline strokes, echoing the
+          logo's node-and-line motif without becoming decorative clutter. Pure CSS, no asset. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(60%_50%_at_80%_-10%,rgba(37,99,235,0.08),transparent),radial-gradient(40%_35%_at_0%_10%,rgba(8,145,178,0.07),transparent)]"
+      />
+
+      <div className="mx-auto grid max-w-7xl grid-cols-1 items-center gap-16 px-4 py-16 sm:px-6 lg:px-8 lg:py-24 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)]">
+        <div>
+          <div className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm">
+            <Sparkles className="size-4 text-blue-600" aria-hidden="true" />
             <span className="font-medium text-blue-700">{hero.badge}</span>
           </div>
 
-          <h1 className="text-5xl lg:text-6xl font-bold text-gray-900 leading-[1.1]">
+          <h1 className="mt-6 text-balance text-5xl font-bold leading-[1.08] tracking-tight text-slate-900 lg:text-6xl">
             {hero.headlinePrefix}
-            <span className="text-blue-600">{hero.headlineAccent}</span>
+            <span className="text-cyan-600">{hero.headlineAccent}</span>
             {hero.headlineSuffix}
           </h1>
 
-          <p className="text-xl text-gray-600 leading-relaxed max-w-xl">{hero.subtext}</p>
+          <p className="mt-6 max-w-xl text-xl leading-relaxed text-slate-600">{hero.subtext}</p>
 
-          <div className="flex flex-wrap gap-4">
+          <div className="mt-8 flex flex-wrap gap-4">
             <a
               href={contact.whatsapp}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-6 py-3.5 text-base font-semibold text-white hover:bg-blue-700 transition-colors"
+              className={primaryButton("lg")}
             >
               {hero.ctaPrimary}
-              <ArrowRightIcon className="w-4 h-4" />
+              <ArrowRight className="size-4" aria-hidden="true" />
             </a>
-            <a
-              href="#how-it-works"
-              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-6 py-3.5 text-base font-semibold text-gray-700 hover:border-blue-600 hover:text-blue-600 transition-colors"
-            >
+            <a href="#how-it-works" className={secondaryButton("lg")}>
               {hero.ctaSecondary}
             </a>
           </div>
 
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-3 pt-4 text-sm">
+          <ul className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3 text-sm text-slate-600">
             {hero.trustBadges.map((badge) => {
-              const Icon = trustIcons[badge.icon];
+              const Icon = TRUST_ICONS[badge.icon];
               return (
-                <div key={badge.label} className="flex items-center gap-2">
-                  <Icon className="w-4 h-4 text-green-700" />
-                  <span className="text-gray-700">{badge.label}</span>
-                </div>
+                <li key={badge.label} className="flex items-center gap-2">
+                  <Icon className="size-4 text-emerald-600" aria-hidden="true" />
+                  {badge.label}
+                </li>
               );
             })}
-          </div>
+          </ul>
         </div>
 
-        {/* Illustrative mockup of a compliance decision */}
-        <div className="relative lg:ml-8">
-          <div className="bg-white rounded-xl shadow-2xl overflow-hidden border border-gray-200">
-            <div className="bg-gray-50 px-4 py-2.5 flex items-center gap-3 border-b border-gray-200">
+        {/* Product preview: a single, specific compliance decision shown with the full
+            Risk / Evidence / Policy / Outcome chain (not generic dashboard stats) — the
+            product's own "Evidence UX" principle applied to its first impression. */}
+        <div className="relative">
+          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_24px_60px_-20px_rgba(15,23,42,0.25)]">
+            <div className="flex items-center gap-3 border-b border-slate-200 bg-slate-50 px-4 py-2.5">
               <div className="flex gap-1.5">
-                <div className="w-3 h-3 rounded-full bg-red-500" />
-                <div className="w-3 h-3 rounded-full bg-yellow-500" />
-                <div className="w-3 h-3 rounded-full bg-green-500" />
+                <div className="size-2.5 rounded-full bg-red-400" />
+                <div className="size-2.5 rounded-full bg-amber-400" />
+                <div className="size-2.5 rounded-full bg-emerald-400" />
               </div>
-              <div className="flex-1 text-center text-xs text-gray-500 font-medium">
-                app.jurisense.com
-              </div>
+              <div className="flex-1 text-center text-xs font-medium text-slate-500">app.jurisense.com</div>
               <div className="w-8" />
             </div>
 
-            <div className="p-5 bg-white space-y-4">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-xs text-gray-500 mb-0.5">{hero.mockup.sectionLabel}</p>
-                  <h3 className="text-base font-semibold text-gray-900">{hero.mockup.title}</h3>
+            <div className="space-y-4 p-5">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  {mockup.sectionLabel}
+                </p>
+                <div className="flex items-center gap-1.5 text-xs font-medium text-emerald-700">
+                  <span className="relative flex size-2">
+                    <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-75 motion-reduce:hidden" />
+                    <span className="relative inline-flex size-2 rounded-full bg-emerald-500" />
+                  </span>
+                  {mockup.liveLabel}
                 </div>
-                <span className="text-xs text-green-600 font-semibold">
-                  {hero.mockup.monthDelta}
+              </div>
+
+              <div className="rounded-xl border border-slate-200 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <p className="text-sm font-semibold text-slate-900">{mockup.primary.supplier}</p>
+                  <span
+                    className={`shrink-0 rounded-md px-2 py-1 text-[11px] font-bold tracking-wide ${OUTCOME_STYLES.review}`}
+                  >
+                    {mockup.primary.outcome}
+                  </span>
+                </div>
+
+                <dl className="mt-3 space-y-2 text-xs">
+                  <div className="flex items-start gap-2">
+                    <Scale className="mt-0.5 size-3.5 shrink-0 text-amber-600" aria-hidden="true" />
+                    <dt className="font-medium text-slate-500">{mockup.primary.riskLabel}</dt>
+                    <dd className="text-slate-700">{mockup.primary.risk}</dd>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <FileSearch className="mt-0.5 size-3.5 shrink-0 text-slate-400" aria-hidden="true" />
+                    <dt className="font-medium text-slate-500">{mockup.primary.evidenceLabel}</dt>
+                    <dd className="text-slate-700">{mockup.primary.evidence}</dd>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <Gavel className="mt-0.5 size-3.5 shrink-0 text-slate-400" aria-hidden="true" />
+                    <dt className="font-medium text-slate-500">{mockup.primary.policyLabel}</dt>
+                    <dd className="font-mono text-slate-700">{mockup.primary.policy}</dd>
+                  </div>
+                </dl>
+              </div>
+
+              <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-slate-900">{mockup.secondary.supplier}</p>
+                  <p className="truncate text-xs text-slate-500">{mockup.secondary.note}</p>
+                </div>
+                <span
+                  className={`ml-3 shrink-0 rounded-md px-2 py-1 text-[11px] font-bold tracking-wide ${OUTCOME_STYLES.approve}`}
+                >
+                  {mockup.secondary.outcome}
                 </span>
               </div>
 
-              <div className="grid grid-cols-3 gap-2.5">
-                <div className="bg-gray-50 rounded-lg p-3 border border-gray-100">
-                  <div className="text-2xl font-bold text-gray-900 mb-0.5">
-                    {hero.mockup.stats[0].value}
-                  </div>
-                  <div className="text-xs text-gray-600">{hero.mockup.stats[0].label}</div>
+              <div className="flex items-center justify-between border-t border-slate-100 pt-3">
+                <div className="flex gap-4">
+                  {mockup.stats.map((stat) => (
+                    <div key={stat.label} className="text-left">
+                      <p className="text-sm font-bold tabular-nums text-slate-900">{stat.value}</p>
+                      <p className="text-[11px] text-slate-500">{stat.label}</p>
+                    </div>
+                  ))}
                 </div>
-                <div className="bg-teal-50 rounded-lg p-3 border border-teal-100">
-                  <div className="text-2xl font-bold text-teal-700 mb-0.5">
-                    {hero.mockup.stats[1].value}
-                  </div>
-                  <div className="text-xs text-gray-600">{hero.mockup.stats[1].label}</div>
-                </div>
-                <div className="bg-yellow-50 rounded-lg p-3 border border-yellow-100">
-                  <div className="text-2xl font-bold text-yellow-700 mb-0.5">
-                    {hero.mockup.stats[2].value}
-                  </div>
-                  <div className="text-xs text-gray-600">{hero.mockup.stats[2].label}</div>
-                </div>
-              </div>
-
-              <div className="space-y-2.5 pt-1">
-                <div className="flex items-start gap-2.5 p-2.5 bg-amber-50 rounded-lg border border-amber-100">
-                  <span className="shrink-0 rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-bold text-white mt-0.5">
-                    {hero.mockup.review.status}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium text-gray-900">{hero.mockup.review.name}</p>
-                    <p className="text-xs text-gray-500">{hero.mockup.review.note}</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-2.5 p-2.5 bg-green-50 rounded-lg border border-green-100">
-                  <span className="shrink-0 rounded-full bg-green-600 px-2 py-0.5 text-[10px] font-bold text-white mt-0.5">
-                    {hero.mockup.approved.status}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium text-gray-900">
-                      {hero.mockup.approved.name}
-                    </p>
-                    <p className="text-xs text-gray-500">{hero.mockup.approved.note}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1.5 pt-1 pl-1">
-                  <div className="w-2 h-2 rounded-full bg-green-500" />
-                  <span className="text-xs text-gray-600">{hero.mockup.engineRunning}</span>
-                </div>
+                <span className="text-xs font-semibold text-emerald-600">{mockup.monthDelta}</span>
               </div>
             </div>
           </div>
 
-          <div className="absolute -top-3 -right-3 bg-white rounded-lg shadow-lg p-2 border border-gray-200 text-blue-600">
-            <SparklesIcon className="w-5 h-5" />
+          <div className="absolute -right-3 -top-3 rounded-xl border border-slate-200 bg-white p-2.5 text-cyan-600 shadow-lg">
+            <Sparkles className="size-5" aria-hidden="true" />
           </div>
         </div>
       </div>
