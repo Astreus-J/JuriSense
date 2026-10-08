@@ -5,6 +5,16 @@
 > structure and limit dimensions see `pricing-strategy.md`, for the buying logic see
 > `business-case.md`, and for the payment-gateway sequencing decision see `ADR-014`.
 
+## Commercial policy update — 2026-10-07
+
+The owner selected **the same released features in every subscription, differentiated only by
+usage allowances**. [Pricing strategy](pricing-strategy.md) now defines the proposed BRL catalog,
+quota semantics, cost assumptions, and rollout requirements. This supersedes feature exclusivity
+suggested in the candidate-model discussion below: API, integrations, SSO, standard policy packs,
+and workflow capabilities are available in every tier when released. Their implementation dates
+remain governed by the roadmap. Enterprise negotiates finite capacity; bespoke professional
+services remain separately scoped. Public prices are proposals until cost and metering validation.
+
 ## Why this matters now, even without a payment gateway
 
 `ADR-014` defers real payment-gateway integration (Stripe or a Brazilian equivalent) past the
@@ -219,7 +229,7 @@ per the `Plan`/`Subscription` model already decided in `ADR-014`.** Concretely:
 **Why this is the right sequencing**: it gives the first cohort of customers pricing that is legible
 and predictable enough to buy without a procurement fight (flat tiers), while the underlying limit
 dimensions already track real cost drivers — so when the product has enough usage history to move
-toward true usage-based or enterprise pricing (`pricing-strategy.md`'s stated maturity path), that
+toward true usage-based or enterprise pricing (subject to the feature-parity policy in `pricing-strategy.md`), that
 transition is a pricing-page change and a metering-to-billing wire-up, not a rebuild of the
 `Plan`/`Subscription` domain model.
 
