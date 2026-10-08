@@ -103,3 +103,22 @@ class UserResponse(BaseModel):
     is_active: bool
     last_login_at: datetime | None
     created_at: datetime
+
+
+class OrganizationResponse(BaseModel):
+    """The `/settings/organization` screen's "plan and usage" panel. Limits are `None`
+    on the Enterprise tier (negotiated capacity, not a numeric cap -- see
+    `PLAN_LIMITS`/`register_organization`); the frontend renders that as "unlimited" or
+    "custom", not a blank field."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+    plan: str
+    user_limit: int | None
+    supplier_limit: int | None
+    storage_limit_gb: int | None
+    ai_execution_limit: int | None
+    active_user_count: int
+    created_at: datetime

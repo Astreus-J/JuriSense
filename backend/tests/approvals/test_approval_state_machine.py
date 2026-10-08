@@ -469,3 +469,47 @@ async def test_approval_requests_are_scoped_to_the_caller_organization(
         f"/api/approvals/requests/{request_id}/approve", json={}, headers=outsider_headers
     )
     assert approve_attempt.status_code == 404
+
+
+async def test_pending_inbox_shows_only_matching_role_and_clears_after_resolution(
+    client: httpx.AsyncClient,
+    mock_openrouter,
+    mock_cnpj_registry,
+    seed_sanctions_index,
+    run_contract_extraction_inline,
+    run_supplier_checks_inline,
+) -> None:
+    """`GET /api/approvals/requests/pending`: the admin (role-mismatched, per
+    `test_wrong_role_cannot_resolve_and_request_stays_pending` above) sees an empty
+    inbox despite having `update` RBAC on the module; the matching "legal" approver
+    sees exactly this request, and it disappears from their inbox once resolved."""
+    mock_cnpj_registry(data=ACTIVE_CNPJ_RESPONSE)
+    await seed_sanctions_index(hit_document=TAX_ID)
+    mock_openrouter(payload=EVIDENCE_ENVELOPE)
+
+    admin_headers = await register_org_and_login(client, "pending-inbox-admin@example.com")
+    legal_headers = await create_user_and_login(
+        client, admin_headers, email="pending-inbox-legal@example.com", role="legal"
+    )
+    review = await _trigger_review(client, admin_headers, rule_yamls=[FIN_003_YAML])
+
+    admin_inbox = await client.get("/api/approvals/requests/pending", headers=admin_headers)
+    assert admin_inbox.status_code == 200
+    assert admin_inbox.json() == []
+
+    legal_inbox = await client.get("/api/approvals/requests/pending", headers=legal_headers)
+    assert legal_inbox.status_code == 200
+    pending = legal_inbox.json()
+    assert len(pending) == 1
+    assert pending[0]["compliance_review_id"] == review["id"]
+    assert pending[0]["approver_role"] == "legal"
+
+    resolve = await client.post(
+        f"/api/approvals/requests/{pending[0]['id']}/approve",
+        json={"justification": "Reviewed and approved."},
+        headers=legal_headers,
+    )
+    assert resolve.status_code == 200, resolve.text
+
+    legal_inbox_after = await client.get("/api/approvals/requests/pending", headers=legal_headers)
+    assert legal_inbox_after.json() == []

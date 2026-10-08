@@ -73,6 +73,25 @@ class ApprovalRequestRepository:
         )
         return list(result.scalars())
 
+    async def list_pending_by_role(
+        self, organization_id: uuid.UUID, approver_role: str
+    ) -> list[ApprovalRequest]:
+        """The current user's "pending approvals" inbox (frontend `/approvals` screen):
+        every `pending` request in this organization routed to this role, across all
+        reviews -- `list_by_review` is scoped to one review at a time and has no
+        cross-review "mine to resolve" view, which is what a human approver actually
+        needs to land on when they open this screen."""
+        result = await self._session.execute(
+            select(ApprovalRequest)
+            .where(
+                ApprovalRequest.organization_id == organization_id,
+                ApprovalRequest.approver_role == approver_role,
+                ApprovalRequest.status == ApprovalRequestStatus.PENDING.value,
+            )
+            .order_by(ApprovalRequest.requested_at)
+        )
+        return list(result.scalars())
+
     async def list_pending_requested_before(self, cutoff: datetime) -> list[ApprovalRequest]:
         """BR-APR-003 SLA expiry: every `pending` request whose `requested_at` is older
         than `cutoff` -- across every organization, since the Celery task

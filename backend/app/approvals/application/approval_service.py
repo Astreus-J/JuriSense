@@ -149,6 +149,19 @@ async def get_request(
     return request
 
 
+async def list_pending_for_actor(
+    session: AsyncSession, *, organization_id: uuid.UUID, user_id: uuid.UUID
+) -> list[ApprovalRequest]:
+    """The `/approvals` screen's inbox: every `pending` `ApprovalRequest` in this
+    organization routed to the caller's own role. A user with no active `Membership`
+    (shouldn't happen -- auth already requires one -- but mirrors `_resolve_actor_role`'s
+    own fail-safe) simply sees an empty inbox rather than a 500."""
+    role = await _resolve_actor_role(session, user_id=user_id, organization_id=organization_id)
+    if role is None:
+        return []
+    return await ApprovalRequestRepository(session).list_pending_by_role(organization_id, role)
+
+
 async def list_requests_for_review(
     session: AsyncSession, *, organization_id: uuid.UUID, compliance_review_id: uuid.UUID
 ) -> list[ApprovalRequest]:

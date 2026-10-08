@@ -44,6 +44,21 @@ CanReadApprovals = Annotated[User, Depends(require_permission(Module.APPROVALS, 
 CanUpdateApprovals = Annotated[User, Depends(require_permission(Module.APPROVALS, "update"))]
 
 
+@router.get("/requests/pending", response_model=list[ApprovalRequestResponse])
+async def list_pending_requests(
+    user: CanReadApprovals, session: SessionDep
+) -> list[ApprovalRequestResponse]:
+    """The `/approvals` screen's inbox: this caller's own pending requests, across every
+    review. Declared before `/requests/{request_id}` and `/requests` below -- FastAPI/
+    Starlette matches routes in registration order, so this must come first or a request
+    to `/requests/pending` would instead match `/requests/{request_id}` with
+    `request_id="pending"` and fail UUID parsing."""
+    requests = await approval_service.list_pending_for_actor(
+        session, organization_id=user.organization_id, user_id=user.id
+    )
+    return [ApprovalRequestResponse.model_validate(r) for r in requests]
+
+
 @router.post("/requests/{request_id}/approve", response_model=ApprovalRequestResponse)
 async def approve_request(
     request_id: uuid.UUID, body: ApproveRequestBody, user: CanUpdateApprovals, session: SessionDep

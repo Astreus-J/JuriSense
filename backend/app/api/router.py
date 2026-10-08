@@ -7,6 +7,7 @@ from app.contracts.api.routes import router as contracts_router
 from app.evidence.api.public_routes import public_router as evidence_public_router
 from app.evidence.api.routes import blockchain_anchor_router, decision_passport_router
 from app.evidence.api.routes import router as evidence_router
+from app.identity.api.organizations import router as identity_organizations_router
 from app.identity.api.routes import router as identity_router
 from app.identity.api.users import router as identity_users_router
 from app.integrations.api.routes import router as integrations_router
@@ -18,6 +19,7 @@ api_router = APIRouter(prefix="/api")
 api_router.include_router(health.router)
 api_router.include_router(identity_router)
 api_router.include_router(identity_users_router)
+api_router.include_router(identity_organizations_router)
 api_router.include_router(integrations_router)
 api_router.include_router(suppliers_router)
 api_router.include_router(contracts_router)
