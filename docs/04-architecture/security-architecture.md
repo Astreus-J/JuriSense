@@ -115,6 +115,15 @@ followed:
   (`docs/07-engineering/security.md`), not an architectural concern beyond noting that access tokens'
   short 15-minute life bounds the blast radius of a leaked `JWT_SECRET_KEY` signature-forging window
   to already-issued-but-unexpired tokens if rotation is done promptly.
+- `INTEGRATION_CREDENTIALS_ENCRYPTION_KEY` (added 2026-10-10, closing the H1 follow-up on
+  encrypting `Integration.config`'s connector credentials at rest, not just masking them in API
+  responses): a symmetric Fernet key, same env-var pattern as above. A managed KMS (envelope
+  encryption, rotation without re-encrypting data, a decrypt audit trail) was considered and
+  deliberately deferred — no real connector exists yet to need the plaintext back (EPIC-9 is
+  post-hackathon) and no VPS/cloud account is provisioned yet to host one. Revisit if a real
+  enterprise customer's security review requires it (ties into EPIC-10's "harden multi-tenancy"
+  scope); `app/integrations/infrastructure/credential_encryption.py`'s own docstring repeats this
+  so the decision travels with the code, not only the doc.
 
 ## 5. Security boundary diagram: where checks happen in the request path
 

@@ -7,6 +7,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 _DEV_JWT_SECRET = "dev-only-insecure-secret-with-32-bytes-min"  # noqa: S105 -- development only
 _DEV_STORAGE_ACCESS_KEY = "test"
 _DEV_STORAGE_SECRET_KEY = "test"  # noqa: S105 -- development only (local s3mock S3)
+# A real (correctly-formatted) Fernet key, but publicly known from being committed here --
+# development only, same trust level as _DEV_JWT_SECRET. Generate a real one for production
+# with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+_DEV_INTEGRATION_CREDENTIALS_KEY = "K8ICvuSzZmFZO1MpA4lBQhyPp8s079pIIZH41eUoU2s="  # noqa: S105
 
 
 def _normalize_database_url(url: str) -> str:
@@ -74,6 +78,14 @@ class Settings(BaseSettings):
     # Login lockout (5 failed attempts)
     login_max_attempts: int = 5
     login_lockout_minutes: int = 15
+
+    # Integration connector credentials at rest (STORY: encrypt integration connector
+    # credentials at rest). Environment-variable key, same pattern as jwt_secret_key/
+    # storage_secret_key above (docs/04-architecture/security-architecture.md §4) --
+    # deliberately not a managed KMS: no real connector exists yet (EPIC-9 is
+    # post-hackathon) and no VPS/cloud account is provisioned yet to host one. Revisit if a
+    # real enterprise customer's security review requires it (ties into EPIC-10).
+    integration_credentials_encryption_key: str = _DEV_INTEGRATION_CREDENTIALS_KEY
 
     # Email (SMTP); with no SMTP_HOST configured, emails go to the log (dev)
     smtp_host: str | None = None
@@ -208,6 +220,15 @@ class Settings(BaseSettings):
             raise ValueError(
                 "STORAGE_ACCESS_KEY/STORAGE_SECRET_KEY must be set in production "
                 "with real Cloudflare R2 credentials (never the s3mock dev credentials)"
+            )
+        if (
+            self.environment == "production"
+            and self.integration_credentials_encryption_key == _DEV_INTEGRATION_CREDENTIALS_KEY
+        ):
+            raise ValueError(
+                "INTEGRATION_CREDENTIALS_ENCRYPTION_KEY must be set in production with a "
+                "real Fernet key (generate with: python -c \"from cryptography.fernet import "
+                'Fernet; print(Fernet.generate_key().decode())"), never the committed dev key'
             )
         if self.environment == "production" and not self.smtp_host:
             # Found in security review (MED-A): with no smtp_host, email sending

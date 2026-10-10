@@ -4,26 +4,19 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-# Key fragments that mark a config value as a credential. Matching is by substring on the
-# lowercased key, so over-masking (e.g. "monkey") is the accepted trade-off.
-_SENSITIVE_KEY_FRAGMENTS = ("secret", "token", "password", "passwd", "key", "credential", "auth")
+from app.integrations.domain.credential_fields import transform_sensitive_values
+
 MASKED_VALUE = "********"
 
 
 def _mask_sensitive(value: Any) -> Any:
     """Security review (H1, 2026-10-03): connector credentials were returned in plaintext to
     AUDITOR and SECURITY. Responses now keep the shape of `config` but replace the value of any
-    credential-like key, at any depth, with a fixed mask. Storage is not changed here."""
-    if isinstance(value, dict):
-        return {
-            key: MASKED_VALUE
-            if any(fragment in str(key).lower() for fragment in _SENSITIVE_KEY_FRAGMENTS)
-            else _mask_sensitive(item)
-            for key, item in value.items()
-        }
-    if isinstance(value, list):
-        return [_mask_sensitive(item) for item in value]
-    return value
+    credential-like key, at any depth, with a fixed mask. Storage is handled separately (at-rest
+    encryption, `infrastructure/credential_encryption.py`) -- this mask applies the same whether
+    the underlying stored value is plaintext or an encrypted token, since it never looks at the
+    value itself, only the key."""
+    return transform_sensitive_values(value, lambda _: MASKED_VALUE)
 
 
 class CreateIntegrationRequest(BaseModel):

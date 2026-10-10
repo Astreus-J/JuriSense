@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.evidence.application.audit_service import emit_audit_event
 from app.integrations.domain.errors import IntegrationNotFoundError
+from app.integrations.infrastructure.credential_encryption import encrypt_integration_config
 from app.integrations.infrastructure.models import Integration
 from app.integrations.infrastructure.repositories import IntegrationRepository
 
@@ -25,7 +26,13 @@ async def create_integration(
     provider: str,
     config: dict[str, Any],
 ) -> Integration:
-    integration = Integration(organization_id=organization_id, provider=provider, config=config)
+    # Credential-like values (same key-matching rule as the H1 masking fix) are encrypted
+    # before this ever reaches the database -- see credential_encryption.py.
+    integration = Integration(
+        organization_id=organization_id,
+        provider=provider,
+        config=encrypt_integration_config(config),
+    )
     IntegrationRepository(session).add(integration)
     await session.flush()  # populate integration.id for the audit payload below
     # Payload carries the provider only: `config` may hold connector credentials.

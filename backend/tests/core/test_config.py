@@ -19,6 +19,7 @@ def _prod_kwargs(**overrides: object) -> dict:
         "storage_access_key": "real-access-key",
         "storage_secret_key": "real-secret-key",
         "smtp_host": "smtp.example.com",
+        "integration_credentials_encryption_key": "tbmho9wV12RQ-6KJU5aaEfSPBkVK9RKZNtMrYnNC6MQ=",
     }
     base.update(overrides)
     return base
@@ -46,6 +47,15 @@ def test_production_refuses_dev_storage_credentials() -> None:
 def test_production_refuses_missing_smtp_host() -> None:
     with pytest.raises(ValidationError, match="SMTP_HOST"):
         Settings(**_prod_kwargs(smtp_host=None))
+
+
+def test_production_refuses_dev_integration_credentials_key() -> None:
+    with pytest.raises(ValidationError, match="INTEGRATION_CREDENTIALS_ENCRYPTION_KEY"):
+        Settings(
+            **_prod_kwargs(
+                integration_credentials_encryption_key="K8ICvuSzZmFZO1MpA4lBQhyPp8s079pIIZH41eUoU2s="
+            )
+        )
 
 
 def test_development_does_not_require_any_of_these() -> None:
