@@ -184,10 +184,22 @@ async def login(
     if retry_after is not None:
         raise AccountLockedError(retry_after)
 
+    # Security review (2026-10-05, concurrent-burst bypass): reserve this attempt's slot
+    # in the failure budget BEFORE doing anything expensive (the DB lookup, and especially
+    # `verify_password`'s deliberately-slow hash) -- see `LoginLockout.reserve_attempt`'s own
+    # docstring for why checking only the OLD lock state here isn't enough on its own. A
+    # count already past `max_attempts` means earlier attempts (in this same burst or an
+    # ongoing one) already spent the whole budget; this request is refused outright, with
+    # no password verification and no new Redis write beyond the INCR that just happened.
+    attempts = await lockout.reserve_attempt(email)
+    if attempts > lockout.max_attempts:
+        raise AccountLockedError(lockout.lockout_seconds)
+
     user = await UserRepository(session).get_by_email(email)
 
     async def _fail() -> None:
-        await lockout.register_failure(email)
+        # The failure is already counted (`reserve_attempt`, above, ran before verification
+        # started) -- this only records the audit trail for it.
         AccessLogRepository(session).add(
             AccessLog(
                 user_id=user.id if user else None,
@@ -210,8 +222,18 @@ async def login(
         raise InvalidCredentialsError()
 
     if not user.is_active:
-        # Lockout and AccessLog are deliberately untouched for this path (unchanged behavior);
-        # only the audit trail records that a correct password was refused for an inactive account.
+        # Lockout and AccessLog are deliberately untouched for this path (unchanged
+        # behavior); only the audit trail records that a correct password was refused for
+        # an inactive account. `reserve_attempt` above still ran unconditionally (it has to,
+        # before the DB lookup even tells us the account is inactive -- see its docstring),
+        # so its reservation is undone here to restore the original "this path never
+        # touches the lockout counter" invariant -- an inactive account's own correct-
+        # password attempts were never meant to consume the shared failure budget, and
+        # shouldn't start mattering once it's reactivated. `undo_reservation`, not `reset`:
+        # a full reset would also erase any OTHER, concurrently-in-flight attacker failure
+        # count for this same email (security review, 2026-10-05) -- this only gives back
+        # the one slot this request itself just reserved.
+        await lockout.undo_reservation(email)
         await _record_login_failure(session, user=user, reason="user_inactive")
         await session.commit()
         raise UserInactiveError()

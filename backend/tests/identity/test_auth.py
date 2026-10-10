@@ -124,6 +124,64 @@ async def test_login_locks_after_5_failures(client: httpx.AsyncClient) -> None:
     assert "Retry-After" in response.headers
 
 
+async def test_locked_account_rejects_the_correct_password_without_verifying_it(
+    client: httpx.AsyncClient,
+) -> None:
+    """Security review (2026-10-05, concurrent-burst bypass): once the budget is spent, a
+    6th request -- even with the right password -- must be refused by the lockout check
+    itself (429), never reach `verify_password` and get a 200. Proves the fix's actual
+    guarantee (verification never happens once `attempts > max_attempts`), not just that
+    the account ends up inaccessible."""
+    await _register(client)
+    for _ in range(5):
+        await _login(client, password="WrongPass1")
+
+    response = await _login(client)  # the correct password
+    assert response.status_code == 429
+    assert "access_token" not in response.text
+
+
+async def test_repeated_logins_against_an_inactive_account_never_trigger_a_lockout(
+    client: httpx.AsyncClient,
+) -> None:
+    """Regression guard for a side effect introduced by the burst-bypass fix: every login
+    attempt now reserves a budget slot BEFORE the DB lookup even knows the account is
+    inactive (`LoginLockout.reserve_attempt` has to run first -- see its docstring), so
+    without `login()`'s explicit `lockout.reset(email)` on this path, enough correct-
+    password attempts against an inactive account would exhaust the shared budget and
+    start returning 429 instead of the expected 401 -- a behavior change this story was
+    not meant to introduce (the pre-fix code never touched the counter here at all)."""
+    await _register(client, plan="business")  # Starter's 1-seat limit would block create_user
+    admin_headers = {
+        "Authorization": f"Bearer {(await _login(client)).json()['access_token']}"
+    }
+    created = await client.post(
+        "/api/users",
+        json={
+            "full_name": "Bruno Souza",
+            "email": "bruno@example.com",
+            "password": "StrongPass2",
+            "role": "legal",
+        },
+        headers=admin_headers,
+    )
+    assert created.status_code == 201, created.text
+    bruno_id = created.json()["id"]
+    await client.patch(
+        f"/api/users/{bruno_id}", json={"status": "inactive"}, headers=admin_headers
+    )
+
+    for _ in range(8):  # more than MAX_ATTEMPTS (5)
+        response = await client.post(
+            "/api/auth/login",
+            json={"email": "bruno@example.com", "password": "StrongPass2"},
+        )
+        assert response.status_code == 401, (
+            "an inactive account's own correct-password attempts must never escalate to a "
+            f"lockout; got {response.status_code}"
+        )
+
+
 # ---- Access log ----
 
 
