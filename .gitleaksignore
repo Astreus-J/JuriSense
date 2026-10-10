@@ -1,1 +1,12 @@
 a67833e6b0b1a221df3a9c4d73186ecff58a087e:backend/app/accounts/api/routes.py:generic-api-key:88
+
+# Dev-only Fernet placeholder key for INTEGRATION_CREDENTIALS_ENCRYPTION_KEY (same trust
+# tier as JWT_SECRET_KEY's own dev placeholder, which doesn't trigger this scanner only
+# because its low-entropy human-readable text doesn't match the generic-api-key heuristic
+# -- a real Fernet key is base64 of 32 random bytes, which does). Committed and public by
+# design: app/core/config.py's _require_production_secrets validator refuses to boot with
+# this exact value when environment=production.
+22347f71c6e4102e09640786574163757658b5ac:backend/app/core/config.py:generic-api-key:13
+22347f71c6e4102e09640786574163757658b5ac:backend/.env.example:generic-api-key:22
+22347f71c6e4102e09640786574163757658b5ac:backend/tests/core/test_config.py:generic-api-key:22
+22347f71c6e4102e09640786574163757658b5ac:backend/tests/core/test_config.py:generic-api-key:56
