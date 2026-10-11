@@ -8,6 +8,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from app.core import security
 from app.core.config import get_settings
 from app.core.db import SessionDep
+from app.core.rate_limit import RateLimiter, RateLimitExceededError
 from app.core.redis import RedisDep
 from app.identity.application.permission_service import PermissionAction, has_permission
 from app.identity.domain.constants import Module, Role
@@ -103,6 +104,50 @@ def require_permission(
         return user
 
     return _dependency
+
+
+def rate_limit_by_organization(
+    *, max_requests: int, window_seconds: int, key_prefix: str
+) -> Callable[..., Coroutine[Any, Any, None]]:
+    """Dependency factory for an AUTHENTICATED route that triggers a real external API call
+    and/or a Celery task (#143) -- a coarser, per-`organization_id` abuse/cost backstop,
+    separate from `require_permission`'s authorization check and from plan-limit enforcement
+    (`ADR-014`, `BR-ORG-003`). Lives here, not in `app/core/rate_limit.py` (which only has
+    `rate_limit_by_ip`, for the one unauthenticated route), because it depends on
+    `CurrentUser` to resolve `organization_id` -- `app/core` must not depend on any bounded
+    context. Combine with `require_permission` on the same route (both as separate `Depends`
+    params); FastAPI resolves `CurrentUser` once per request and shares it across both.
+
+    Usage::
+
+        from app.identity.api.deps import rate_limit_by_organization
+
+        @router.post("/{id}/recheck", status_code=202)
+        async def recheck(
+            id: uuid.UUID,
+            user: Annotated[User, Depends(require_permission(Module.SUPPLIERS, "update"))],
+            _: Annotated[None, Depends(rate_limit_by_organization(
+                max_requests=settings.external_call_rate_limit_max_requests,
+                window_seconds=settings.external_call_rate_limit_window_seconds,
+                key_prefix="supplier_recheck",
+            ))],
+            session: SessionDep,
+        ) -> ...:
+            ...
+    """
+
+    async def _check(user: CurrentUser, redis: RedisDep) -> None:
+        limiter = RateLimiter(redis, max_requests=max_requests, window_seconds=window_seconds)
+        try:
+            await limiter.hit(f"{key_prefix}:{user.organization_id}")
+        except RateLimitExceededError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Too many requests. Try again later.",
+                headers={"Retry-After": str(exc.retry_after_seconds)},
+            ) from exc
+
+    return _check
 
 
 def get_email_sender() -> EmailSender:

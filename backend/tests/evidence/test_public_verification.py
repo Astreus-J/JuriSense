@@ -11,6 +11,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
+from app.core.config import get_settings
 from app.evidence.application import verification_service
 from app.evidence.domain.anchoring import AnchorProof, AnchorStatus
 from app.evidence.domain.errors import AnchoringProviderError
@@ -161,6 +162,23 @@ async def test_verify_returns_not_found_for_a_garbage_reference(client: httpx.As
 
     assert response.status_code == 200, response.text
     assert response.json()["status"] == "not_found"
+
+
+async def test_verify_is_rate_limited_per_ip(client: httpx.AsyncClient) -> None:
+    """#112: beyond `public_verification_rate_limit_max_requests` calls in one window, the
+    route returns 429 with a `Retry-After` header -- enforced before `verify_public_
+    reference` runs at all, same as every earlier call in this budget returning its
+    ordinary 200 `not_found` body."""
+    settings = get_settings()
+    budget = settings.public_verification_rate_limit_max_requests
+
+    for _ in range(budget):
+        response = await client.get(f"/api/public/verify?ref={'0' * 64}")
+        assert response.status_code == 200, response.text
+
+    limited = await client.get(f"/api/public/verify?ref={'0' * 64}")
+    assert limited.status_code == 429, limited.text
+    assert int(limited.headers["retry-after"]) > 0
 
 
 async def test_verify_returns_not_found_for_a_failed_anchor(

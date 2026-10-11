@@ -125,21 +125,37 @@ themselves have received a malicious file:
 
 ## Rate limiting on public endpoints
 
-- **The public verification page (`GET /verify/{hash}`, `docs/06-blockchain/verification.md`) is
+- **The public verification page (`GET /public/verify`, `docs/06-blockchain/verification.md`) is
   unauthenticated by design** and is therefore the single most important rate-limiting target in the
-  system — anyone can hit it without an account. It gets IP-based rate limiting (Redis token-bucket
-  or fixed-window counter, mirroring the existing lockout-counter infrastructure pattern in
-  `app/accounts/infrastructure/lockout.py`) tuned to allow legitimate verification traffic (a human
-  checking one hash) while blocking enumeration/scraping attempts against the anchor space.
+  system — anyone can hit it without an account. **Implemented** (#112): IP-based, fixed-window
+  Redis rate limiting (`app/core/rate_limit.py`'s `rate_limit_by_ip`, mirroring the existing
+  lockout-counter pattern in `app/identity/infrastructure/lockout.py`), tuned
+  (`public_verification_rate_limit_max_requests`/`_window_seconds`, `app/core/config.py`) to allow
+  legitimate verification traffic (a human checking one hash) while blocking enumeration/scraping
+  attempts against the anchor space. **Caveat (security review, 2026-10-11)**: the key is the
+  caller's `request.client.host`, which only reflects the real visitor once the reverse-proxy
+  chain trusts and forwards it correctly -- that configuration is `#150`-`#153`'s own scope ("Reverse
+  proxy (Nginx) & HTTPS" / "Configure and verify proxy headers / trusted-proxy handling"), not done
+  here. Until those land, every visitor collapses onto the same handful of keys in production (no
+  `nginx` service exists in `docker-compose.yml` yet), making this a shared global budget rather
+  than a per-visitor one -- still strictly better than the prior fully-unthrottled state, and no
+  code change will be needed in `rate_limit_by_ip` once #153 ships (Starlette/uvicorn populate
+  `request.client.host` correctly on their own at that point).
 - Public/pre-authentication endpoints that send email (`/auth/register`, `/auth/password/forgot`) get
   the same IP-based rate limiting — already an identified, tracked gap (`sprint-01.md` LOW-005,
   scheduled for Sprint 5) rather than a new finding; this document makes the general rule explicit so
   every future public endpoint is rate-limited from creation, not retrofitted after an audit finds
-  the gap again.
-- Authenticated endpoints get a coarser, per-organization or per-user rate limit as a general
-  abuse/cost-control backstop (particularly endpoints that trigger billable AI usage, like
-  `POST /compliance/check`), separate from and in addition to plan-limit enforcement
-  (`ADR-014`, `BR-ORG-003`), which governs business-limit exceedance, not abuse.
+  the gap again. Not yet wired to these two routes — `rate_limit_by_ip` is already generic enough to
+  reuse directly when that lands.
+- Authenticated endpoints get a coarser, per-organization rate limit as a general abuse/cost-control
+  backstop, separate from and in addition to plan-limit enforcement (`ADR-014`, `BR-ORG-003`), which
+  governs business-limit exceedance, not abuse. **Implemented** (#143) for the endpoints a load test
+  confirmed trigger an unthrottled external API call and/or Celery task: `POST /suppliers` and
+  `POST /suppliers/{id}/recheck` (CNPJ/sanctions checks) and `POST /contracts/upload` (AI extraction)
+  — `app.identity.api.deps.rate_limit_by_organization`, same `external_call_rate_limit_max_requests`/
+  `_window_seconds` budget. Apply the same dependency to any new endpoint that triggers a real
+  external call or Celery task (Integrations, future AI Services routes) as it ships, rather than
+  waiting for another load test to find the gap.
 
 ## CSRF, CSP, and SSRF
 

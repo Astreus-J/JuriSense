@@ -79,6 +79,19 @@ class Settings(BaseSettings):
     login_max_attempts: int = 5
     login_lockout_minutes: int = 15
 
+    # Rate limiting (docs/07-engineering/security.md "Rate limiting on public endpoints").
+    # #112: per-IP, on the one genuinely unauthenticated route (GET /public/verify) -- tuned
+    # to allow a human re-checking a hash a few times, not an enumeration/scraping script.
+    public_verification_rate_limit_max_requests: int = 30
+    public_verification_rate_limit_window_seconds: int = 60
+    # #143: per-organization, on authenticated routes that trigger a real external API call
+    # and/or a Celery task (confirmed via load test: 15 back-to-back POST /suppliers/{id}/
+    # recheck calls all returned 202 with no throttling) -- a coarser abuse/cost backstop,
+    # separate from plan-limit enforcement (ADR-014, BR-ORG-003), which governs business
+    # limits, not abuse.
+    external_call_rate_limit_max_requests: int = 10
+    external_call_rate_limit_window_seconds: int = 60
+
     # Integration connector credentials at rest (STORY: encrypt integration connector
     # credentials at rest). Environment-variable key, same pattern as jwt_secret_key/
     # storage_secret_key above (docs/04-architecture/security-architecture.md §4) --

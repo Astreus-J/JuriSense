@@ -28,7 +28,7 @@ from app.contracts.infrastructure.repositories import ClauseRepository
 from app.core.config import get_settings
 from app.core.db import SessionDep
 from app.core.storage import StorageDep
-from app.identity.api.deps import require_permission
+from app.identity.api.deps import rate_limit_by_organization, require_permission
 from app.identity.domain.constants import Module
 from app.identity.infrastructure.models import User
 
@@ -49,6 +49,21 @@ CanCreateContracts = Annotated[User, Depends(require_permission(Module.CONTRACTS
 CanReadContracts = Annotated[User, Depends(require_permission(Module.CONTRACTS, "read"))]
 CanUpdateContracts = Annotated[User, Depends(require_permission(Module.CONTRACTS, "update"))]
 
+# #143: every upload dispatches AI extraction (CON-003) -- a real external API call (the
+# configured AI Gateway provider) plus a Celery task, the same external-call shape the
+# load test found unthrottled for Suppliers.
+_settings = get_settings()
+ContractUploadRateLimited = Annotated[
+    None,
+    Depends(
+        rate_limit_by_organization(
+            max_requests=_settings.external_call_rate_limit_max_requests,
+            window_seconds=_settings.external_call_rate_limit_window_seconds,
+            key_prefix="contract_upload",
+        )
+    ),
+]
+
 _UPLOAD_ERROR_MAP = {
     UnsupportedFileTypeError: status.HTTP_422_UNPROCESSABLE_CONTENT,
     FileTooLargeError: status.HTTP_413_CONTENT_TOO_LARGE,
@@ -66,6 +81,7 @@ async def upload_contract_version(
     user: CanCreateContracts,
     session: SessionDep,
     storage: StorageDep,
+    _: ContractUploadRateLimited,
     file: Annotated[UploadFile, File()],
     supplier_id: Annotated[uuid.UUID, Form()],
     contract_id: Annotated[uuid.UUID | None, Form()] = None,

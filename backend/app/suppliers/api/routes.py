@@ -3,8 +3,9 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
+from app.core.config import get_settings
 from app.core.db import SessionDep
-from app.identity.api.deps import require_permission
+from app.identity.api.deps import rate_limit_by_organization, require_permission
 from app.identity.domain.constants import Module
 from app.identity.infrastructure.models import User
 from app.suppliers.api.schemas import (
@@ -35,10 +36,30 @@ CanCreateSuppliers = Annotated[User, Depends(require_permission(Module.SUPPLIERS
 CanReadSuppliers = Annotated[User, Depends(require_permission(Module.SUPPLIERS, "read"))]
 CanUpdateSuppliers = Annotated[User, Depends(require_permission(Module.SUPPLIERS, "update"))]
 
+# #143: both routes below trigger a real SupplierCheck (CNPJ registry + sanctions index
+# calls, plus a Celery task) -- confirmed via load test with no throttling at all
+# (15 back-to-back POST .../recheck calls all returned 202). One shared key_prefix: both
+# endpoints feed the SAME external-call budget per organization, since they trigger the
+# identical downstream work (check_service.trigger_check).
+_settings = get_settings()
+SupplierCheckRateLimited = Annotated[
+    None,
+    Depends(
+        rate_limit_by_organization(
+            max_requests=_settings.external_call_rate_limit_max_requests,
+            window_seconds=_settings.external_call_rate_limit_window_seconds,
+            key_prefix="supplier_check",
+        )
+    ),
+]
+
 
 @router.post("", response_model=SupplierResponse, status_code=status.HTTP_201_CREATED)
 async def create_supplier(
-    body: CreateSupplierRequest, user: CanCreateSuppliers, session: SessionDep
+    body: CreateSupplierRequest,
+    user: CanCreateSuppliers,
+    session: SessionDep,
+    _: SupplierCheckRateLimited,
 ) -> SupplierResponse:
     """SUP-001: registers a Supplier and triggers its initial SupplierCheck (SUP-002).
     BR-SUP-002 (unique tax_id + organization_id) surfaces as 409, not 500."""
@@ -119,7 +140,10 @@ async def update_supplier_status(
     status_code=status.HTTP_202_ACCEPTED,
 )
 async def recheck_supplier(
-    supplier_id: uuid.UUID, user: CanUpdateSuppliers, session: SessionDep
+    supplier_id: uuid.UUID,
+    user: CanUpdateSuppliers,
+    session: SessionDep,
+    _: SupplierCheckRateLimited,
 ) -> SupplierCheckResponse:
     """SUP-002: manual re-check request, e.g. before a renewal."""
     try:
