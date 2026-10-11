@@ -48,9 +48,15 @@ def test_leaf_hash_is_sha256_over_type_ref_and_payload() -> None:
 
 
 def test_commitment_is_stable_under_key_order() -> None:
-    assert commitment({"value": 1, "provenance": {"page": 2}}) == commitment(
-        {"provenance": {"page": 2}, "value": 1}
+    assert commitment({"value": 1, "provenance": {"page": 2}}, "n1") == commitment(
+        {"provenance": {"page": 2}, "value": 1}, "n1"
     )
+
+
+def test_commitment_changes_with_the_nonce() -> None:
+    """A different nonce for the same value must produce a different commitment -- otherwise
+    salting would do nothing against cross-leaf/cross-package value correlation."""
+    assert commitment({"value": True}, "n1") != commitment({"value": True}, "n2")
 
 
 def test_empty_set_root_is_sha256_of_empty_bytes() -> None:

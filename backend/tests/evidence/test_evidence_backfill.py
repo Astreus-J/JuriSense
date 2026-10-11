@@ -4,13 +4,25 @@ every backfilled package recomputes to its stored root (BR-EVD-001)."""
 import uuid
 
 import httpx
-from sqlalchemy import delete, select
-from sqlalchemy.ext.asyncio import async_sessionmaker
+from sqlalchemy import delete, select, text
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.evidence.application import evidence_package_service
 from app.evidence.infrastructure.models import Evidence, EvidencePackage
 from tests.approvals.conftest import create_supplier, register_org_and_login
 from tests.policies.test_compliance_review import EVIDENCE_ENVELOPE, TAX_ID, _upload_contract
+
+
+async def _delete_as_if_it_predated_evd001(session: AsyncSession, package_ids: list) -> None:
+    """#184 added a DB trigger that rejects DELETE on `evidence`/`evidence_packages` -- a real,
+    deliberate guarantee for production. These tests still need to construct the one state the
+    backfill feature exists for (a Decision that predates EVD-001 and never had a package
+    assembled), so they drop the SQLite DELETE trigger first, the same bypass a one-off
+    historical-data script would need in the real database."""
+    for table in ("evidence", "evidence_packages"):
+        await session.execute(text(f"DROP TRIGGER IF EXISTS trg_{table}_append_only_delete"))
+    await session.execute(delete(Evidence).where(Evidence.evidence_package_id.in_(package_ids)))
+    await session.execute(delete(EvidencePackage).where(EvidencePackage.id.in_(package_ids)))
 
 
 async def test_backfill_creates_missing_packages_once_and_they_recompute(
@@ -32,8 +44,7 @@ async def test_backfill_creates_missing_packages_once_and_they_recompute(
     # Simulate a Decision created before EVD-001: remove its package and leaves.
     async with db_session_factory() as session:
         package_ids = [p.id for p in (await session.execute(select(EvidencePackage))).scalars()]
-        await session.execute(delete(Evidence).where(Evidence.evidence_package_id.in_(package_ids)))
-        await session.execute(delete(EvidencePackage).where(EvidencePackage.id.in_(package_ids)))
+        await _delete_as_if_it_predated_evd001(session, package_ids)
         await session.commit()
 
     async with db_session_factory() as session:
@@ -98,8 +109,7 @@ async def test_backfill_records_the_outcome_a_decision_was_created_with_not_its_
 
     async with db_session_factory() as session:
         package_ids = [p.id for p in (await session.execute(select(EvidencePackage))).scalars()]
-        await session.execute(delete(Evidence).where(Evidence.evidence_package_id.in_(package_ids)))
-        await session.execute(delete(EvidencePackage).where(EvidencePackage.id.in_(package_ids)))
+        await _delete_as_if_it_predated_evd001(session, package_ids)
         await session.commit()
 
     async with db_session_factory() as session:
@@ -138,8 +148,7 @@ async def test_one_failing_decision_does_not_abort_the_backfill_run(
     )
     async with db_session_factory() as session:
         package_ids = [p.id for p in (await session.execute(select(EvidencePackage))).scalars()]
-        await session.execute(delete(Evidence).where(Evidence.evidence_package_id.in_(package_ids)))
-        await session.execute(delete(EvidencePackage).where(EvidencePackage.id.in_(package_ids)))
+        await _delete_as_if_it_predated_evd001(session, package_ids)
         await session.commit()
 
     async def boom(*args, **kwargs):

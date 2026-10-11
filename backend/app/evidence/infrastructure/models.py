@@ -2,10 +2,11 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, UniqueConstraint, func
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
+from app.evidence.infrastructure.append_only import register_append_only_guards
 
 
 class AuditEvent(Base):
@@ -16,7 +17,8 @@ class AuditEvent(Base):
     payload" rather than through a DB-level relationship — the audit trail must remain
     resolvable even if the referenced row is later changed or removed. No update or
     delete path exists anywhere for this entity (BR-EVD-003/AUD-002); see
-    AuditEventRepository, which exposes only add/get/list.
+    AuditEventRepository, which exposes only add/get/list. Enforced below the ORM too, by a
+    DB trigger rejecting any UPDATE/DELETE (`infrastructure/append_only.py`, #184).
     """
 
     __tablename__ = "audit_events"
@@ -37,8 +39,10 @@ class EvidencePackage(Base):
 
     One package per Decision, enforced by `uq_evidence_packages_one_per_decision`. A
     superseded Decision keeps its package: nothing here is ever deleted or updated after
-    creation. `merkle_root` is stored for fast reads and verification, and is always
-    recomputable from the `Evidence` rows (`evidence_package_service.recompute`).
+    creation -- enforced by a DB trigger, not just application convention
+    (`infrastructure/append_only.py`, #184). `merkle_root` is stored for fast reads and
+    verification, and is always recomputable from the `Evidence` rows
+    (`evidence_package_service.recompute`).
     """
 
     __tablename__ = "evidence_packages"
@@ -120,3 +124,57 @@ class BlockchainAnchor(Base):
         DateTime(timezone=True), server_default=func.now()
     )
     confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+
+
+class EvidenceOverrideAddendum(Base):
+    """An anchorable, append-only record of a Decision override, chained onto the
+    `EvidencePackage` that already existed (and may already be anchored) for that Decision
+    (product decision 2026-10-10, closing #187; docs/03-domain/domain-model.md "Decision"
+    invariants).
+
+    `override_decision` can run more than once against the same Decision while it stays
+    `ACTIVE`, so a package accumulates one addendum per override, not at most one --
+    `sequence_number` orders them and `previous_hash` chains each one's `content_hash` to the
+    one before it (`domain/override_addendum.py`), so the sequence itself is tamper-evident.
+    Deliberately NOT folded into the package's own Merkle tree (`domain/merkle.py`): that tree
+    is sealed the moment the package is created/anchored, and an addendum, by definition,
+    happens after that. Wiring a package's addenda into `BlockchainAnchor`/`AnchoringProvider`
+    is out of scope here -- today they are stored and readable (via the evidence-package API),
+    not yet submitted for anchoring on their own.
+
+    QA/security review (2026-10-10): `evidence_package_service.record_override_addendum` locks
+    the parent `EvidencePackage` row (`SELECT ... FOR UPDATE`) before computing the next
+    `sequence_number`/`previous_hash`, so two concurrent overrides of the same Decision can
+    never compute the same pair -- but that locking is this class's own insurance, not a
+    database-level guarantee. `uq_evidence_override_addenda_one_per_sequence` is the backstop:
+    even if a future call site ever creates an addendum without taking that lock, two rows
+    claiming the same `(evidence_package_id, sequence_number)` can still never both commit.
+    """
+
+    __tablename__ = "evidence_override_addenda"
+    __table_args__ = (
+        UniqueConstraint(
+            "evidence_package_id",
+            "sequence_number",
+            name="uq_evidence_override_addenda_one_per_sequence",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id"), index=True)
+    evidence_package_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("evidence_packages.id"), index=True
+    )
+    decision_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("decisions.id"), index=True)
+    sequence_number: Mapped[int] = mapped_column(Integer)
+    original_status: Mapped[str] = mapped_column(String(20))
+    new_status: Mapped[str] = mapped_column(String(20))
+    justification: Mapped[str] = mapped_column(Text)
+    overridden_by: Mapped[uuid.UUID] = mapped_column()
+    overridden_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    previous_hash: Mapped[str | None] = mapped_column(String(64), default=None)
+    content_hash: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+register_append_only_guards(Base.metadata)

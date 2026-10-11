@@ -10,9 +10,9 @@ import json
 import uuid
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.approvals.domain.evidence import DecisionFacts
 from app.approvals.infrastructure.models import Decision
@@ -30,6 +30,14 @@ from tests.policies.test_compliance_review import (
     _create_policy_with_rules,
     _upload_contract,
 )
+
+
+async def _drop_evidence_update_guard(session: AsyncSession) -> None:
+    """#184 added a DB trigger that rejects UPDATE on `evidence` -- a real, deliberate guarantee
+    for production. These tamper-detection tests still need to simulate the one thing that
+    trigger exists to stop (a leaf rewritten after the fact), so they drop the SQLite UPDATE
+    trigger first, the same bypass a rogue admin or a bug would need in the real database."""
+    await session.execute(text("DROP TRIGGER IF EXISTS trg_evidence_append_only_update"))
 
 
 async def _organization_id(db_session_factory: async_sessionmaker, email: str) -> uuid.UUID:
@@ -251,8 +259,11 @@ async def test_review_chain_resolved_to_approve_records_the_human_reviewers(
     [reviewer] = reviewers
     assert reviewer.payload["approver_role"] == "legal"
     assert reviewer.payload["status"] == "approved"
-    assert reviewer.payload["resolved_by"] is not None
     assert reviewer.payload["step_number"] == 1
+    # Product decision (2026-10-10): the hashed/anchored leaf records only the resolving role,
+    # never the individual reviewer's identity -- that stays a live, authenticated-only read
+    # through the Decision Passport's own port.
+    assert "resolved_by" not in reviewer.payload
 
     recomputed = await _recompute(db_session_factory, packages[0].id)
     assert recomputed.matches is True
@@ -435,6 +446,7 @@ async def test_tampering_with_one_persisted_leaf_makes_recompute_mismatch(
     victim = next(row for row in evidence if row.type == "decision")
 
     async with db_session_factory() as session:
+        await _drop_evidence_update_guard(session)
         row = await session.get(Evidence, victim.id)
         row.payload = {**row.payload, "status": "APPROVE"}  # rewrite history
         await session.commit()
@@ -559,6 +571,7 @@ async def test_recompute_flags_a_tampered_leaf_even_when_the_root_still_matches(
     victim = evidence[0]
 
     async with db_session_factory() as session:
+        await _drop_evidence_update_guard(session)
         row = await session.get(Evidence, victim.id)
         row.content_hash = "0" * 64
         await session.commit()

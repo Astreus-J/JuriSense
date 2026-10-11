@@ -9,6 +9,7 @@ import httpx
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.approvals.infrastructure.repositories import DecisionRepository
+from app.evidence.infrastructure.repositories import AuditEventRepository
 from app.identity.infrastructure.repositories import UserRepository
 from app.policies.infrastructure.repositories import RuleEvaluationRepository
 from tests.approvals.conftest import (
@@ -166,3 +167,81 @@ async def test_decisions_are_scoped_to_the_caller_organization(
         headers=outsider_headers,
     )
     assert override_response.status_code == 404
+
+
+async def test_override_appends_a_chained_addendum_to_the_evidence_package(
+    client: httpx.AsyncClient,
+    db_session_factory: async_sessionmaker,
+    mock_openrouter,
+    mock_cnpj_registry,
+    seed_sanctions_index,
+    run_contract_extraction_inline,
+    run_supplier_checks_inline,
+) -> None:
+    """#187: override_decision used to change `Decision.status` in place without ever
+    touching the EvidencePackage already assembled for it, leaving anchored evidence stale.
+    Every override now appends a chained, anchorable `EvidenceOverrideAddendum`."""
+    mock_cnpj_registry(data=ACTIVE_CNPJ_RESPONSE)
+    await seed_sanctions_index(hit_document=TAX_ID)
+    mock_openrouter(payload=EVIDENCE_ENVELOPE)
+
+    headers = await register_org_and_login(client, "override-addendum@example.com")
+    review = await _block_decision(client, headers)
+
+    async with db_session_factory() as session:
+        admin = await UserRepository(session).get_by_email("override-addendum@example.com")
+        organization_id = admin.organization_id
+        decision = await DecisionRepository(session).get_by_review(
+            uuid.UUID(review["id"]), organization_id
+        )
+    decision_id = decision.id
+
+    first = await client.post(
+        f"/api/decisions/{decision_id}/override",
+        json={"new_status": "APPROVE", "justification": "Sanctions hit was a false positive"},
+        headers=headers,
+    )
+    assert first.status_code == 200, first.text
+
+    package_response = await client.get(
+        f"/api/decisions/{decision_id}/evidence-package", headers=headers
+    )
+    assert package_response.status_code == 200, package_response.text
+    package_id = package_response.json()["id"]
+    addenda = package_response.json()["override_addenda"]
+    assert len(addenda) == 1
+    [first_addendum] = addenda
+    assert first_addendum["sequence_number"] == 1
+    assert first_addendum["previous_hash"] is None
+    assert first_addendum["original_status"] == "BLOCK"
+    assert first_addendum["new_status"] == "APPROVE"
+    assert first_addendum["decision_id"] == str(decision_id)
+    assert first_addendum["evidence_package_id"] == package_id
+    assert first_addendum["content_hash"]
+
+    async with db_session_factory() as session:
+        events = await AuditEventRepository(session).list(
+            organization_id=organization_id, event_type="evidence.override_addendum_recorded"
+        )
+    assert len(events) == 1
+    assert events[0].payload["sequence_number"] == 1
+    assert events[0].payload["content_hash"] == first_addendum["content_hash"]
+
+    # A second override on the same (still-ACTIVE) Decision extends the chain.
+    second = await client.post(
+        f"/api/decisions/{decision_id}/override",
+        json={"new_status": "BLOCK", "justification": "Reassessed: the hit was genuine"},
+        headers=headers,
+    )
+    assert second.status_code == 200, second.text
+
+    package_response_2 = await client.get(
+        f"/api/decisions/{decision_id}/evidence-package", headers=headers
+    )
+    addenda_2 = package_response_2.json()["override_addenda"]
+    assert len(addenda_2) == 2
+    second_addendum = next(a for a in addenda_2 if a["sequence_number"] == 2)
+    assert second_addendum["previous_hash"] == first_addendum["content_hash"]
+    assert second_addendum["original_status"] == "APPROVE"
+    assert second_addendum["new_status"] == "BLOCK"
+    assert second_addendum["content_hash"] != first_addendum["content_hash"]

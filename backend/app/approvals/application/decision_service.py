@@ -23,7 +23,10 @@ from app.approvals.infrastructure.models import Decision
 from app.approvals.infrastructure.repositories import DecisionRepository
 from app.core.config import get_settings
 from app.evidence.application.audit_service import emit_audit_event
-from app.evidence.application.evidence_package_service import assemble_evidence_package
+from app.evidence.application.evidence_package_service import (
+    assemble_evidence_package,
+    record_override_addendum,
+)
 
 
 async def create_decision_for_review(
@@ -255,6 +258,12 @@ async def override_decision(
     explicitly-modeled mutation path, see `Decision`'s own docstring). Never touches the
     underlying `RuleEvaluation`/`ApprovalRequest` records (BR-DEC-003: "without deleting
     the original evaluation record") -- this function doesn't even import those models.
+
+    #187: also appends an `EvidenceOverrideAddendum` to the Decision's EvidencePackage
+    (`evidence_package_service.record_override_addendum`), in the same transaction, so the
+    anchored evidence never silently goes stale relative to an override. Does not commit
+    before that call -- if it fails, the Decision-row update and the audit event above are
+    rolled back along with it.
     """
     if not justification or not justification.strip():
         raise EmptyJustificationError()
@@ -292,6 +301,17 @@ async def override_decision(
             "overridden_by": str(actor_id),
             "overridden_at": now.isoformat(),
         },
+    )
+    await record_override_addendum(
+        session,
+        organization_id=organization_id,
+        decision_id=decision_id,
+        original_status=original_status,
+        new_status=new_status,
+        justification=justification,
+        overridden_by=actor_id,
+        overridden_at=now,
+        actor_id=actor_id,
     )
     await session.commit()
     await session.refresh(decision)

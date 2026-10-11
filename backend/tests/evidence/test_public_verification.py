@@ -8,6 +8,7 @@ import uuid
 
 import httpx
 import pytest
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.evidence.application import verification_service
@@ -238,6 +239,13 @@ async def test_verify_returns_mismatch_when_the_stored_hash_changed_after_anchor
     )
 
     async with db_session_factory() as session:
+        # #184 added a DB trigger rejecting UPDATE on evidence_packages -- a real, deliberate
+        # guarantee for production. This test simulates the exact tamper that trigger exists to
+        # stop, so it drops the SQLite trigger first, the same bypass a rogue admin or a bug
+        # would need in the real database.
+        await session.execute(
+            text("DROP TRIGGER IF EXISTS trg_evidence_packages_append_only_update")
+        )
         package = await session.get(EvidencePackage, package_id)
         package.merkle_root = "f" * 64
         await session.commit()

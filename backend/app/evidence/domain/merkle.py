@@ -43,11 +43,18 @@ def canonical_json(value: Any) -> bytes:
     ).encode("ascii")
 
 
-def commitment(value: Any) -> str:
-    """SHA-256 hex digest of a value's canonical JSON. Used for payload fields that must
-    commit to content without storing it (contract field values, rationale text, raw
-    registry results)."""
-    return hashlib.sha256(canonical_json(value)).hexdigest()
+def commitment(value: Any, nonce: str) -> str:
+    """SHA-256 hex digest of a value's canonical JSON, salted with a per-leaf random nonce.
+    Used for payload fields that must commit to content without storing it (contract field
+    values, rationale text, raw registry results) -- the nonce is required (product
+    decision, 2026-10-10) because these values are often low-entropy (booleans, short
+    enums, currency codes, day counts), and an unsalted hash over a small domain lets
+    anyone holding only the public commitment guess the plaintext, or correlate the same
+    plaintext appearing in two different packages by comparing hashes. The nonce is stored
+    in the clear next to the commitment (see call sites in `evidence_package_service.py`)
+    so `recompute()` can still verify it -- its job is to make each leaf's hash unique
+    even for a repeated value, not to keep the value secret."""
+    return hashlib.sha256(canonical_json({"value": value, "nonce": nonce})).hexdigest()
 
 
 @dataclass(frozen=True)

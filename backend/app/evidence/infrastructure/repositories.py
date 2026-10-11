@@ -7,6 +7,7 @@ from app.evidence.infrastructure.models import (
     AuditEvent,
     BlockchainAnchor,
     Evidence,
+    EvidenceOverrideAddendum,
     EvidencePackage,
 )
 
@@ -75,14 +76,21 @@ class EvidencePackageRepository:
         return result.scalar_one_or_none()
 
     async def get_by_decision_and_organization(
-        self, decision_id: uuid.UUID, organization_id: uuid.UUID
+        self, decision_id: uuid.UUID, organization_id: uuid.UUID, *, for_update: bool = False
     ) -> EvidencePackage | None:
-        result = await self._session.execute(
-            select(EvidencePackage).where(
-                EvidencePackage.decision_id == decision_id,
-                EvidencePackage.organization_id == organization_id,
-            )
+        """`for_update=True` (QA/security review, 2026-10-10, #187) takes a row lock on the
+        package, held until the caller's transaction ends -- `record_override_addendum` uses
+        this to serialize concurrent overrides of the same Decision, so two overrides can
+        never read the same "latest addendum" and compute the same `sequence_number`. A no-op
+        on SQLite (the test suite's backend), which doesn't support row locking; the
+        `uq_evidence_override_addenda_one_per_sequence` constraint is the backstop there."""
+        query = select(EvidencePackage).where(
+            EvidencePackage.decision_id == decision_id,
+            EvidencePackage.organization_id == organization_id,
         )
+        if for_update:
+            query = query.with_for_update()
+        result = await self._session.execute(query)
         return result.scalar_one_or_none()
 
     async def get_by_decision_id_any_organization(
@@ -135,6 +143,44 @@ class EvidenceRepository:
             .order_by(Evidence.type, Evidence.ref_id)
         )
         return list(result.scalars())
+
+
+class EvidenceOverrideAddendumRepository:
+    """Append-only, tenant-scoped repository for `EvidenceOverrideAddendum` (#187). Exposes
+    `add` and reads only, same append-only spirit as `EvidencePackageRepository`."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    def add(self, addendum: EvidenceOverrideAddendum) -> None:
+        self._session.add(addendum)
+
+    async def list_by_package(
+        self, evidence_package_id: uuid.UUID, organization_id: uuid.UUID
+    ) -> list[EvidenceOverrideAddendum]:
+        result = await self._session.execute(
+            select(EvidenceOverrideAddendum)
+            .where(
+                EvidenceOverrideAddendum.evidence_package_id == evidence_package_id,
+                EvidenceOverrideAddendum.organization_id == organization_id,
+            )
+            .order_by(EvidenceOverrideAddendum.sequence_number)
+        )
+        return list(result.scalars())
+
+    async def get_latest_for_package(
+        self, evidence_package_id: uuid.UUID, organization_id: uuid.UUID
+    ) -> EvidenceOverrideAddendum | None:
+        result = await self._session.execute(
+            select(EvidenceOverrideAddendum)
+            .where(
+                EvidenceOverrideAddendum.evidence_package_id == evidence_package_id,
+                EvidenceOverrideAddendum.organization_id == organization_id,
+            )
+            .order_by(EvidenceOverrideAddendum.sequence_number.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
 
 
 class BlockchainAnchorRepository:

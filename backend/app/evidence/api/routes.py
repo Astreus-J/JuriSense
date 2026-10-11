@@ -61,6 +61,22 @@ def _to_response(view: PackageView) -> EvidencePackageResponse:
             }
             for row in view.evidence
         ],
+        override_addenda=[
+            {
+                "id": addendum.id,
+                "evidence_package_id": addendum.evidence_package_id,
+                "decision_id": addendum.decision_id,
+                "sequence_number": addendum.sequence_number,
+                "original_status": addendum.original_status,
+                "new_status": addendum.new_status,
+                "justification": addendum.justification,
+                "overridden_by": addendum.overridden_by,
+                "overridden_at": addendum.overridden_at,
+                "previous_hash": addendum.previous_hash,
+                "content_hash": addendum.content_hash,
+            }
+            for addendum in view.override_addenda
+        ],
     )
 
 

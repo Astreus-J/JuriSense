@@ -276,6 +276,17 @@ Invariants, Lifecycle, Events, Versioning behavior, Tenant ownership.
   with `supersedes_decision_id` set (`ADR-010` §4). At most one `ACTIVE` Decision per
   ContractVersion (`BR-DEC-002`, enforced by a partial unique index). An override (`BR-DEC-003`)
   is the one in-place change, and it is only possible while the Decision is `ACTIVE`.
+- **Product decision (reconfirmed 2026-10-10)**: supersession is strictly "whichever Decision is
+  created LAST wins," symmetric between a manual review and an automated re-evaluation chain —
+  there is no special-casing that makes a manual Decision immune to being superseded by a
+  re-evaluation chain that was triggered earlier but happens to resolve later (`create_decision_
+  for_review`'s own docstring step 2 describes the mechanics; `test_manual_review_completing_
+  before_a_pending_reevaluation_chain_is_superseded_by_it` and its mirror lock this in). The one
+  deliberate asymmetry is `overridden` Decisions (`F1`/`BR-DEC-003`): those are never superseded
+  by an automated chain, only by another manual review. Re-evaluated and confirmed as the
+  intended behavior, not an oversight — a Decision is meant to always reflect the most complete
+  information available as of the moment it was produced, whether that completion came from a
+  human or from automation re-running against newer policy/contract state.
 - **Lifecycle**: `lifecycle` goes `ACTIVE → SUPERSEDED`, one way. `SUPERSEDED` is set on the old
   row only when a newer Decision replaces it, and that is the only change to the old row.
   `status` is the outcome and never changes meaning. Staleness (`expired`, `contract_changed`,

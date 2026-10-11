@@ -15,6 +15,22 @@ class EvidenceResponse(BaseModel):
     content_hash: str
 
 
+class EvidenceOverrideAddendumResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    evidence_package_id: uuid.UUID
+    decision_id: uuid.UUID
+    sequence_number: int
+    original_status: str
+    new_status: str
+    justification: str
+    overridden_by: uuid.UUID
+    overridden_at: datetime
+    previous_hash: str | None
+    content_hash: str
+
+
 class EvidencePackageResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -25,6 +41,7 @@ class EvidencePackageResponse(BaseModel):
     evidence_count: int
     created_at: datetime
     evidence: list[EvidenceResponse]
+    override_addenda: list[EvidenceOverrideAddendumResponse]
 
 
 class RecomputeResponse(BaseModel):

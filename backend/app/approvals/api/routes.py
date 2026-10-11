@@ -22,6 +22,7 @@ from app.approvals.domain.errors import (
     OverriddenDecisionSupersessionError,
 )
 from app.core.db import SessionDep
+from app.evidence.application.evidence_package_service import EvidencePackageNotFoundError
 from app.identity.api.deps import require_permission
 from app.identity.domain.constants import Module
 from app.identity.infrastructure.models import User
@@ -192,4 +193,9 @@ async def override_decision(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=exc.message
         ) from exc
+    except EvidencePackageNotFoundError as exc:
+        # #187: only reachable for a Decision that predates EVD-001 and was never backfilled
+        # (`evidence_package_service.backfill_missing_packages`) -- every Decision created
+        # since always has a package to append this override's addendum to.
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.message) from exc
     return DecisionResponse.model_validate(decision)

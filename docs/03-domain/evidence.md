@@ -37,6 +37,17 @@ domain entity or event referenced in `docs/03-domain/audit.md`:
 | Final decision | `Decision.status` (`APPROVE|REVIEW|BLOCK`), and `overridden`/`override_justification` if applicable |
 | Timestamp | `Decision.created_at` (and, for an override, `decision.overridden`'s `overridden_at`) |
 
+**Product decision (reconfirmed 2026-10-10)**: the Supplier row above — `Supplier.id`,
+`legal_name`, `tax_id` — is captured as a **point-in-time snapshot as of the decision**, not a live
+reference re-read from the current `Supplier` row, for the same consistency reason the rest of this
+table already reads from fixed, review-time state (`SupplierProfile`/`SupplierCheck` "current as of
+the review", not "current as of whenever someone opens the Passport"). This is currently moot —
+there is no feature yet that lets a `Supplier`'s `legal_name`/`tax_id` be edited after a `Decision`
+references it, so today the snapshot and the live row are always identical. The decision is recorded
+now so that whenever a supplier-edit feature ships, it's built against an already-settled answer
+instead of silently defaulting to a live join that would make older Decision Passports describe a
+supplier identity that didn't exist at decision time.
+
 Each of these is represented internally as one or more `Evidence` records — `domain-model.md`:
 *"one atomic piece of evidence referenced by a `Decision` (a document hash, a `SupplierCheck`
 result, a `RuleEvaluation`)"* — each with a `type`, `ref_id` (pointing back to the source entity),
@@ -65,6 +76,34 @@ this step; it only collects references and hashes of facts that already exist. T
 `EVD-001` ("assemble a complete `EvidencePackage` for every `Decision`") a mechanical step rather
 than a judgment call: everything it needs was already recorded, immutably, by the time
 `decision.created` fires.
+
+## Override addenda (product decision 2026-10-10, closing #187)
+
+`override_decision` is the one documented exception to "never edited in place" (it changes
+`Decision.status` in place, `BR-DEC-003`) -- but until this decision, it never touched the
+`EvidencePackage` already assembled for that Decision, leaving anchored evidence silently stale
+relative to the real, overridden outcome. Every override now also appends an
+`EvidenceOverrideAddendum` to the package, in the same transaction as the Decision update and its
+`decision.overridden` audit event:
+
+```
+EvidencePackage (merkle_root, sealed at creation/anchoring time)
+    │
+    └── EvidenceOverrideAddendum[sequence_number=1] (previous_hash=null)
+            └── EvidenceOverrideAddendum[sequence_number=2] (previous_hash=addendum[1].content_hash)
+                    └── ...
+```
+
+A Decision can be overridden more than once while it stays `ACTIVE`, so a package can accumulate
+more than one addendum, not at most one. Each addendum's `content_hash` commits to its own fields
+*and* the previous addendum's hash (`None` for the first), so the sequence itself is tamper-evident
+and strictly ordered -- a chain, not an independent bag of rows (`app/evidence/domain/
+override_addendum.py`). Deliberately kept OUT of the package's own Merkle tree: that tree is
+sealed at package-creation time (and may already be anchored), while an addendum, by definition,
+happens later. Addenda are append-only (the same DB trigger as `evidence`/`evidence_packages`,
+`infrastructure/append_only.py`) and readable through the existing evidence-package API, but
+wiring them into `BlockchainAnchor`/`AnchoringProvider` on their own is deliberately deferred --
+today they strengthen the audit trail and are ready to anchor, but nothing submits them yet.
 
 Once assembled, the `EvidencePackage` itself is immutable (`domain-model.md`): a re-evaluation never
 edits an existing package — a new `Decision` (via `supersedes_decision_id`, `BR-DEC-002`) produces

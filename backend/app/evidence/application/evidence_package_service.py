@@ -13,9 +13,15 @@ for an existing package and returns it unchanged if one exists, so a re-run is a
 no audit event). A superseded Decision keeps its package.
 
 ## Design: leaves are the source of truth, the root is derived
-Leaves are persisted first, then the root is computed from the persisted rows (not from in-memory
-objects), so the stored `merkle_root` is what a later recomputation from the same rows yields.
-The canonical encoding, leaf hash, ordering and tree rules live in `domain/merkle.py`.
+`compute_merkle` runs once, over the in-memory `LeafInput` list that is about to be persisted, and
+the `EvidencePackage` row is created with its final `merkle_root`/`evidence_count` already set --
+there is no placeholder-then-update step (product decision 2026-10-10, closing #184): both
+`evidence_packages` and `evidence` are append-only end to end, enforced by a DB trigger that
+rejects every UPDATE/DELETE (`infrastructure/append_only.py`), so assembly itself must never need
+to update a row after creating it. `recompute()` still independently re-derives the root from the
+persisted `Evidence` rows (not from these in-memory objects), so it continues to catch any drift
+between what was computed and what is actually stored. The canonical encoding, leaf hash, ordering
+and tree rules live in `domain/merkle.py`.
 
 ## Leaf catalog (what each leaf's `payload` holds)
 Payloads hold only ids, versions, enum values and SHA-256 commitments. No contract text, no
@@ -26,12 +32,22 @@ personal data (BR-EVD-002).
 - `ai_execution`: provider, model_name, prompt_version, extracted_at (from the extraction run
   persisted in `ContractVersion.extracted_data`). Omitted when no extraction run is recorded.
 - `policy_version`: policy_id, version_number (every PolicyVersion pooled by the review).
-- `rule_evaluation`: rule_id, rule_key, outcome, severity, approver_role, rationale_commitment.
-- `contract_field`: one per normalized contract field, `commitment` = hash of {value, provenance}.
+- `rule_evaluation`: rule_id, rule_key, outcome, severity, approver_role, rationale_nonce,
+  rationale_commitment (salted with rationale_nonce -- product decision 2026-10-10, see
+  `domain/merkle.py`'s `commitment()`).
+- `contract_field`: one per normalized contract field, `nonce` + `commitment` = salted hash of
+  {value, provenance}. Salted for the same reason: field values are often low-entropy
+  (booleans, enums, currency, day counts).
 - `supplier_check`: one per SupplierCheck the review's rule evaluations referenced
-  (`evidence_refs`): supplier_id, supplier_profile_id, sources_consulted, raw_results_commitment.
+  (`evidence_refs`): supplier_id, supplier_profile_id, sources_consulted, raw_results_nonce,
+  raw_results_commitment (salted).
 - `reviewer`: one per ApprovalRequest of the review: approver_role, step_number, status,
-  resolved_by, resolved_at.
+  resolved_at. Deliberately does NOT include `resolved_by` (product decision 2026-10-10): the
+  hashed/anchored evidence leaf records only the role that resolved it, not the individual
+  reviewer's identity, so a verifier reconstructing this leaf never needs a user id. The live
+  Decision Passport UI still shows `resolved_by` -- that's a separate, authenticated-internal-only
+  read through `decision_passport_service.py`'s own port (`docs/03-domain/evidence.md`), unaffected
+  by this.
 
 The evidence_refs path is what makes supplier checks historical: it is what the review actually
 used, read from immutable rows, not "whatever check is current today".
@@ -40,9 +56,16 @@ used, read from immutable rows, not "whatever check is current today".
 A missing review, contract version, document, or supplier check raises `EvidenceError`. Each is
 a broken reference, which should be impossible: the caller's transaction is then rolled back, and
 the Decision is never created without its package.
+
+## Override addenda (#187)
+`record_override_addendum` is called by `decision_service.override_decision`, after a Decision is
+overridden, to append an `EvidenceOverrideAddendum` to that Decision's already-existing package --
+closing the gap where an override left anchored evidence silently stale. See
+`domain/override_addendum.py` for the hash-chaining rules.
 """
 
 import logging
+import secrets
 import uuid
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
@@ -61,8 +84,18 @@ from app.contracts.domain.evidence import ContractVersionEvidenceDTO
 from app.evidence.application.audit_service import emit_audit_event
 from app.evidence.domain.errors import EvidenceError, EvidencePackageNotFoundError
 from app.evidence.domain.merkle import LeafInput, commitment, compute_merkle, leaf_hash
-from app.evidence.infrastructure.models import AuditEvent, Evidence, EvidencePackage
-from app.evidence.infrastructure.repositories import EvidencePackageRepository, EvidenceRepository
+from app.evidence.domain.override_addendum import compute_addendum_hash
+from app.evidence.infrastructure.models import (
+    AuditEvent,
+    Evidence,
+    EvidenceOverrideAddendum,
+    EvidencePackage,
+)
+from app.evidence.infrastructure.repositories import (
+    EvidenceOverrideAddendumRepository,
+    EvidencePackageRepository,
+    EvidenceRepository,
+)
 from app.policies.application.evidence_service import get_review_evidence
 from app.policies.domain.evidence import ReviewEvidenceDTO
 from app.suppliers.application.evidence_service import get_supplier_check_evidence
@@ -77,6 +110,7 @@ logger = logging.getLogger("jurisense.evidence.packages")
 class PackageView:
     package: EvidencePackage
     evidence: list[Evidence]
+    override_addenda: list[EvidenceOverrideAddendum]
 
 
 @dataclass(frozen=True)
@@ -120,13 +154,13 @@ async def assemble_evidence_package(
         return existing
 
     leaves = await _build_leaves(session, facts=facts)
+    merkle = compute_merkle(leaves)
 
     package = EvidencePackage(
         organization_id=facts.organization_id,
         decision_id=facts.decision_id,
-        # Placeholder replaced below, once the persisted leaves exist to hash.
-        merkle_root="",
-        evidence_count=0,
+        merkle_root=merkle.root,
+        evidence_count=len(leaves),
         created_at=datetime.now(UTC),
     )
     repository.add(package)
@@ -144,15 +178,6 @@ async def assemble_evidence_package(
                 content_hash=leaf_hash(leaf),
             )
         )
-    await session.flush()
-
-    persisted = await evidence_repository.list_by_package(package.id, facts.organization_id)
-    merkle = compute_merkle(
-        LeafInput(evidence_type=row.type, ref_id=row.ref_id, payload=row.payload)
-        for row in persisted
-    )
-    package.merkle_root = merkle.root
-    package.evidence_count = len(persisted)
     await session.flush()
 
     await emit_audit_event(
@@ -272,35 +297,43 @@ def _policy_and_rule_leaves(review: ReviewEvidenceDTO) -> list[LeafInput]:
         )
         for version in review.policy_versions
     ]
-    leaves.extend(
-        LeafInput(
-            evidence_type="rule_evaluation",
-            ref_id=str(evaluation.rule_evaluation_id),
-            payload={
-                "rule_id": str(evaluation.rule_id),
-                "rule_key": evaluation.rule_key,
-                "outcome": evaluation.outcome,
-                "severity": evaluation.severity,
-                "approver_role": evaluation.approver_role,
-                "rationale_commitment": commitment(evaluation.rationale),
-            },
+    for evaluation in review.rule_evaluations:
+        nonce = secrets.token_hex(16)
+        leaves.append(
+            LeafInput(
+                evidence_type="rule_evaluation",
+                ref_id=str(evaluation.rule_evaluation_id),
+                payload={
+                    "rule_id": str(evaluation.rule_id),
+                    "rule_key": evaluation.rule_key,
+                    "outcome": evaluation.outcome,
+                    "severity": evaluation.severity,
+                    "approver_role": evaluation.approver_role,
+                    "rationale_nonce": nonce,
+                    "rationale_commitment": commitment(evaluation.rationale, nonce),
+                },
+            )
         )
-        for evaluation in review.rule_evaluations
-    )
     return leaves
 
 
 def _contract_field_leaves(contract: ContractVersionEvidenceDTO) -> list[LeafInput]:
-    return [
-        LeafInput(
-            evidence_type="contract_field",
-            ref_id=field.context_path,
-            payload={
-                "commitment": commitment({"value": field.value, "provenance": field.provenance})
-            },
+    leaves = []
+    for field in contract.fields:
+        nonce = secrets.token_hex(16)
+        leaves.append(
+            LeafInput(
+                evidence_type="contract_field",
+                ref_id=field.context_path,
+                payload={
+                    "nonce": nonce,
+                    "commitment": commitment(
+                        {"value": field.value, "provenance": field.provenance}, nonce
+                    ),
+                },
+            )
         )
-        for field in contract.fields
-    ]
+    return leaves
 
 
 async def _supplier_check_leaves(
@@ -326,6 +359,7 @@ async def _supplier_check_leaves(
         )
         if check is None:
             raise EvidenceError("Cannot assemble evidence: supplier check not found")
+        nonce = secrets.token_hex(16)
         leaves.append(
             LeafInput(
                 evidence_type="supplier_check",
@@ -334,7 +368,8 @@ async def _supplier_check_leaves(
                     "supplier_id": str(check.supplier_id),
                     "supplier_profile_id": profile_id,
                     "sources_consulted": list(check.sources_consulted),
-                    "raw_results_commitment": commitment(check.raw_results),
+                    "raw_results_nonce": nonce,
+                    "raw_results_commitment": commitment(check.raw_results, nonce),
                 },
             )
         )
@@ -342,6 +377,19 @@ async def _supplier_check_leaves(
 
 
 def _reviewer_leaf(record: ReviewerRecord) -> LeafInput:
+    """Deliberately omits `resolved_by` (product decision 2026-10-10): the hashed/anchored
+    leaf records only the role that resolved the step, not the individual reviewer's identity.
+    The live Decision Passport UI still shows `resolved_by` through a separate port
+    (`decision_passport_service.py`'s `PassportReviewer`) -- that READ is unaffected by this.
+
+    Security review (2026-10-10): this is a real trade-off, not a free improvement. The
+    anchored evidence no longer lets a dispute over "did user X actually approve this" point
+    to a tamper-evident, hash-chain-backed attestation of identity -- only of role. `resolved_by`
+    on the live `ApprovalRequest` row is still protected (an ORM `@validates` guard, not this
+    module's DB trigger), just with strictly less tamper-evidence than before this change. Traded
+    deliberately for BR-EVD-002 ("no personal data in anchored evidence"), and `recompute()` never
+    cross-checked a leaf against the live `ApprovalRequest` row anyway, so no integrity check is
+    lost -- only the anchored record's own evidentiary strength on this one field."""
     return LeafInput(
         evidence_type="reviewer",
         ref_id=str(record.approval_request_id),
@@ -349,7 +397,6 @@ def _reviewer_leaf(record: ReviewerRecord) -> LeafInput:
             "approver_role": record.approver_role,
             "step_number": record.step_number,
             "status": record.status,
-            "resolved_by": str(record.resolved_by) if record.resolved_by else None,
             "resolved_at": _iso(record.resolved_at),
         },
     )
@@ -363,8 +410,7 @@ async def get_package(
     )
     if package is None:
         raise EvidencePackageNotFoundError()
-    evidence = await EvidenceRepository(session).list_by_package(package.id, organization_id)
-    return PackageView(package=package, evidence=evidence)
+    return await _package_view(session, package, organization_id)
 
 
 async def get_package_for_decision(
@@ -375,8 +421,98 @@ async def get_package_for_decision(
     )
     if package is None:
         raise EvidencePackageNotFoundError()
+    return await _package_view(session, package, organization_id)
+
+
+async def _package_view(
+    session: AsyncSession, package: EvidencePackage, organization_id: uuid.UUID
+) -> PackageView:
     evidence = await EvidenceRepository(session).list_by_package(package.id, organization_id)
-    return PackageView(package=package, evidence=evidence)
+    addenda = await EvidenceOverrideAddendumRepository(session).list_by_package(
+        package.id, organization_id
+    )
+    return PackageView(package=package, evidence=evidence, override_addenda=addenda)
+
+
+async def record_override_addendum(
+    session: AsyncSession,
+    *,
+    organization_id: uuid.UUID,
+    decision_id: uuid.UUID,
+    original_status: str,
+    new_status: str,
+    justification: str,
+    overridden_by: uuid.UUID,
+    overridden_at: datetime,
+    actor_id: uuid.UUID | None,
+) -> EvidenceOverrideAddendum:
+    """Called by `decision_service.override_decision`, after the Decision row is updated and
+    before the caller commits. Appends one `EvidenceOverrideAddendum` to the Decision's
+    EvidencePackage, chained to whatever addendum (if any) already exists for it -- a Decision
+    can be overridden more than once while it stays ACTIVE. Does not commit.
+
+    QA/security review (2026-10-10): fetches the package `for_update=True`, locking its row
+    until this transaction commits, so two overrides racing on the same Decision can never
+    both compute the next `sequence_number`/`previous_hash` from the same "latest addendum" --
+    the second to reach this lock waits for the first to commit (or roll back) before reading.
+    `uq_evidence_override_addenda_one_per_sequence` is the DB-level backstop if that ever fails.
+
+    Raises `EvidencePackageNotFoundError` if the Decision has no package yet -- only possible
+    for a Decision that predates EVD-001 and has not been backfilled
+    (`backfill_missing_packages`); every Decision created since always has one.
+    """
+    package = await EvidencePackageRepository(session).get_by_decision_and_organization(
+        decision_id, organization_id, for_update=True
+    )
+    if package is None:
+        raise EvidencePackageNotFoundError()
+
+    addendum_repository = EvidenceOverrideAddendumRepository(session)
+    latest = await addendum_repository.get_latest_for_package(package.id, organization_id)
+    sequence_number = latest.sequence_number + 1 if latest else 1
+    previous_hash = latest.content_hash if latest else None
+
+    content_hash = compute_addendum_hash(
+        evidence_package_id=str(package.id),
+        decision_id=str(decision_id),
+        sequence_number=sequence_number,
+        original_status=original_status,
+        new_status=new_status,
+        justification=justification,
+        overridden_by=str(overridden_by),
+        overridden_at=_iso(overridden_at),
+        previous_hash=previous_hash,
+    )
+    addendum = EvidenceOverrideAddendum(
+        organization_id=organization_id,
+        evidence_package_id=package.id,
+        decision_id=decision_id,
+        sequence_number=sequence_number,
+        original_status=original_status,
+        new_status=new_status,
+        justification=justification,
+        overridden_by=overridden_by,
+        overridden_at=overridden_at,
+        previous_hash=previous_hash,
+        content_hash=content_hash,
+    )
+    addendum_repository.add(addendum)
+    await session.flush()
+
+    await emit_audit_event(
+        session,
+        event_type="evidence.override_addendum_recorded",
+        actor_id=actor_id,
+        organization_id=organization_id,
+        payload={
+            "evidence_override_addendum_id": str(addendum.id),
+            "evidence_package_id": str(package.id),
+            "decision_id": str(decision_id),
+            "sequence_number": sequence_number,
+            "content_hash": content_hash,
+        },
+    )
+    return addendum
 
 
 async def recompute(

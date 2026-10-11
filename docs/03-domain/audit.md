@@ -548,6 +548,26 @@ the emission: that it shares its business transaction is covered only by the ato
 - Audit implications: `merkle_root` recorded here is what `BR-EVD-001` requires to be
   deterministically recomputable later — full mechanics in `docs/03-domain/evidence.md`.
 
+**`evidence.override_addendum_recorded`**
+- Producer: `EvidenceOverrideAddendum` aggregate (`app.evidence.application.evidence_package_
+  service.record_override_addendum`), called by `decision_service.override_decision` in the
+  same transaction as `decision.overridden`, right after it (product decision 2026-10-10,
+  closing #187).
+- Meaning: a Decision's EvidencePackage has gained one more chained, anchorable addendum
+  recording an override -- closing the gap where `override_decision` changed `Decision.status`
+  in place but never touched the package built for it, leaving anchored evidence silently stale
+  relative to the real, current outcome. A Decision can be overridden more than once while it
+  stays `ACTIVE`, so a package can accumulate more than one addendum.
+- Payload: `evidence_override_addendum_id`, `evidence_package_id`, `decision_id`,
+  `sequence_number`, `content_hash`.
+- Consumers: none yet -- addenda are stored and readable through the evidence-package API
+  (`GET /api/evidence-packages/{id}`, `GET /api/decisions/{id}/evidence-package`) but are not
+  yet submitted to `BlockchainAnchor`/`AnchoringProvider` on their own; that wiring is deferred.
+- Audit implications: `content_hash` chains to the previous addendum's hash (`previous_hash`,
+  `docs/03-domain/evidence.md`), so a sequence of overrides on the same package is itself
+  tamper-evident and strictly ordered, the same guarantee the package's own Merkle root gives
+  its leaves.
+
 **`evidence.anchored`**
 - Producer: `BlockchainAnchor` aggregate (`app.evidence.application.anchoring_service.
   check_anchor_status`/`submit_anchor`), the first time a submission's status settles to
