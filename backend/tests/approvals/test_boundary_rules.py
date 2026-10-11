@@ -86,12 +86,16 @@ def test_approvals_only_imports_the_sanctioned_policies_surface() -> None:
 def test_approvals_only_imports_the_sanctioned_evidence_surface() -> None:
     """EVD-001: Approvals & Decisions hands each new Decision to Evidence & Audit in the same
     transaction (`decision_service.create_decision_for_review` -> `evidence_package_service.
-    assemble_evidence_package`), and emits its audit events via `audit_service`. Those are the
-    only two Evidence modules Approvals may import. It must never reach Evidence's repositories
-    or models, which would let it bypass the package's one-per-decision rule."""
+    assemble_evidence_package`), and emits its audit events via `audit_service`. #199 adds a
+    fourth sanctioned module: `anchoring_service.enqueue_anchor_submission`, called by
+    `approval_service.approve_request`/`reject_request` right after their own commit, to
+    auto-submit the Decision's EvidencePackage for anchoring. These are the only Evidence
+    modules Approvals may import -- it must never reach Evidence's repositories or models,
+    which would let it bypass the package's one-per-decision rule."""
     allowed = {
         "app.evidence.application.audit_service",
         "app.evidence.application.evidence_package_service",
+        "app.evidence.application.anchoring_service",
     }
     for path in _python_files(APPROVALS_DIR):
         touched = {m for m in _imported_modules(path) if _starts_with_any(m, {"app.evidence"})}

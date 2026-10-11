@@ -87,6 +87,7 @@ from app.approvals.domain.constants import ReviewRequiredReason
 from app.approvals.infrastructure.models import Decision
 from app.approvals.infrastructure.repositories import DecisionRepository
 from app.core.config import get_settings
+from app.evidence.application.anchoring_service import enqueue_anchor_submission
 from app.evidence.application.audit_service import emit_audit_event
 from app.policies.application.compliance_review_service import (
     assess_review_staleness,
@@ -111,6 +112,17 @@ class _Candidate:
     review_required_at: datetime | None
     reevaluation_generation: int
     last_reevaluation_review_id: uuid.UUID | None
+
+
+@dataclass(frozen=True)
+class _ReevaluationOutcome:
+    """#199: `started` is the pre-existing "did a re-evaluation review run this call"
+    signal `reevaluate_stale_decisions` counts; `decision_id` is additionally set only when
+    that review's outcome was APPROVE/BLOCK (a new Decision -- and EvidencePackage -- was
+    created), so the caller knows whether to enqueue automatic anchor submission."""
+
+    started: bool
+    decision_id: uuid.UUID | None
 
 
 def _as_utc(value: datetime) -> datetime:
@@ -155,14 +167,16 @@ async def _emit_review_required(
     )
 
 
-async def _flag_and_reevaluate(session: AsyncSession, candidate: _Candidate) -> bool:
+async def _flag_and_reevaluate(
+    session: AsyncSession, candidate: _Candidate
+) -> _ReevaluationOutcome:
     """Fresh (unflagged) candidate: flag it, then re-evaluate it, unless it carries a human
     override, in which case it is only flagged for a human (FEATURE-6.5, item 3). Writes only;
     the caller commits the unit."""
     now = datetime.now(UTC)
     determination = await _determine_reason(session, candidate, now=now)
     if determination is None:
-        return False
+        return _ReevaluationOutcome(started=False, decision_id=None)
     reason, contract_version_id = determination
 
     repository = DecisionRepository(session)
@@ -185,7 +199,7 @@ async def _flag_and_reevaluate(session: AsyncSession, candidate: _Candidate) -> 
                 reason=ReviewRequiredReason.OVERRIDE_REVIEW_REQUIRED.value,
                 flagged_at=flagged_at,
             )
-        return False
+        return _ReevaluationOutcome(started=False, decision_id=None)
 
     # The race guard: only the one caller whose conditional UPDATE matches the row may
     # continue. An overlapping sweep that already flagged this Decision gets False here
@@ -198,10 +212,10 @@ async def _flag_and_reevaluate(session: AsyncSession, candidate: _Candidate) -> 
         expected_overridden=False,
     )
     if not won:
-        return False
+        return _ReevaluationOutcome(started=False, decision_id=None)
 
     await _emit_review_required(session, candidate, reason=reason.value, flagged_at=flagged_at)
-    review = await execute_review(
+    outcome = await execute_review(
         session,
         organization_id=candidate.organization_id,
         actor_id=None,
@@ -209,19 +223,21 @@ async def _flag_and_reevaluate(session: AsyncSession, candidate: _Candidate) -> 
         supersedes_decision_id=candidate.decision_id,
     )
     await repository.set_last_reevaluation_review(
-        candidate.decision_id, organization_id=candidate.organization_id, review_id=review.id
+        candidate.decision_id,
+        organization_id=candidate.organization_id,
+        review_id=outcome.review.id,
     )
-    return True
+    return _ReevaluationOutcome(started=True, decision_id=outcome.decision_id)
 
 
-async def _retry_flagged(session: AsyncSession, candidate: _Candidate) -> bool:
+async def _retry_flagged(session: AsyncSession, candidate: _Candidate) -> _ReevaluationOutcome:
     """Flagged candidate whose last re-evaluation failed (its approval chain expired with no
     Decision): retry it, or, at the attempt cap, raise the one-time operator alert
     (FEATURE-6.5, item 4). Writes only; the caller commits the unit."""
     if candidate.last_reevaluation_review_id is None:
         # The sweep only selects a retry when a prior attempt exists; a flag with no attempt
         # behind it is not something this path may act on.
-        return False
+        return _ReevaluationOutcome(started=False, decision_id=None)
 
     repository = DecisionRepository(session)
     attempts = await count_reevaluation_attempts(
@@ -248,7 +264,7 @@ async def _retry_flagged(session: AsyncSession, candidate: _Candidate) -> bool:
                     "failed_at": now.isoformat(),
                 },
             )
-        return False
+        return _ReevaluationOutcome(started=False, decision_id=None)
 
     claimed = await repository.claim_reevaluation_retry(
         candidate.decision_id,
@@ -256,14 +272,14 @@ async def _retry_flagged(session: AsyncSession, candidate: _Candidate) -> bool:
         observed_generation=candidate.reevaluation_generation,
     )
     if not claimed:
-        return False
+        return _ReevaluationOutcome(started=False, decision_id=None)
 
     staleness = await assess_review_staleness(
         session,
         organization_id=candidate.organization_id,
         compliance_review_id=candidate.compliance_review_id,
     )
-    review = await execute_review(
+    outcome = await execute_review(
         session,
         organization_id=candidate.organization_id,
         actor_id=None,
@@ -271,12 +287,16 @@ async def _retry_flagged(session: AsyncSession, candidate: _Candidate) -> bool:
         supersedes_decision_id=candidate.decision_id,
     )
     await repository.set_last_reevaluation_review(
-        candidate.decision_id, organization_id=candidate.organization_id, review_id=review.id
+        candidate.decision_id,
+        organization_id=candidate.organization_id,
+        review_id=outcome.review.id,
     )
-    return True
+    return _ReevaluationOutcome(started=True, decision_id=outcome.decision_id)
 
 
-async def _process_candidate(session: AsyncSession, candidate: _Candidate) -> bool:
+async def _process_candidate(
+    session: AsyncSession, candidate: _Candidate
+) -> _ReevaluationOutcome:
     if candidate.review_required_at is None:
         return await _flag_and_reevaluate(session, candidate)
     return await _retry_flagged(session, candidate)
@@ -357,7 +377,7 @@ async def reevaluate_stale_decisions(session: AsyncSession) -> int:
     for candidate in candidates:
         checked_at = datetime.now(UTC)
         try:
-            started = await _process_candidate(session, candidate)
+            outcome = await _process_candidate(session, candidate)
             await DecisionRepository(session).mark_checked(
                 candidate.decision_id,
                 organization_id=candidate.organization_id,
@@ -380,6 +400,25 @@ async def reevaluate_stale_decisions(session: AsyncSession) -> int:
                     candidate.decision_id,
                 )
             continue
-        if started:
+        # #199: enqueued after the commit above, never before -- see
+        # `enqueue_anchor_submission`'s own docstring for why that ordering is mandatory.
+        # QA review (2026-10-11): deliberately OUTSIDE the try/except above -- a failure to
+        # enqueue is not a re-evaluation failure (the new Decision already committed
+        # successfully). Treating it as one used to run `_record_failed_attempt` against
+        # `candidate.decision_id`, which this sweep already superseded -- a silent no-op
+        # that left the new Decision's package un-anchored with no retry and no alert.
+        if outcome.decision_id is not None:
+            try:
+                await enqueue_anchor_submission(
+                    decision_id=outcome.decision_id,
+                    organization_id=candidate.organization_id,
+                    actor_id=None,
+                )
+            except Exception:
+                logger.exception(
+                    "Could not enqueue automatic anchor submission for decision %s",
+                    outcome.decision_id,
+                )
+        if outcome.started:
             reevaluated += 1
     return reevaluated

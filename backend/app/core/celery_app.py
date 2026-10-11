@@ -39,6 +39,7 @@ celery_app.conf.update(
         "app.integrations.infrastructure.tasks",
         "app.contracts.infrastructure.tasks",
         "app.approvals.infrastructure.tasks",
+        "app.evidence.infrastructure.tasks",
     ),
     # FEATURE-6.4 (BR-DEC-004): the staleness sweep. Cadence is a TBD placeholder, see
     # settings.decision_reevaluation_interval_seconds.

@@ -4,16 +4,17 @@ a submission first reaches a terminal state (`confirmed` or `failed`) -- never o
 `check_anchor_status` poll, so re-checking an already-settled anchor is not itself an audited
 action.
 
-## Scope call (2026-10-07, matching this epic's own working method)
-Auto-triggering anchoring the moment a Decision's `EvidencePackage` is assembled -- so every new
-Decision gets an anchor with no human action -- needs wiring at every one of `create_decision_for_
-review`'s several call sites (the synchronous APPROVE/BLOCK path, both `approval_service.approve_
-request`/`reject_request` once a REVIEW chain resolves, and the re-evaluation sweep), each of which
-owns its own commit boundary. Getting that fan-out right deserves its own pass rather than being
-rushed at the tail of this one; `submit_anchor` below is a real, complete, independently callable
-and tested entry point (`POST /evidence-packages/{id}/anchor`) in the meantime -- the same
-"on-demand, not yet automatic" shape `evidence_package_service.recompute` already has for its own
-read-only check. The auto-trigger wiring is tracked separately.
+## Automatic submission (#199, 2026-10-10)
+`enqueue_anchor_submission` below is called at every point a Decision's `EvidencePackage` can be
+created -- `compliance_review_service.trigger_review`'s synchronous APPROVE/BLOCK path,
+`approval_service.approve_request`/`reject_request` once a REVIEW chain resolves, and the
+re-evaluation sweep (`reevaluation_service.reevaluate_stale_decisions`) -- right after each one's
+own commit, never before (the worker must never race ahead of the row it is about to read). Every
+one of those call sites owns its own commit boundary, which is exactly why this is a `.delay()`
+fire-and-forget hand-off to a Celery task (`app/evidence/infrastructure/tasks.py`) rather than a
+direct call: the actual `submit_anchor` below still runs on-demand too, unchanged, both as the
+manual fallback (`POST /evidence-packages/{id}/anchor`) and as what the automatic task itself
+calls once the worker picks up the job.
 """
 
 import logging
@@ -173,6 +174,37 @@ async def submit_anchor(
     newly_confirmed = await _refresh_from_provider(session, anchor=anchor, provider=active_provider)
     await session.commit()
     return AnchorResult(anchor=anchor, newly_confirmed=newly_confirmed)
+
+
+async def enqueue_anchor_submission(
+    *, decision_id: uuid.UUID, organization_id: uuid.UUID, actor_id: uuid.UUID | None
+) -> None:
+    """Hands automatic anchor submission off to the Celery worker (#199), once a Decision's
+    EvidencePackage is known to exist. Fire-and-forget: `.delay()` itself is synchronous/
+    non-blocking -- `async def` only so this call composes with `await` the same way
+    `check_service.enqueue_supplier_check` does.
+
+    Every caller MUST invoke this only AFTER its own transaction has committed -- never
+    before, or the worker could race ahead and look up a Decision/EvidencePackage that
+    isn't visible yet (the same ordering `check_service.trigger_check` already enforces for
+    its own enqueue call).
+
+    Imported by direct name (`from app.evidence.application.anchoring_service import
+    enqueue_anchor_submission`) at every call site, matching this codebase's boundary-rule
+    tests (`tests/approvals/test_boundary_rules.py`'s sanctioned-surface check reads each
+    import's fully-qualified module path by AST, which a `from ... import <module>`-style
+    import would not produce). Because of that, this is NOT a single-seam monkeypatch like
+    `check_service.enqueue_supplier_check` -- `tests/conftest.py`'s `stub_anchor_submission_
+    enqueue` fixture patches this name separately on each of the three call-site modules
+    (`compliance_review_service`, `approval_service`, `reevaluation_service`), since a
+    direct-name import copies the reference into each module's own namespace at import
+    time, out of reach of patching this module's own attribute alone.
+    """
+    from app.evidence.infrastructure.tasks import submit_anchor_task
+
+    submit_anchor_task.delay(
+        str(decision_id), str(organization_id), str(actor_id) if actor_id is not None else None
+    )
 
 
 def _is_one_per_package_violation(exc: IntegrityError) -> bool:

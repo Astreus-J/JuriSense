@@ -32,6 +32,7 @@ risk source is rule evaluation itself, so exactly one `Risk` row is derived per
 schema doesn't hard-code 1:1.
 """
 
+import logging
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -50,6 +51,7 @@ from app.contracts.application.evidence_service import (
     get_newer_analyzed_contract_version_id,
     get_supplier_id_for_contract_version,
 )
+from app.evidence.application.anchoring_service import enqueue_anchor_submission
 from app.evidence.application.audit_service import emit_audit_event
 from app.policies.application.context_builder import build_context_for_contract_version
 from app.policies.application.evaluation_service import (
@@ -75,6 +77,8 @@ from app.policies.infrastructure.repositories import (
     RuleRepository,
 )
 from app.suppliers.application.evidence_service import get_evidence_ref_for_supplier
+
+logger = logging.getLogger("jurisense.policies.compliance_review")
 
 # RuleEvaluation outcomes that represent an actual finding, per the Risk-provenance
 # design decision above -- PASS/NOT_APPLICABLE represent the absence of one.
@@ -133,16 +137,49 @@ async def trigger_review(
 
     Commits itself -- the entry use case for `POST /compliance/reviews`. Re-evaluation
     (FEATURE-6.4) calls `execute_review` directly instead, so it can make its own
-    Decision-flag update and this review commit as one unit."""
-    review = await execute_review(
+    Decision-flag update and this review commit as one unit.
+
+    #199: if this review's outcome is APPROVE/BLOCK (a Decision -- and therefore an
+    EvidencePackage -- was created for it), automatic anchor submission is enqueued right
+    after the commit below, never before (see `enqueue_anchor_submission`'s own docstring
+    for why that ordering is mandatory)."""
+    outcome = await execute_review(
         session,
         organization_id=organization_id,
         actor_id=actor_id,
         contract_version_id=contract_version_id,
     )
     await session.commit()
-    await session.refresh(review)
-    return review
+    await session.refresh(outcome.review)
+    if outcome.decision_id is not None:
+        # QA review (2026-10-11): a failure here must never look like the review itself
+        # failed -- the Decision above is already committed. Logged and swallowed; the
+        # package stays anchorable manually (POST /evidence-packages/{id}/anchor) if this
+        # automatic hand-off never reaches the worker.
+        try:
+            await enqueue_anchor_submission(
+                decision_id=outcome.decision_id,
+                organization_id=organization_id,
+                actor_id=actor_id,
+            )
+        except Exception:
+            logger.exception(
+                "Could not enqueue automatic anchor submission for decision %s",
+                outcome.decision_id,
+            )
+    return outcome.review
+
+
+@dataclass(frozen=True)
+class ReviewOutcome:
+    """`execute_review`'s return shape (#199). `decision_id` is set only on the synchronous
+    APPROVE/BLOCK path (a Decision -- and its EvidencePackage -- was created this call);
+    `None` for REVIEW, whose Decision (if any) is created later from `approval_service`.
+    Deliberately carries the id, not the `Decision` ORM object itself: Policy & Compliance
+    may not import Approvals' infrastructure (`tests/policies/test_boundary_rules.py`)."""
+
+    review: ComplianceReview
+    decision_id: uuid.UUID | None
 
 
 async def execute_review(
@@ -152,7 +189,7 @@ async def execute_review(
     actor_id: uuid.UUID | None,
     contract_version_id: uuid.UUID,
     supersedes_decision_id: uuid.UUID | None = None,
-) -> ComplianceReview:
+) -> ReviewOutcome:
     """The `trigger_review` body, minus the commit: evaluates and persists one
     `ComplianceReview` (plus, for APPROVE/BLOCK, its `Decision`; for REVIEW, its approval
     chain's first step) in the caller's transaction. The caller owns commit.
@@ -311,6 +348,7 @@ async def execute_review(
     # reaches a terminal state); APPROVE/BLOCK need no human step at all, so their
     # Decision is created immediately, right here, alongside this call rather than
     # instead of it.
+    decision_id: uuid.UUID | None = None
     if aggregate.status == RuleOutcome.REVIEW.value:
         # Same highest-triggered-REVIEW-severity tie-break `aggregate_preview` already
         # uses internally to pick required_approver_roles -- recomputed here (as a plain
@@ -328,7 +366,7 @@ async def execute_review(
             highest_review_severity=highest_review_severity,
         )
     else:
-        await create_decision_for_review(
+        decision = await create_decision_for_review(
             session,
             organization_id=organization_id,
             actor_id=actor_id,
@@ -336,8 +374,9 @@ async def execute_review(
             status=aggregate.status,
             supersedes_decision_id=supersedes_decision_id,
         )
+        decision_id = decision.id
 
-    return review
+    return ReviewOutcome(review=review, decision_id=decision_id)
 
 
 @dataclass(frozen=True)

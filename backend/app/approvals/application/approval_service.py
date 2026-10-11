@@ -2,6 +2,7 @@
 APR-003; FEATURE-6.2, APR-002; BR-APR-001/BR-APR-002; docs/03-domain/approvals.md).
 """
 
+import logging
 import uuid
 from datetime import UTC, datetime
 
@@ -21,9 +22,12 @@ from app.approvals.infrastructure.repositories import (
     ApprovalRequestRepository,
     ApprovalWorkflowRepository,
 )
+from app.evidence.application.anchoring_service import enqueue_anchor_submission
 from app.evidence.application.audit_service import emit_audit_event
 from app.identity.domain.constants import MembershipStatus
 from app.identity.infrastructure.repositories import MembershipRepository
+
+logger = logging.getLogger("jurisense.approvals.approval")
 
 
 async def create_approval_requests_for_review(
@@ -286,8 +290,9 @@ async def approve_request(
     next_request = await _instantiate_next_step(
         session, organization_id=organization_id, actor_id=actor_id, resolved_request=request
     )
+    new_decision_id: uuid.UUID | None = None
     if next_request is None:
-        await decision_service.create_decision_for_review(
+        decision = await decision_service.create_decision_for_review(
             session,
             organization_id=organization_id,
             actor_id=actor_id,
@@ -299,9 +304,23 @@ async def approve_request(
                 compliance_review_id=request.compliance_review_id,
             ),
         )
+        new_decision_id = decision.id
 
     await session.commit()
     await session.refresh(request)
+    # #199: enqueued after the commit above, never before -- see
+    # `enqueue_anchor_submission`'s own docstring for why that ordering is mandatory.
+    # QA review (2026-10-11): a failure here must never look like the approval itself
+    # failed -- the Decision above is already committed. Logged and swallowed.
+    if new_decision_id is not None:
+        try:
+            await enqueue_anchor_submission(
+                decision_id=new_decision_id, organization_id=organization_id, actor_id=actor_id
+            )
+        except Exception:
+            logger.exception(
+                "Could not enqueue automatic anchor submission for decision %s", new_decision_id
+            )
     return request
 
 
@@ -363,7 +382,7 @@ async def reject_request(
         },
     )
 
-    await decision_service.create_decision_for_review(
+    decision = await decision_service.create_decision_for_review(
         session,
         organization_id=organization_id,
         actor_id=actor_id,
@@ -378,4 +397,16 @@ async def reject_request(
 
     await session.commit()
     await session.refresh(request)
+    # #199: enqueued after the commit above, never before -- see
+    # `enqueue_anchor_submission`'s own docstring for why that ordering is mandatory.
+    # QA review (2026-10-11): a failure here must never look like the rejection itself
+    # failed -- the Decision above is already committed. Logged and swallowed.
+    try:
+        await enqueue_anchor_submission(
+            decision_id=decision.id, organization_id=organization_id, actor_id=actor_id
+        )
+    except Exception:
+        logger.exception(
+            "Could not enqueue automatic anchor submission for decision %s", decision.id
+        )
     return request

@@ -7,12 +7,14 @@ from fakeredis import FakeAsyncRedis
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
+from app.approvals.application import approval_service, reevaluation_service
 from app.contracts.application import extraction_orchestration
 from app.contracts.infrastructure import (
     models as contracts_models,  # noqa: F401 — registers tables on Base
 )
 from app.core.db import Base, get_session
 from app.core.redis import get_redis
+from app.evidence.application import anchoring_service, evidence_package_service
 from app.evidence.infrastructure import (
     models as evidence_models,  # noqa: F401 — registers tables on Base
 )
@@ -24,6 +26,7 @@ from app.integrations.infrastructure import (
     models as integrations_models,  # noqa: F401 — registers tables on Base
 )
 from app.main import app
+from app.policies.application import compliance_review_service
 from app.policies.infrastructure import (
     models as policies_models,  # noqa: F401 — registers tables on Base
 )
@@ -94,6 +97,56 @@ def run_supplier_checks_inline(
             await check_service.run_supplier_check(session, check_id=check_id)
 
     monkeypatch.setattr(check_service, "enqueue_supplier_check", _run_inline)
+
+
+_ANCHOR_ENQUEUE_CALL_SITES = (compliance_review_service, approval_service, reevaluation_service)
+
+
+@pytest.fixture(autouse=True)
+def stub_anchor_submission_enqueue(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Default (#199): creating/overriding a Decision in a test does not automatically submit
+    its EvidencePackage for anchoring (no network, no Celery/broker) — same role as
+    `stub_supplier_check_enqueue` above. `POST /evidence-packages/{id}/anchor` is unaffected:
+    it calls `anchoring_service.submit_anchor` directly, never through this enqueue seam.
+
+    `enqueue_anchor_submission` is imported by direct name (not module-qualified) at each of
+    its three call sites, per the boundary-rule tests' AST-based check -- so unlike
+    `stub_supplier_check_enqueue`'s single patch target, this patches all three call-site
+    modules' own copies of the name (see `anchoring_service.enqueue_anchor_submission`'s own
+    docstring). Tests that need a real auto-submitted anchor to exist request the opt-in
+    `submit_anchor_inline` fixture below instead."""
+
+    async def _noop(*, decision_id: object, organization_id: object, actor_id: object) -> None:
+        return None
+
+    for module in _ANCHOR_ENQUEUE_CALL_SITES:
+        monkeypatch.setattr(module, "enqueue_anchor_submission", _noop)
+
+
+@pytest.fixture
+def submit_anchor_inline(
+    monkeypatch: pytest.MonkeyPatch, db_session_factory: async_sessionmaker
+) -> None:
+    """Opt-in (#199): runs the real automatic anchor submission synchronously against the
+    test database whenever one is enqueued, in place of a real Celery worker. Mirrors
+    `run_supplier_checks_inline`'s exact role for its own enqueue seam."""
+
+    async def _run_inline(
+        *, decision_id: uuid.UUID, organization_id: uuid.UUID, actor_id: uuid.UUID | None
+    ) -> None:
+        async with db_session_factory() as session:
+            package_view = await evidence_package_service.get_package_for_decision(
+                session, organization_id=organization_id, decision_id=decision_id
+            )
+            await anchoring_service.submit_anchor(
+                session,
+                organization_id=organization_id,
+                evidence_package_id=package_view.package.id,
+                actor_id=actor_id,
+            )
+
+    for module in _ANCHOR_ENQUEUE_CALL_SITES:
+        monkeypatch.setattr(module, "enqueue_anchor_submission", _run_inline)
 
 
 @pytest.fixture(autouse=True)

@@ -532,7 +532,9 @@ async def test_an_override_after_the_snapshot_never_fires_the_retry_cap_alert(
     )
 
     async with db_session_factory() as session:
-        assert await reevaluation_service._retry_flagged(session, stale_candidate) is False
+        outcome = await reevaluation_service._retry_flagged(session, stale_candidate)
+        assert outcome.started is False
+        assert outcome.decision_id is None
         await session.commit()
 
     held = await decision_row(db_session_factory, original_id)
