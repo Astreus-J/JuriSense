@@ -65,11 +65,18 @@ Mitigations:
   user-supplied content, or explicit, unambiguous delimiters the system prompt instructs the model to
   never treat as instructions), and the system prompt explicitly states that any instruction-like text
   found inside the contract content is data to be extracted or ignored, never a command to be obeyed.
-- **Output schema enforcement is itself a defense**, not just a data-quality tool (see guardrail 1):
-  because the model can only return the declared schema's shape, a successful prompt injection would
-  still have to produce a schema-valid response to have any effect — this rules out entire classes of
-  injection payloads that try to make the model emit free text, change its role, or call an
-  unauthorized action, none of which fit the fixed extraction schema.
+- **Output schema enforcement is itself a defense**, not just a data-quality tool (see guardrail 1) --
+  correction (security review, 2026-10-12): the request's `response_format: json_schema` is sent with
+  `"strict": false` (`prompt_builder.build_response_format`), which is a hint to the provider, not
+  grammar-constrained decoding -- the model is not structurally prevented from emitting extra fields
+  or a malformed shape at generation time. The actual enforcement is **post-hoc, on this codebase's
+  own side**: every `ModelExtractionOutput` field model declares `model_config = ConfigDict(extra=
+  "forbid")` (`app/ai_services/domain/schema.py`), and `openrouter_gateway._validate` runs the raw
+  response through Pydantic before anything downstream ever sees it -- a response trying to emit free
+  text, change its role, or carry an unauthorized extra field fails validation there, triggering the
+  retry → fallback → loud-failure path (guardrail 1), never a silent pass-through. The net security
+  property this bullet originally claimed still holds; it is delivered by validation-after-the-fact,
+  not provider-side constrained generation.
 - **Extracted text is never re-interpreted as instructions downstream.** A value like
   `termination_for_cause_conditions` or an `obligations[]` entry is always treated as inert string
   data by every consumer (reviewer UI, Policy Engine normalization, evidence package) — it is never
@@ -88,6 +95,25 @@ Mitigations:
   low-confidence/rejected responses from a single document) are logged for review
   (`observability.md`) — prompt injection attempts are a security-relevant event class, not just a
   quality one.
+
+**Test coverage (#113, 2026-10-12)**: `tests/contracts/test_prompt_injection_defense.py` exercises
+this guardrail end-to-end through the real upload endpoint and the real `prompt_builder.
+build_messages` — one test inspects the actual outgoing AI Gateway request to confirm an embedded
+injection attempt never escapes the user-role contract-data payload into the system prompt or adds
+a fake message/role; a second mocks a response standing in for a model that correctly resisted the
+injection (this suite never calls a live model) and confirms the resulting `ContractVersion`
+reflects that non-empty, `analyzed` outcome rather than the empty/corrupted output the injected
+instruction asked for. What this proves: the isolation/validation mechanics in this codebase's own
+code work as designed. What it cannot prove, and does not claim to: that any given live model is
+itself immune to being influenced by the injected text sitting in its user message -- that is a
+property of the model, not of this harness, and has no complete fix (`prompt_builder.py`'s own
+docstring says so); the confidence-gate and the architectural guardrail that AI output can never set
+`Decision.status` (guardrail 4) are what keep a manipulated-but-schema-valid response from mattering.
+
+**RAG-poisoning**: this ticket's other half is not yet applicable — this codebase has no
+retrieval/embedding/RAG pipeline at all as of 2026-10-12 (`ADR-009` scopes `pgvector` for a future
+phase; contract extraction via the AI Gateway is the only model call site that exists today).
+Revisit this section once a retrieval feature is actually built; there is nothing to poison yet.
 
 ## 4. Architectural guardrail: AI output can never set a `Decision` status
 

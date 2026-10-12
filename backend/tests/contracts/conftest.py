@@ -143,8 +143,19 @@ def mock_openrouter(monkeypatch: pytest.MonkeyPatch) -> Callable[..., None]:
     `extraction_service.get_ai_gateway` so tests never depend on a real
     `OPENROUTER_API_KEY` being configured."""
 
-    def apply(*, payload: dict = HIGH_CONFIDENCE_ENVELOPE, status_code: int = 200) -> None:
+    def apply(
+        *,
+        payload: dict = HIGH_CONFIDENCE_ENVELOPE,
+        status_code: int = 200,
+        captured_requests: list[dict] | None = None,
+    ) -> None:
         def handler(request: httpx.Request) -> httpx.Response:
+            if captured_requests is not None:
+                # #113: lets a test inspect the ACTUAL outgoing request body (the real
+                # messages array build_messages produced), not just the mocked response --
+                # needed to prove injected document text never escapes into the system
+                # prompt or the request's control structure.
+                captured_requests.append(json.loads(request.content))
             if status_code != 200:
                 return httpx.Response(status_code, text="error")
             return httpx.Response(
