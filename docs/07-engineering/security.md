@@ -159,16 +159,29 @@ themselves have received a malicious file:
 
 ## CSRF, CSP, and SSRF
 
-- **CSRF**: the API is a stateless, `Authorization: Bearer` JWT API (not cookie-session-based), which
-  is inherently not vulnerable to classic CSRF — if any endpoint ever adopts cookie-based auth
-  (e.g. for a specific frontend flow), it must add CSRF tokens at that point; until then, do not
-  introduce cookie-based session auth without revisiting this section.
+- **CSRF**: the backend API itself is a stateless, `Authorization: Bearer` JWT API (not
+  cookie-session-based), which remains inherently not vulnerable to classic CSRF. #129
+  (2026-09-28) found this statement needed a caveat, not a correction: the Next.js *frontend*
+  does hold a cookie-based session for the browser (its BFF pattern, `cookie-config.ts`) — that
+  session cookie is never seen by the backend (`backend.ts` is `server-only`, attaches a Bearer
+  header itself), so the statement above is still exactly true of the backend, but the frontend's
+  own `/api/*` Route Handlers are the part of the system that actually holds a cookie and
+  therefore needed its own CSRF analysis. Documented in full, including why no CSRF token was
+  added, in `docs/04-architecture/security-architecture.md` §6 — if any *backend* endpoint ever
+  adopts cookie-based auth of its own, it must add CSRF tokens at that point; until then, do not
+  introduce cookie-based session auth at the backend without revisiting this section.
 - **CSP**: the Next.js frontend serves a Content-Security-Policy header restricting script/style/
-  connect sources to the app's own origin and explicitly allowlisted third parties (no
-  `unsafe-inline`/`unsafe-eval` by default) — set via Next.js middleware or `next.config.ts` headers,
-  particularly important for the public `/verify/{hash}` page, which is the frontend surface most
-  likely to be linked from outside the product (shared on a signed contract, indexed by search
-  engines) and therefore the one most worth hardening against injected content.
+  connect sources to the app's own origin (no third party is ever allowlisted — the app loads no
+  external script, style, image, or font; `next.config.ts`'s own comment records exactly how that
+  was confirmed, not assumed) — set via `next.config.ts`'s `headers()`, so it applies uniformly
+  including to `/api/*`, particularly important for the public `/verify/{hash}` page, which is the
+  frontend surface most likely to be linked from outside the product (shared on a signed contract,
+  indexed by search engines) and therefore the one most worth hardening against injected content.
+  `'unsafe-inline'` is kept for `script-src` only (Next.js's own RSC/hydration bootstrap emits
+  inline scripts) — a nonce-based strict policy was considered and deferred because it would force
+  the two static marketing routes into dynamic rendering for no real benefit here (no third-party
+  script source exists for a nonce to guard against); `style-src` needs no exception at all (zero
+  inline styles anywhere in this codebase).
 - **SSRF**: any server-side fetch to an external target driven even partially by user/organization
   input — company-registry lookups, sanctions-list sources, a future Integration webhook target, a
   document fetched from a URL instead of uploaded — validates the target against an **explicit

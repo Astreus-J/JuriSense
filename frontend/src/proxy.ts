@@ -9,13 +9,14 @@ import {
   REFRESH_TOKEN_COOKIE,
   REFRESH_TOKEN_MAX_AGE_SECONDS,
 } from "@/lib/auth/cookie-config";
+import { isCrossSiteMutation } from "@/lib/auth/csrf";
 import { isJwtLikelyValid } from "@/lib/auth/jwt";
 
 /**
  * Proxy (Next.js 16 renamed Middleware to Proxy — see
  * `node_modules/next/dist/docs/01-app/01-getting-started/16-proxy.md`).
  *
- * Two jobs, both "optimistic" per Next's own authentication guide
+ * Three jobs. The first two are both "optimistic" per Next's own authentication guide
  * (`node_modules/next/dist/docs/01-app/02-guides/authentication.md`,
  * "Optimistic checks with Proxy"): the real authorization check always
  * happens server-side against `/auth/me` (`src/lib/auth/session.ts`).
@@ -27,6 +28,12 @@ import { isJwtLikelyValid } from "@/lib/auth/jwt";
  *    `src/lib/auth/session.ts`'s comment).
  * 2. Redirect unauthenticated users away from the authenticated app, and
  *    authenticated users away from the login/invite-accept screens.
+ * 3. #129: reject a cross-site mutation against any `/api/*` BFF route handler (see
+ *    `csrf.ts`'s own docstring for the full posture) -- done here, not inside each
+ *    `route.ts`, so the check applies uniformly without needing to remember to add it
+ *    to a 17th file later. `/api/*` is otherwise unrelated to jobs 1-2 (a Route
+ *    Handler reads its own cookies and returns its own 401, never a page redirect), so
+ *    it short-circuits before any of that logic runs.
  */
 const PROTECTED_PREFIXES = [
   "/dashboard",
@@ -47,6 +54,13 @@ function matchesPrefix(pathname: string, prefixes: string[]): boolean {
 
 export async function proxy(request: NextRequest): Promise<NextResponse> {
   const { pathname } = request.nextUrl;
+
+  if (pathname.startsWith("/api/")) {
+    if (isCrossSiteMutation(request)) {
+      return NextResponse.json({ detail: "Cross-site request rejected." }, { status: 403 });
+    }
+    return NextResponse.next();
+  }
 
   let accessToken = request.cookies.get(ACCESS_TOKEN_COOKIE)?.value;
   const refreshToken = request.cookies.get(REFRESH_TOKEN_COOKIE)?.value;
@@ -98,5 +112,7 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/).*)"],
+  // #129: now also matches `/api/*` (previously excluded) so job 3's CSRF check runs
+  // on every BFF route handler -- still excludes Next's own static/image assets.
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };

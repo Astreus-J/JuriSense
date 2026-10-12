@@ -167,7 +167,84 @@ carry confidential data (`blockchain-architecture.md` §4) — it is not that au
 forgotten there, it is that the route was designed from the start to not need it, backed by the same
 DTO-boundary discipline used for every cross-context call in `components.md`.
 
-## 6. Summary of enforcement points
+## 6. Frontend BFF: cookie-based session, and why it isn't vulnerable to CSRF
+
+#129 (security/pentest QA round, 2026-09-28): the frontend never was, and still isn't, a
+cookie-session client of the backend API — `docs/07-engineering/security.md`'s "the API is a
+stateless, `Authorization: Bearer` JWT API (not cookie-session-based)" statement remains exactly
+true of the backend itself. What exists, and was never written down anywhere until this section,
+is a second trust boundary *in front of* that one: the Next.js frontend acting as a
+Backends-for-Frontends (BFF) for the browser.
+
+```mermaid
+sequenceDiagram
+    participant B as Browser
+    participant RH as Next.js Route Handler<br/>(src/app/api/session/login)
+    participant API as Backend API (Identity & Organizations)
+
+    B->>RH: POST /api/session/login (email, password)
+    RH->>API: POST /auth/login (server-side, Authorization: Bearer N/A yet)
+    API-->>RH: { access_token, refresh_token } (JSON body)
+    RH->>RH: setSessionCookies() -- httpOnly, sameSite=lax, secure in prod
+    RH-->>B: Set-Cookie: jurisense_access_token, jurisense_refresh_token
+    Note over B,RH: Every later request from B carries only these cookies.<br/>B's own JavaScript can never read either token (httpOnly).
+    B->>RH: any later request (page nav, or fetch to /api/*)
+    RH->>RH: readAccessToken() from its own cookie
+    RH->>API: Authorization: Bearer <access_token>
+    API-->>RH: JSON
+    RH-->>B: JSON (or rendered page)
+```
+
+The browser holds a session **cookie**; the backend still only ever sees a **Bearer header**,
+attached server-side, inside the Next.js container, never by the browser itself. `backend.ts` (the
+one module allowed to call the backend) is marked `import "server-only"`, which fails the build if
+any Client Component ever imports it — so this boundary is enforced at compile time, not just by
+convention.
+
+### CSRF threat model for this specific boundary
+
+The classic CSRF attack — a malicious page makes the victim's browser submit a state-changing
+request to an app the victim is logged into, relying on the browser auto-attaching that app's
+session cookie — applies to the **Browser ↔ Route Handler** leg above, since that's the only leg
+with a cookie in play. It does not apply to the **Route Handler ↔ backend** leg (no browser, no
+cookie, nothing for an attacker's page to ride along on).
+
+Three independent properties jointly close this off, none of them hypothetical — each verified
+against this exact codebase, not assumed:
+
+1. **`sameSite: "lax"`** (`src/lib/auth/cookie-config.ts`) — a `lax` cookie is never attached to a
+   cross-site `POST`/`PUT`/`PATCH`/`DELETE` request (only to a cross-site top-level `GET`
+   navigation, e.g. clicking a link). Every mutating route under `src/app/api/` uses one of those
+   four methods; **none** of the handful of `GET` route handlers
+   (`compliance/reviews`, `compliance/reviews/[id]`, `users/invites`) changes any state — confirmed
+   by reading every `route.ts` in the codebase, the exact "state-changing GET" gap this ticket
+   asked to rule out or close. So the `lax` default alone already stops the classic vector.
+2. **An explicit `Origin`/`Sec-Fetch-Site` check** (`src/lib/auth/csrf.ts`, enforced centrally in
+   `src/proxy.ts` for every `/api/*` request) — a second, independent layer that doesn't depend on
+   the browser correctly honoring a cookie attribute. Rejects any non-`GET`/`HEAD`/`OPTIONS` request
+   whose `Sec-Fetch-Site` is anything but `same-origin`/`none`, or — if that header is absent —
+   whose `Origin` doesn't match the request's own `Host` header. Every mutation this app
+   itself ever sends is a same-origin `fetch()` (every `<form>` uses `onSubmit` + `fetch`, never a
+   native `action=`/`method=` submission), so this never has a legitimate reason to fail; a request
+   with neither header, or a mismatched one, is rejected (403) rather than assumed safe.
+3. **No endpoint anywhere trusts a cookie's mere presence as authorization** — every Route Handler
+   still has to successfully read a non-expired, structurally valid access token from the cookie
+   (`readAccessToken()`) and have the backend accept it as a real `Authorization: Bearer` header;
+   a forged request riding on an attacker's page has no path to a cookie value it doesn't already
+   have (httpOnly), so even a hypothetical gap in (1) or (2) would still need a real token to do
+   anything with the cookie that did ride along.
+
+### Decision
+
+No CSRF token was added. Given (1) and (2) above are both real, verified, and independent (a gap
+in one doesn't defeat the other), and there is no state-changing `GET` for `sameSite=lax`'s own
+residual gap to matter against, a CSRF token would be a third redundant layer protecting against a
+vector that's already closed twice — not a response to any identified gap. Revisit this decision
+if a future route ever needs state-changing behavior on `GET`, or if a client not subject to
+`fetch`'s header behavior (e.g. a native mobile app hitting these same Route Handlers) is ever
+added.
+
+## 7. Summary of enforcement points
 
 | Concern | Enforcement point | Mechanism |
 |---|---|---|
@@ -177,3 +254,4 @@ DTO-boundary discipline used for every cross-context call in `components.md`.
 | Cross-context data access | Application layer (ports/DTOs) | `components.md` boundary rules — irrelevant to auth, but a second, independent line of defense against a confidential field leaking through an unintended path |
 | Secrets | Deploy-time environment injection | `.env` (dev, gitignored) / host environment variables (prod), fail-closed validation in `Settings` |
 | Public verification carve-out | API layer, one specific route | No auth/RBAC dependency at all; safety comes from the response DTO's structural narrowness, not from a permission check |
+| CSRF (frontend BFF cookie session) | Next.js Proxy, every `/api/*` route handler | `sameSite=lax` cookies + explicit `Origin`/`Sec-Fetch-Site` same-origin check (§6) — the backend API itself remains Bearer-only and is never exposed to this threat model at all |
