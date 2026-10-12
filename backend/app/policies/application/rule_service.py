@@ -8,12 +8,14 @@ import uuid
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.evidence.application.audit_service import emit_audit_event
 from app.policies.application import policy_service
 from app.policies.domain.constants import PolicyVersionStatus
 from app.policies.domain.errors import (
     DuplicateRuleKeyError,
     PolicyVersionNotDraftError,
+    RuleLimitExceededError,
     RuleNotFoundError,
 )
 from app.policies.domain.rule_dsl import ParsedRule, parse_rule_yaml
@@ -43,6 +45,9 @@ async def create_rule(
     parsed: ParsedRule = parse_rule_yaml(rule_yaml)
 
     rule_repo = RuleRepository(session)
+    limit = get_settings().max_rules_per_policy_version
+    if await rule_repo.count_by_version(version.id) >= limit:
+        raise RuleLimitExceededError(limit)
     if await rule_repo.get_by_key_and_version(parsed.rule_key, version.id) is not None:
         raise DuplicateRuleKeyError(parsed.rule_key)
 

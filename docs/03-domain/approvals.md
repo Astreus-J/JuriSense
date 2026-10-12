@@ -61,6 +61,16 @@ models `ApprovalWorkflow` as organization-configurable data, so a customer can r
 Director only, skipping a dedicated Compliance role it doesn't staff). `domain-model.md`'s
 invariant ("at least one step required") is the only hard constraint on a valid `ApprovalWorkflow`.
 
+**"Director" is a persona-facing label, not a distinct RBAC role (product decision, 2026-10-12,
+#181).** The technical `ApprovalWorkflow.steps` value this table's "Director" step seeds is the
+real `app.identity.domain.constants.Role.APPROVER` value ("approver") -- `app.identity.domain.
+rbac`'s own role grid already describes `approver` as "the generic Director/Approver persona."
+There is no separate `director` role in the RBAC grid, and none is planned: a customer's actual
+director is provisioned as an `approver`-role `User`, and "Director" is simply how this product
+displays/names that step in the UI and in this table. Revisit only if a real customer's RBAC
+needs genuinely diverge `approver` into distinct sub-personas -- not something this decision
+anticipates.
+
 `ApprovalWorkflow` itself is not versioned in v1 (`domain-model.md`: "not versioned in v1 (future
 item if historical reproducibility of *workflow configuration* — not just decisions — becomes
 required)"). Editing an active `ApprovalWorkflow` fires `approval_workflow.updated`

@@ -179,20 +179,16 @@ async def test_high_severity_review_multistep_chain_in_order(
     initially; approving step 1 instantiates step 2; approving the final step creates the
     Decision.
 
-    Steps 1/2 ("compliance"/"legal") are exercised through the real HTTP API with real
-    users. Step 3 ("director") cannot be: `app.identity.domain.constants.Role` has no
-    "director" value at all -- the closest real role is the generic "approver" persona
-    (see `app.identity.domain.rbac`'s own module docstring: "the generic Director/
-    Approver persona") -- so there is no way to provision a "director"-role user through
-    the public `POST /api/users` API. This is a real, pre-existing gap between
-    `docs/03-domain/approvals.md`'s routing-table vocabulary and Identity's actual `Role`
-    enum, not something this epic's scope includes fixing (see this suite's final report
-    for the write-up). Step 3 is instead exercised directly at the application layer,
-    with a hand-crafted `User`/`Membership(role="director")` inserted straight into the
-    test database -- `approval_service.approve_request` only ever checks
-    `Membership.role` (BR-APR-001), never the RBAC permission grid (that is the FastAPI
-    route dependency's separate concern), so this still faithfully exercises the same
-    state-machine code a real HTTP call would run.
+    All three steps are exercised through the real HTTP API with real users (#181,
+    2026-10-12): step 3's technical role is "approver" -- `workflow_service.py`'s
+    `_DEFAULT_WORKFLOW_STEPS` now seeds that real `app.identity.domain.constants.Role`
+    value instead of the string "director", which never existed as an actual role
+    (`rbac.py`'s own docstring already called `approver` "the generic Director/Approver
+    persona," this seed just didn't match it yet). "Director" remains the product's
+    persona-facing label for this step; previously this test could only reach it by
+    hand-inserting a `User`/`Membership(role="director")` straight into the test database,
+    since no real role existed to provision through `POST /api/users` -- that workaround
+    is gone now that the seed and the role agree.
     """
     mock_cnpj_registry(data=ACTIVE_CNPJ_RESPONSE)
     await seed_sanctions_index(hit_document=TAX_ID)
@@ -204,6 +200,9 @@ async def test_high_severity_review_multistep_chain_in_order(
     )
     legal_headers = await create_user_and_login(
         client, admin_headers, email="legal-high-chain@example.com", role="legal"
+    )
+    approver_headers = await create_user_and_login(
+        client, admin_headers, email="approver-high-chain@example.com", role="approver"
     )
 
     review = await _trigger_review(client, admin_headers, rule_yamls=[LEGAL_008_YAML])
@@ -242,7 +241,7 @@ async def test_high_severity_review_multistep_chain_in_order(
 
     requests = await _list_requests()
     assert len(requests) == 3
-    assert requests[2]["approver_role"] == "director"
+    assert requests[2]["approver_role"] == "approver"
     assert requests[2]["step_number"] == 3
     assert requests[2]["status"] == "pending"
 
@@ -255,41 +254,12 @@ async def test_high_severity_review_multistep_chain_in_order(
         )
     assert decision is None
 
-    from app.approvals.application.approval_service import approve_request as _approve_request
-    from app.core import security
-    from app.identity.domain.constants import MembershipStatus
-    from app.identity.infrastructure.models import Membership, User
-
-    async with db_session_factory() as session:
-        director = User(
-            organization_id=organization_id,
-            full_name="Director",
-            email="director-high-chain@example.com",
-            password_hash=security.hash_password("StrongPass1"),
-            role="director",
-        )
-        session.add(director)
-        await session.flush()
-        session.add(
-            Membership(
-                user_id=director.id,
-                organization_id=organization_id,
-                role="director",
-                status=MembershipStatus.ACTIVE.value,
-            )
-        )
-        await session.commit()
-        director_id = director.id
-
-    async with db_session_factory() as session:
-        resolved = await _approve_request(
-            session,
-            organization_id=organization_id,
-            actor_id=director_id,
-            request_id=uuid.UUID(requests[2]["id"]),
-            justification=None,
-        )
-    assert resolved.status == "approved"
+    step3_response = await client.post(
+        f"/api/approvals/requests/{requests[2]['id']}/approve",
+        json={},
+        headers=approver_headers,
+    )
+    assert step3_response.status_code == 200, step3_response.text
 
     async with db_session_factory() as session:
         decision = await DecisionRepository(session).get_by_review(

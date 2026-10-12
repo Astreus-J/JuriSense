@@ -42,12 +42,21 @@ class RuleOutcome(StrEnum):
     """Per-rule evaluation outcome (ADR-010 / docs/03-domain/domain-model.md
     "RuleEvaluation"). Phase 5 (EPIC-5) persists these into real `RuleEvaluation` rows;
     this epic's rule-execution engine (#61) produces values of this shape without
-    persisting them."""
+    persisting them.
+
+    `EXEMPTED` (#120, STORY-4.4.2): a time-boxed `PolicyException` grants a documented
+    override INPUT for this specific rule+target, so the rule is never CEL-evaluated at
+    all -- distinct from `PASS` (condition evaluated and did not match) and
+    `NOT_APPLICABLE` (presence check failed). Like those two, it never contributes to
+    `evaluation_service.aggregate_preview`'s BLOCK/REVIEW tiers -- an exempted rule is a
+    non-finding, by the approver's own prior sign-off, not a fresh one.
+    """
 
     PASS = "PASS"
     REVIEW = "REVIEW"
     BLOCK = "BLOCK"
     NOT_APPLICABLE = "NOT_APPLICABLE"
+    EXEMPTED = "EXEMPTED"
 
 
 class Severity(StrEnum):

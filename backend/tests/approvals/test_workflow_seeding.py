@@ -31,8 +31,10 @@ async def test_registering_an_organization_seeds_default_approval_workflows(
     by_tier = {w.trigger_condition: w.steps for w in workflows}
     assert by_tier == {
         "medium": ["legal"],
-        "high": ["compliance", "legal", "director"],
-        "critical": ["compliance", "legal", "director"],
+        # #181: "approver" is the real RBAC role for this step -- "Director" is this
+        # product's persona-facing label for it, not a distinct technical role.
+        "high": ["compliance", "legal", "approver"],
+        "critical": ["compliance", "legal", "approver"],
     }
     # Explicitly no "low" row (docs/03-domain/approvals.md: an undocumented edge case).
     assert "low" not in by_tier

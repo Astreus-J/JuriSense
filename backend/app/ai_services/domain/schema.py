@@ -159,7 +159,17 @@ class ModelExtractionOutput(BaseModel):
 class ExtractionEnvelope(BaseModel):
     """The full top-level response `extract_contract()` produces and validates
     (`ADR-005`: "structured output only... rejects and retries a response that doesn't
-    validate")."""
+    validate").
+
+    #144 (2026-10-12): this class used to carry its own `all_field_confidences()`,
+    walking this Pydantic model tree -- a second, independent implementation of "every
+    leaf confidence" alongside `app.contracts.domain.extracted_data.iter_field_leaves`/
+    `min_confidence`, which walk the PERSISTED `extracted_data` JSON dict instead (the
+    shape `extraction_service` actually stores and the BR-CON-003 confidence gate and
+    CON-005 confirmation endpoint actually read). `all_field_confidences` was never
+    called by production code -- only by its own unit test -- so it was removed rather
+    than consolidated: the JSON-dict walker in `extracted_data.py` is the one real
+    implementation of this rule now."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -171,25 +181,3 @@ class ExtractionEnvelope(BaseModel):
     pagination_mode: str = Field(pattern="^(native|synthetic)$")
     fields: ContractFields = Field(default_factory=ContractFields)
     clauses: list[ClauseExtraction] = Field(default_factory=list)
-
-    def all_field_confidences(self) -> list[float]:
-        """Every leaf `ExtractedValue.confidence` present in `fields`, flattened -- used
-        to compute `ContractVersion.extraction_confidence` (the minimum, per
-        `contract-compliance.md`'s "one weak field... cannot be masked" design rule)."""
-        confidences: list[float] = []
-
-        def _walk(value: Any) -> None:
-            if isinstance(value, ExtractedValue):
-                confidences.append(value.confidence)
-            elif isinstance(value, DeadlineItem):
-                if value.date is not None:
-                    confidences.append(value.date.confidence)
-            elif isinstance(value, BaseModel):
-                for field_name in type(value).model_fields:
-                    _walk(getattr(value, field_name))
-            elif isinstance(value, list):
-                for item in value:
-                    _walk(item)
-
-        _walk(self.fields)
-        return confidences

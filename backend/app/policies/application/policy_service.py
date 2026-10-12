@@ -8,11 +8,14 @@ import uuid
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.evidence.application.audit_service import emit_audit_event
 from app.policies.domain.constants import PolicyVersionStatus
 from app.policies.domain.errors import (
+    PolicyLimitExceededError,
     PolicyNotFoundError,
     PolicyVersionConflictError,
+    PolicyVersionLimitExceededError,
     PolicyVersionNotFoundError,
 )
 from app.policies.infrastructure.models import Policy, PolicyVersion, Rule
@@ -26,8 +29,13 @@ from app.policies.infrastructure.repositories import (
 async def create_policy(
     session: AsyncSession, *, organization_id: uuid.UUID, actor_id: uuid.UUID, name: str
 ) -> tuple[Policy, PolicyVersion]:
+    policy_repo = PolicyRepository(session)
+    limit = get_settings().max_policies_per_organization
+    if await policy_repo.count_by_organization(organization_id) >= limit:
+        raise PolicyLimitExceededError(limit)
+
     policy = Policy(organization_id=organization_id, name=name)
-    PolicyRepository(session).add(policy)
+    policy_repo.add(policy)
     await session.flush()
 
     version = PolicyVersion(
@@ -94,6 +102,10 @@ async def create_draft_version(
     policy = await get_policy(session, organization_id=organization_id, policy_id=policy_id)
     version_repo = PolicyVersionRepository(session)
     rule_repo = RuleRepository(session)
+
+    limit = get_settings().max_policy_versions_per_policy
+    if await version_repo.count_by_policy(policy.id) >= limit:
+        raise PolicyVersionLimitExceededError(limit)
 
     current = await version_repo.get_current_by_policy(policy.id)
     next_number = await version_repo.get_next_version_number(policy.id)

@@ -71,6 +71,7 @@ from app.policies.domain.rule_dsl import referenced_paths_of
 from app.policies.infrastructure.models import ComplianceReview, Risk, Rule, RuleEvaluation
 from app.policies.infrastructure.repositories import (
     ComplianceReviewRepository,
+    PolicyExceptionRepository,
     PolicyVersionRepository,
     RiskRepository,
     RuleEvaluationRepository,
@@ -216,8 +217,14 @@ async def execute_review(
     policy_versions = await version_repo.list_current_by_organization(organization_id)
 
     rules: list[Rule] = []
+    # #179: Risk.category alone (= rule_key) can't disambiguate two different Policies that
+    # happen to reuse the same rule_key string -- rule_key is only unique PER PolicyVersion
+    # (uq_rule_key_per_version), never across Policies. This map lets every Risk row also
+    # carry the owning Policy's id.
+    policy_id_by_version_id: dict[uuid.UUID, uuid.UUID] = {}
     for policy_version in policy_versions:
         rules.extend(await rule_repo.list_by_version(policy_version.id))
+        policy_id_by_version_id[policy_version.id] = policy_version.policy_id
 
     context = await build_context_for_contract_version(
         session, organization_id=organization_id, contract_version_id=contract_version_id
@@ -246,12 +253,26 @@ async def execute_review(
         },
     )
 
-    results: list[RuleEvaluationResult] = evaluate_policy_version(rules, context)
-    aggregate: AggregatePreview = aggregate_preview(results)
-
     supplier_id = await get_supplier_id_for_contract_version(
         session, organization_id=organization_id, contract_version_id=contract_version_id
     )
+    # #120: every active PolicyException applicable to this review's own supplier/
+    # contract-version target, keyed by rule_id so evaluate_policy_version can look each
+    # pooled rule's up in O(1) without evaluation_service ever touching the repository.
+    active_exceptions = await PolicyExceptionRepository(session).list_active_for_rule_ids(
+        [rule.id for rule in rules],
+        organization_id=organization_id,
+        supplier_id=supplier_id,
+        contract_version_id=contract_version_id,
+        now=datetime.now(UTC),
+    )
+    active_exceptions_by_rule_id = {str(exc.rule_id): exc for exc in active_exceptions}
+
+    results: list[RuleEvaluationResult] = evaluate_policy_version(
+        rules, context, active_exceptions_by_rule_id=active_exceptions_by_rule_id
+    )
+    aggregate: AggregatePreview = aggregate_preview(results)
+
     contract_evidence_refs = await get_evidence_refs_for_contract_version(
         session, organization_id=organization_id, contract_version_id=contract_version_id
     )
@@ -285,6 +306,7 @@ async def execute_review(
             approver_role=result.approver_role,
             rationale=result.rationale,
             evidence_refs=evidence_refs,
+            exception_id=uuid.UUID(result.exception_id) if result.exception_id else None,
         )
         eval_repo.add(evaluation)
         evaluations.append(evaluation)
@@ -312,9 +334,11 @@ async def execute_review(
             },
         )
         if result.outcome in _RISK_OUTCOMES:
+            rule = rules_by_id[result.rule_id]
             risk_repo.add(
                 Risk(
                     compliance_review_id=review.id,
+                    policy_id=policy_id_by_version_id[rule.policy_version_id],
                     category=result.rule_key,
                     description=result.rationale,
                     severity=result.severity,

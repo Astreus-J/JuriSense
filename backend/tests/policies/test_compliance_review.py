@@ -175,6 +175,64 @@ async def test_trigger_review_persists_block_and_emits_audit_events(
     assert {r["category"] for r in detail_body["risks"]} == {"SANC-001", "FIN-003"}
 
 
+async def test_risks_from_colliding_rule_keys_across_policies_carry_distinct_policy_ids(
+    client: httpx.AsyncClient,
+    mock_openrouter,
+    run_contract_extraction_inline,
+) -> None:
+    """#179: two independently-authored Policies that happen to reuse the same rule_key
+    ("FIN-003") produce Risk rows indistinguishable by `category` alone -- `policy_id` is
+    what tells them apart. `uq_rule_key_per_version` only forbids the collision within one
+    PolicyVersion; nothing stops two different Policies from each defining their own
+    FIN-003."""
+    mock_openrouter(payload=EVIDENCE_ENVELOPE)
+    headers = await register_org_and_login(client, "risk-collision@example.com")
+    supplier = await create_supplier(client, headers, tax_id=TAX_ID)
+    contract_version_id = await _upload_contract(client, headers, supplier["id"])
+
+    variant_a_yaml = """
+rule:
+  id: FIN-003
+  name: Variant A -- High-Value Contract
+when:
+  contract.value.brl: { gte: 250000 }
+result:
+  status: REVIEW
+severity: medium
+approver_role: legal
+"""
+    variant_b_yaml = """
+rule:
+  id: FIN-003
+  name: Variant B -- Unlimited Liability
+when:
+  contract.liability.type: unlimited
+result:
+  status: REVIEW
+severity: high
+approver_role: legal
+"""
+    policy_a_id, _ = await _create_policy_with_rules(
+        client, headers, name="Finance Policy A", rule_yamls=[variant_a_yaml]
+    )
+    policy_b_id, _ = await _create_policy_with_rules(
+        client, headers, name="Finance Policy B", rule_yamls=[variant_b_yaml]
+    )
+
+    response = await client.post(
+        "/api/compliance/reviews",
+        json={"contract_version_id": contract_version_id},
+        headers=headers,
+    )
+    assert response.status_code == 201, response.text
+    review_id = response.json()["id"]
+
+    detail = (await client.get(f"/api/compliance/reviews/{review_id}", headers=headers)).json()
+    fin_003_risks = [r for r in detail["risks"] if r["category"] == "FIN-003"]
+    assert len(fin_003_risks) == 2
+    assert {r["policy_id"] for r in fin_003_risks} == {policy_a_id, policy_b_id}
+
+
 async def test_trigger_review_evidence_refs_are_real_and_traceable(
     client: httpx.AsyncClient,
     mock_openrouter,

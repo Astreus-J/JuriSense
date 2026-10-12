@@ -1,11 +1,13 @@
 import uuid
+from datetime import datetime
 
-from sqlalchemy import func, select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.policies.infrastructure.models import (
     ComplianceReview,
     Policy,
+    PolicyException,
     PolicyVersion,
     Risk,
     Rule,
@@ -35,6 +37,15 @@ class PolicyRepository:
             .order_by(Policy.created_at)
         )
         return list(result.scalars())
+
+    async def count_by_organization(self, organization_id: uuid.UUID) -> int:
+        """#180: backs `policy_service.create_policy`'s per-organization cap."""
+        result = await self._session.execute(
+            select(func.count())
+            .select_from(Policy)
+            .where(Policy.organization_id == organization_id)
+        )
+        return result.scalar_one()
 
 
 class PolicyVersionRepository:
@@ -86,6 +97,15 @@ class PolicyVersionRepository:
             .order_by(PolicyVersion.version_number.desc())
         )
         return list(result.scalars())
+
+    async def count_by_policy(self, policy_id: uuid.UUID) -> int:
+        """#180: backs `policy_service.create_draft_version`'s per-policy version cap."""
+        result = await self._session.execute(
+            select(func.count())
+            .select_from(PolicyVersion)
+            .where(PolicyVersion.policy_id == policy_id)
+        )
+        return result.scalar_one()
 
     async def get_next_version_number(self, policy_id: uuid.UUID) -> int:
         versions = await self.list_by_policy(policy_id)
@@ -155,6 +175,15 @@ class RuleRepository:
             .order_by(Rule.created_at)
         )
         return list(result.scalars())
+
+    async def count_by_version(self, policy_version_id: uuid.UUID) -> int:
+        """#180: backs `rule_service.create_rule`'s per-version rule cap."""
+        result = await self._session.execute(
+            select(func.count())
+            .select_from(Rule)
+            .where(Rule.policy_version_id == policy_version_id)
+        )
+        return result.scalar_one()
 
     def freeze(self, rules: list[Rule]) -> None:
         """BR-POL-001: flips `is_frozen` on every given (already-loaded) Rule -- called by
@@ -237,6 +266,92 @@ class RuleEvaluationRepository:
             select(RuleEvaluation)
             .where(RuleEvaluation.compliance_review_id == compliance_review_id)
             .order_by(RuleEvaluation.created_at)
+        )
+        return list(result.scalars())
+
+
+class PolicyExceptionRepository:
+    """Append-only (#120) -- exposes only `add`/`list_*`, no update/delete, mirroring
+    `RuleEvaluationRepository`/`RiskRepository`: a `PolicyException` is left to expire
+    via `valid_until`, never edited or revoked in place."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    def add(self, exception: PolicyException) -> None:
+        self._session.add(exception)
+
+    async def list_by_rule(
+        self, rule_id: uuid.UUID, *, organization_id: uuid.UUID
+    ) -> list[PolicyException]:
+        result = await self._session.execute(
+            select(PolicyException)
+            .where(
+                PolicyException.rule_id == rule_id,
+                PolicyException.organization_id == organization_id,
+            )
+            .order_by(PolicyException.created_at)
+        )
+        return list(result.scalars())
+
+    async def count_active_for_rule(self, rule_id: uuid.UUID, *, now: datetime) -> int:
+        """Backs `exception_service.grant_exception`'s per-rule cap -- counts currently
+        active rows only (an expired exception no longer costs anything at evaluation
+        time, so it doesn't count against the live cap)."""
+        result = await self._session.execute(
+            select(func.count())
+            .select_from(PolicyException)
+            .where(
+                PolicyException.rule_id == rule_id,
+                PolicyException.valid_from <= now,
+                PolicyException.valid_until >= now,
+            )
+        )
+        return result.scalar_one()
+
+    async def list_active_for_rule_ids(
+        self,
+        rule_ids: list[uuid.UUID],
+        *,
+        organization_id: uuid.UUID,
+        supplier_id: uuid.UUID | None,
+        contract_version_id: uuid.UUID | None,
+        now: datetime,
+    ) -> list[PolicyException]:
+        """Active exceptions (within `[valid_from, valid_until]`) for any of `rule_ids`,
+        scoped to the organization and to the specific target the review is actually
+        evaluating -- `supplier_id`/`contract_version_id` are matched only if the given
+        arg is not `None`, since `execute_review`'s own call site may know only one of
+        the two for a given contract/supplier pairing. Used by
+        `compliance_review_service.execute_review` to build the rule_id -> exception
+        lookup `evaluation_service.evaluate_policy_version` consumes."""
+        if not rule_ids:
+            return []
+        target_clauses = []
+        if supplier_id is not None:
+            target_clauses.append(PolicyException.supplier_id == supplier_id)
+        if contract_version_id is not None:
+            target_clauses.append(PolicyException.contract_version_id == contract_version_id)
+        if not target_clauses:
+            return []
+        # Code review (2026-10-12): nothing stops two overlapping active exceptions from
+        # existing for the same rule+target (e.g. legal re-grants before the first
+        # expires) -- `compliance_review_service.execute_review` builds a rule_id-keyed
+        # dict from this list, so without a deterministic order, which grant's
+        # justification/exception_id ends up cited on the RuleEvaluation would depend on
+        # unspecified row order. Ascending `created_at` means the caller's
+        # dict-comprehension (later entries overwrite earlier ones) deterministically
+        # keeps the most recently granted exception.
+        result = await self._session.execute(
+            select(PolicyException)
+            .where(
+                PolicyException.organization_id == organization_id,
+                PolicyException.rule_id.in_(rule_ids),
+                PolicyException.valid_from <= now,
+                PolicyException.valid_until >= now,
+                or_(*target_clauses),
+            )
+            .order_by(PolicyException.created_at)
         )
         return list(result.scalars())
 

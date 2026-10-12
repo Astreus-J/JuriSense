@@ -6,7 +6,7 @@ validates a well-formed response and rejects a malformed one -- this is the back
 import pytest
 from pydantic import ValidationError
 
-from app.ai_services.domain.schema import ExtractionEnvelope, ModelExtractionOutput
+from app.ai_services.domain.schema import ModelExtractionOutput
 
 _PROVENANCE = {
     "document_id": "11111111-1111-1111-1111-111111111111",
@@ -72,27 +72,3 @@ def test_extra_unexpected_key_rejected() -> None:
     payload = {"fields": {}, "clauses": [], "not_a_real_field": True}
     with pytest.raises(ValidationError):
         ModelExtractionOutput.model_validate(payload)
-
-
-def test_full_envelope_all_field_confidences() -> None:
-    envelope = ExtractionEnvelope.model_validate(
-        {
-            "contract_version_id": "22222222-2222-2222-2222-222222222222",
-            "document_id": "11111111-1111-1111-1111-111111111111",
-            "extraction_run_id": "33333333-3333-3333-3333-333333333333",
-            "model": {
-                "provider": "openrouter",
-                "model_name": "nvidia/nemotron-3-super-120b-a12b:free",
-                "prompt_version": "contract-extraction-v1",
-            },
-            "extracted_at": "2026-09-29T00:00:00Z",
-            "pagination_mode": "native",
-            "fields": {
-                "contract_type": _extracted_value("nda", 0.95),
-                "liability": {"type": _extracted_value("capped", 0.6)},
-            },
-            "clauses": [],
-        }
-    )
-    confidences = envelope.all_field_confidences()
-    assert sorted(confidences) == [0.6, 0.95]

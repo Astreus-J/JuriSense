@@ -131,6 +131,7 @@ class RuleEvaluationRecordResponse(BaseModel):
     approver_role: str | None
     rationale: str
     evidence_refs: list[dict[str, Any]]
+    exception_id: uuid.UUID | None
     created_at: datetime
 
 
@@ -139,10 +140,38 @@ class RiskResponse(BaseModel):
 
     id: uuid.UUID
     compliance_review_id: uuid.UUID
+    policy_id: uuid.UUID
     category: str
     description: str
     severity: str
     evidence_refs: list[dict[str, Any]]
+    created_at: datetime
+
+
+class GrantExceptionRequest(BaseModel):
+    """#120: exactly one of `supplier_id`/`contract_version_id` must be set --
+    `exception_service.grant_exception` rejects both-set and neither-set
+    (`ExceptionTargetInvalidError`), this schema does not attempt to encode that itself."""
+
+    supplier_id: uuid.UUID | None = None
+    contract_version_id: uuid.UUID | None = None
+    justification: str = Field(min_length=1)
+    valid_until: datetime
+
+
+class PolicyExceptionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    organization_id: uuid.UUID
+    rule_id: uuid.UUID
+    supplier_id: uuid.UUID | None
+    contract_version_id: uuid.UUID | None
+    justification: str
+    approver_role: str
+    granted_by: uuid.UUID
+    valid_from: datetime
+    valid_until: datetime
     created_at: datetime
 
 

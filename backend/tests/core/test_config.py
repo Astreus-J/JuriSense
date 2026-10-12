@@ -20,6 +20,7 @@ def _prod_kwargs(**overrides: object) -> dict:
         "storage_secret_key": "real-secret-key",
         "smtp_host": "smtp.example.com",
         "integration_credentials_encryption_key": "tbmho9wV12RQ-6KJU5aaEfSPBkVK9RKZNtMrYnNC6MQ=",
+        "openrouter_api_key": "sk-or-v1-real-key",
     }
     base.update(overrides)
     return base
@@ -58,8 +59,54 @@ def test_production_refuses_dev_integration_credentials_key() -> None:
         )
 
 
+def test_production_refuses_missing_openrouter_api_key() -> None:
+    """#116: without this, the first contract upload in production fails with an opaque
+    401 deep inside extraction_service instead of at startup."""
+    with pytest.raises(ValidationError, match="OPENROUTER_API_KEY"):
+        Settings(**_prod_kwargs(openrouter_api_key=None))
+
+
 def test_development_does_not_require_any_of_these() -> None:
     Settings(environment="development")
+
+
+def _constellation_kwargs(**overrides: object) -> dict:
+    base = {
+        "anchoring_provider": "constellation_digital_evidence",
+        "constellation_ded_api_key": "key",
+        "constellation_ded_org_id": "org",
+        "constellation_ded_tenant_id": "tenant",
+        "constellation_ded_private_key": "a" * 64,
+    }
+    base.update(overrides)
+    return base
+
+
+def test_constellation_provider_boots_with_all_four_credentials_set() -> None:
+    Settings(**_constellation_kwargs())
+
+
+@pytest.mark.parametrize(
+    "missing_field",
+    [
+        "constellation_ded_api_key",
+        "constellation_ded_org_id",
+        "constellation_ded_tenant_id",
+        "constellation_ded_private_key",
+    ],
+)
+def test_constellation_provider_refuses_to_boot_missing_any_one_credential(
+    missing_field: str,
+) -> None:
+    """#116: choosing this provider is itself what makes these required, regardless of
+    `environment` -- a dev flipping ANCHORING_PROVIDER to test against the real API with
+    an incomplete .env used to fail deep inside the adapter's first real call instead."""
+    with pytest.raises(ValidationError, match=missing_field.upper()):
+        Settings(**_constellation_kwargs(**{missing_field: None}))
+
+
+def test_default_transparency_log_provider_does_not_require_constellation_credentials() -> None:
+    Settings()  # anchoring_provider defaults to "transparency_log"
 
 
 def test_reevaluation_attempt_cap_must_be_at_least_one() -> None:

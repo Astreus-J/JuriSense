@@ -34,9 +34,18 @@ full 8-bounded-context product.
   `os.environ.get()` elsewhere in the codebase.
 - The existing `_require_production_secrets` validator pattern — refusing to boot in `environment ==
   "production"` with an insecure default — is the model for every new secret-shaped setting: AI
-  provider API keys, object storage credentials, and the eventual `AnchoringProvider` credentials all
-  get an equivalent "don't start in production without a real value" guard, not just a type
-  annotation.
+  provider API keys, object storage credentials, and `AnchoringProvider` credentials all get an
+  equivalent "don't start in production without a real value" guard, not just a type annotation.
+  `OPENROUTER_API_KEY` joined this list in `#116` (2026-10-12) — without it, the first contract
+  upload in production used to fail with an opaque 401 deep inside `extraction_service`, not at
+  startup.
+- **Conditionally-required settings** (gated behind another setting's value, not behind
+  `environment`) get their own validator instead of folding into `_require_production_secrets`:
+  `_require_active_anchoring_provider_credentials` checks all four `CONSTELLATION_DED_*` settings
+  the moment `ANCHORING_PROVIDER=constellation_digital_evidence` is chosen, in every environment —
+  choosing that provider is itself the signal they're required, independent of `environment == "
+  production"`. New conditionally-required settings follow this same "the choice that activates it
+  is the trigger" shape, not a hardcoded environment check.
 - A missing *required* setting (one with no sensible default, e.g. `DATABASE_URL` in a non-dev
   environment) fails at application startup with a clear pydantic-settings validation error, not at
   first use deep in a request handler — this is already how `Settings()` behaves by construction

@@ -213,8 +213,9 @@ Invariants, Lifecycle, Events, Versioning behavior, Tenant ownership.
 *Context: Policy & Compliance*
 - **Purpose**: the result of evaluating one `Rule` within a `ComplianceReview` (`ADR-010`).
 - **Identity**: `id` (UUID).
-- **Core attributes**: `rule_id`, `outcome` (`PASS|REVIEW|BLOCK|NOT_APPLICABLE`), `severity`,
-  `evidence_refs` (→ `Clause`/`SupplierCheck`), `rationale`.
+- **Core attributes**: `rule_id`, `outcome` (`PASS|REVIEW|BLOCK|NOT_APPLICABLE|EXEMPTED`),
+  `severity`, `evidence_refs` (→ `Clause`/`SupplierCheck`), `rationale`, `exception_id` (set only
+  when `outcome = EXEMPTED`, → `PolicyException`).
 - **Relationships**: belongs to `ComplianceReview`; references evidence in `Suppliers`/
   `Contracts & Documents`.
 - **Invariants**: append-only; never edited, including by overrides (`ADR-010` §3).
@@ -222,6 +223,23 @@ Invariants, Lifecycle, Events, Versioning behavior, Tenant ownership.
 - **Events**: `compliance.rule_evaluated`.
 - **Versioning**: immutable by construction.
 - **Tenant ownership**: via `ComplianceReview`.
+
+## PolicyException
+*Context: Policy & Compliance*
+- **Purpose**: a time-boxed, approver-signed waiver of one REVIEW-tier `Rule` for one `Supplier`
+  or `ContractVersion` (`policy-engine.md` "Exceptions & manual overrides"; STORY-4.4.2).
+- **Identity**: `id` (UUID).
+- **Core attributes**: `rule_id`, exactly one of `supplier_id`/`contract_version_id`,
+  `justification` (mandatory), `approver_role` (snapshot of the waived `Rule.approver_role` at
+  grant time), `granted_by`, `valid_from`, `valid_until`.
+- **Relationships**: references `Rule`; targets exactly one of `Supplier`/`ContractVersion`.
+- **Invariants**: only a `Rule` with a non-null `approver_role` (REVIEW tier) is eligible — a
+  BLOCK-tier rule has none, structurally; the granting actor's own organization role must equal
+  `approver_role`; immutable once created (left to expire via `valid_until`, never edited/revoked).
+- **Lifecycle**: created once, immutable; naturally stops applying once `valid_until` passes.
+- **Events**: `policy.exception_granted`.
+- **Versioning**: immutable by construction.
+- **Tenant ownership**: `organization_id`.
 
 ## Risk
 *Context: Policy & Compliance*

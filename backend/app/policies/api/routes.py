@@ -16,6 +16,8 @@ from app.policies.api.schemas import (
     CreatePolicyRequest,
     CreatePolicyResponse,
     CreateRuleRequest,
+    GrantExceptionRequest,
+    PolicyExceptionResponse,
     PolicyResponse,
     PolicyVersionResponse,
     RiskResponse,
@@ -28,20 +30,31 @@ from app.policies.api.schemas import (
 )
 from app.policies.application import (
     compliance_review_service,
+    exception_service,
     policy_service,
     publish_service,
     rule_service,
 )
 from app.policies.application.simulation_service import run_simulation
 from app.policies.domain.errors import (
+    ActiveExceptionLimitExceededError,
+    ActorNotAuthorizedForExceptionError,
     ComplianceReviewNotFoundError,
     ContractVersionNotFoundError,
     DuplicateRuleKeyError,
+    ExceptionJustificationRequiredError,
+    ExceptionTargetInvalidError,
+    ExceptionTargetNotFoundError,
+    ExceptionValidUntilMustBeFutureError,
     NoDraftVersionToPublishError,
+    PolicyLimitExceededError,
     PolicyNotFoundError,
     PolicyVersionConflictError,
+    PolicyVersionLimitExceededError,
     PolicyVersionNotDraftError,
     PolicyVersionNotFoundError,
+    RuleLimitExceededError,
+    RuleNotEligibleForExceptionError,
     RuleNotFoundError,
     RuleValidationError,
 )
@@ -65,9 +78,12 @@ CanReadComplianceReviews = Annotated[
 async def create_policy(
     body: CreatePolicyRequest, user: CanCreatePolicies, session: SessionDep
 ) -> CreatePolicyResponse:
-    policy, version = await policy_service.create_policy(
-        session, organization_id=user.organization_id, actor_id=user.id, name=body.name
-    )
+    try:
+        policy, version = await policy_service.create_policy(
+            session, organization_id=user.organization_id, actor_id=user.id, name=body.name
+        )
+    except PolicyLimitExceededError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=exc.message) from exc
     return CreatePolicyResponse(
         policy=PolicyResponse.model_validate(policy),
         initial_version=PolicyVersionResponse.model_validate(version),
@@ -124,6 +140,8 @@ async def create_draft_version(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.message) from exc
     except PolicyVersionConflictError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.message) from exc
+    except PolicyVersionLimitExceededError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=exc.message) from exc
     return PolicyVersionResponse.model_validate(version)
 
 
@@ -193,6 +211,8 @@ async def create_rule(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.message) from exc
     except DuplicateRuleKeyError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.message) from exc
+    except RuleLimitExceededError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=exc.message) from exc
     except RuleValidationError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=exc.message
@@ -273,6 +293,81 @@ async def update_rule(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=exc.message
         ) from exc
     return RuleResponse.model_validate(rule)
+
+
+@router.post(
+    "/{policy_id}/versions/{version_id}/rules/{rule_id}/exceptions",
+    response_model=PolicyExceptionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def grant_exception(
+    policy_id: uuid.UUID,
+    version_id: uuid.UUID,
+    rule_id: uuid.UUID,
+    body: GrantExceptionRequest,
+    user: CanUpdatePolicies,
+    session: SessionDep,
+) -> PolicyExceptionResponse:
+    """#120 (STORY-4.4.2): grants a time-boxed waiver of this rule for one Supplier or
+    ContractVersion. Gated on `update` (`CanUpdatePolicies`): the actor must still
+    separately hold this rule's own `approver_role` as their organization `Membership`
+    role, enforced inside `exception_service.grant_exception` -- `update` permission on
+    Policies alone is not sufficient."""
+    try:
+        exception = await exception_service.grant_exception(
+            session,
+            organization_id=user.organization_id,
+            actor_id=user.id,
+            policy_id=policy_id,
+            version_id=version_id,
+            rule_id=rule_id,
+            supplier_id=body.supplier_id,
+            contract_version_id=body.contract_version_id,
+            justification=body.justification,
+            valid_until=body.valid_until,
+        )
+    except (PolicyNotFoundError, PolicyVersionNotFoundError, RuleNotFoundError) as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.message) from exc
+    except ExceptionTargetNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.message) from exc
+    except (
+        ExceptionJustificationRequiredError,
+        ExceptionTargetInvalidError,
+        ExceptionValidUntilMustBeFutureError,
+        RuleNotEligibleForExceptionError,
+    ) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=exc.message
+        ) from exc
+    except ActorNotAuthorizedForExceptionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=exc.message) from exc
+    except ActiveExceptionLimitExceededError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=exc.message) from exc
+    return PolicyExceptionResponse.model_validate(exception)
+
+
+@router.get(
+    "/{policy_id}/versions/{version_id}/rules/{rule_id}/exceptions",
+    response_model=list[PolicyExceptionResponse],
+)
+async def list_exceptions(
+    policy_id: uuid.UUID,
+    version_id: uuid.UUID,
+    rule_id: uuid.UUID,
+    user: CanReadPolicies,
+    session: SessionDep,
+) -> list[PolicyExceptionResponse]:
+    try:
+        exceptions = await exception_service.list_exceptions_for_rule(
+            session,
+            organization_id=user.organization_id,
+            policy_id=policy_id,
+            version_id=version_id,
+            rule_id=rule_id,
+        )
+    except (PolicyNotFoundError, PolicyVersionNotFoundError, RuleNotFoundError) as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.message) from exc
+    return [PolicyExceptionResponse.model_validate(e) for e in exceptions]
 
 
 @router.post("/{policy_id}/versions/{version_id}/simulate", response_model=SimulationResponse)

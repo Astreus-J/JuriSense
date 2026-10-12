@@ -1,11 +1,14 @@
 """FEATURE-7.2 / STORY-7.2.1: AuditEvents for policy authoring and publication, and for the
 ComplianceReview lifecycle (started, one rule_evaluated per rule, completed) [AUD-001]."""
 
+from datetime import UTC, datetime, timedelta
+
 import httpx
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.evidence.infrastructure.repositories import AuditEventRepository
 from app.identity.infrastructure.repositories import UserRepository
+from tests.approvals.conftest import create_user_and_login
 from tests.policies.conftest import create_supplier
 from tests.policies.test_compliance_review import (
     EVIDENCE_ENVELOPE,
@@ -141,3 +144,52 @@ async def test_compliance_review_emits_started_one_rule_evaluated_per_rule_and_c
     assert len(evaluated) == 2
     assert {e.payload["rule_key"] for e in evaluated} == {"SANC-001", "FIN-003"}
     assert all(e.payload["compliance_review_id"] == review_id for e in evaluated)
+
+
+async def test_grant_exception_emits_policy_exception_granted(
+    client: httpx.AsyncClient, db_session_factory: async_sessionmaker
+) -> None:
+    """#120 (STORY-4.4.2)."""
+    admin_headers = await register_org_and_login(client, "audit-exception@example.com")
+    legal_headers = await create_user_and_login(
+        client, admin_headers, email="audit-exception-legal@example.com", role="legal"
+    )
+    supplier = await create_supplier(client, admin_headers, tax_id=TAX_ID)
+    created = (
+        await client.post("/api/policies", json={"name": "Vendor Policy"}, headers=admin_headers)
+    ).json()
+    policy_id = created["policy"]["id"]
+    version_id = created["initial_version"]["id"]
+    rule = (
+        await client.post(
+            f"/api/policies/{policy_id}/versions/{version_id}/rules",
+            json={"yaml": FIN_003_YAML},
+            headers=admin_headers,
+        )
+    ).json()
+    publish = await client.post(
+        f"/api/policies/{policy_id}/versions/{version_id}/publish", headers=admin_headers
+    )
+    assert publish.status_code == 200, publish.text
+
+    valid_until = (datetime.now(UTC) + timedelta(days=30)).isoformat()
+    grant = await client.post(
+        f"/api/policies/{policy_id}/versions/{version_id}/rules/{rule['id']}/exceptions",
+        json={
+            "supplier_id": supplier["id"],
+            "justification": "Renewal of an already-reviewed MSA.",
+            "valid_until": valid_until,
+        },
+        headers=legal_headers,
+    )
+    assert grant.status_code == 201, grant.text
+    exception_id = grant.json()["id"]
+
+    [event] = await _events(db_session_factory, "policy.exception_granted")
+    assert str(event.organization_id) == grant.json()["organization_id"]
+    assert event.payload["policy_exception_id"] == exception_id
+    assert event.payload["rule_id"] == rule["id"]
+    assert event.payload["rule_key"] == "FIN-003"
+    assert event.payload["supplier_id"] == supplier["id"]
+    assert event.payload["contract_version_id"] is None
+    assert event.payload["approver_role"] == "legal"

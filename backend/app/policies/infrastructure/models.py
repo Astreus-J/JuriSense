@@ -156,6 +156,62 @@ class Rule(Base):
         return value
 
 
+class PolicyException(Base):
+    """A time-boxed, approver-signed waiver of one `Rule` for one Supplier or
+    ContractVersion (docs/03-domain/policy-engine.md "Exceptions & manual overrides";
+    #120, STORY-4.4.2).
+
+    Scope: only a REVIEW-tier `Rule` (non-null `approver_role`) can be targeted -- a
+    BLOCK-tier rule's `approver_role` is structurally `None` (`rule_dsl`'s own DSL
+    validation), so there is no single role an exception could ever attribute itself to
+    for one; see `RuleNotEligibleForExceptionError`. Targets exactly one of `supplier_id`/
+    `contract_version_id` (never both, never neither) -- validated in
+    `exception_service.grant_exception`, not by a DB CHECK constraint, matching this
+    codebase's existing precedent of enforcing exactly-one-of invariants at the
+    application layer rather than the schema (no CHECK-constraint precedent exists
+    anywhere else in this codebase either).
+
+    `approver_role` here is a snapshot of the waived `Rule.approver_role` at grant time --
+    never user-supplied -- so the exception's own record of "whose sign-off this was"
+    survives even if the rule is later edited in a new draft version (BR-POL-001's
+    copy-modify can change a copied rule's `approver_role` going forward; this row
+    continues to describe the exact rule+role pairing that was actually waived).
+
+    This is a documented override INPUT to evaluation (`evaluation_service.evaluate_rule`
+    checks for an applicable active exception before running any CEL at all), never a
+    mutation of the `Rule` row itself -- `Rule.when`/`compiled_*_cel` are untouched.
+
+    Immutable once created (no update/delete method exists on
+    `PolicyExceptionRepository`) -- an exception that should no longer apply is left to
+    expire via `valid_until`, never edited or revoked in place; this mirrors
+    `RuleEvaluation`/`Risk`'s own append-only contract and keeps "what exception was
+    active when rule X was evaluated" always reconstructable after the fact.
+    """
+
+    __tablename__ = "policy_exceptions"
+    __table_args__ = (
+        Index("ix_policy_exceptions_rule_supplier", "rule_id", "supplier_id"),
+        Index("ix_policy_exceptions_rule_contract_version", "rule_id", "contract_version_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id"), index=True)
+    rule_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("rules.id"), index=True)
+    supplier_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("suppliers.id"), default=None
+    )
+    contract_version_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("contract_versions.id"), default=None
+    )
+    justification: Mapped[str] = mapped_column(Text)
+    approver_role: Mapped[str] = mapped_column(String(50))
+    granted_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    valid_from: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    valid_until: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class ComplianceReview(Base):
     """One evaluation run of a `ContractVersion` against every currently-published
     `PolicyVersion` in the organization (docs/03-domain/domain-model.md
@@ -258,6 +314,11 @@ class RuleEvaluation(Base):
     severity: Mapped[str] = mapped_column(String(20))
     approver_role: Mapped[str | None] = mapped_column(String(50), default=None)
     rationale: Mapped[str] = mapped_column(Text)
+    # #120: set only when `outcome == EXEMPTED` -- the `PolicyException` that caused this
+    # rule to be waived rather than CEL-evaluated. `None` for every other outcome.
+    exception_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("policy_exceptions.id"), default=None
+    )
     # Each entry traces one referenced evaluation-context path back to the evidence that
     # produced it -- a Contract extraction-field provenance (document_id/page/text_span)
     # or a Supplier evidence-port reference (supplier_id/supplier_profile_id/
@@ -282,6 +343,16 @@ class Risk(Base):
     rows with no `RuleEvaluation` counterpart, exactly as domain-model.md anticipates.
 
     Immutable once created -- `RiskRepository` exposes only `add`/`list`, no update/delete.
+
+    ## `policy_id` (#179, 2026-10-12)
+    `category` alone is `rule_key`, which `uq_rule_key_per_version` only guarantees unique
+    PER `PolicyVersion` -- two different, independently-authored Policies in the same
+    organization can legitimately reuse the same `rule_key` string for unrelated rules (the
+    pooling `compliance_review_service.execute_review` already does across every currently-
+    published Policy makes this a real, if rare, authoring collision, not a hypothetical
+    one). `policy_id` disambiguates without changing `category`'s existing meaning/format,
+    so every existing consumer that reads `category` as the human-readable rule_key is
+    unaffected; a caller that needs to tell two same-`category` Risk rows apart now can.
     """
 
     __tablename__ = "risks"
@@ -290,6 +361,7 @@ class Risk(Base):
     compliance_review_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("compliance_reviews.id"), index=True
     )
+    policy_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("policies.id"), index=True)
     category: Mapped[str] = mapped_column(String(50))
     description: Mapped[str] = mapped_column(Text)
     severity: Mapped[str] = mapped_column(String(20))

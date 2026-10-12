@@ -140,6 +140,22 @@ class Settings(BaseSettings):
     # because it is expected to move once real extraction data exists.
     contract_extraction_confidence_threshold: float = 0.82
 
+    # #180 (security finding POL-004): per-organization resource-exhaustion backstop --
+    # unbounded Policies/PolicyVersions/Rules is an unbounded Rule-evaluation cost lever,
+    # since every currently-published PolicyVersion's Rules are pooled into every
+    # trigger_review/simulate call. Generous enough to never bother a real customer;
+    # matches SimulateRequest.contract_version_ids' own max_length=50 cap's precedent of
+    # "a config-driven ceiling, not an unbounded resource."
+    max_policies_per_organization: int = 100
+    max_policy_versions_per_policy: int = 50
+    max_rules_per_policy_version: int = 200
+    # #120/security review (2026-10-12): same POL-004 backstop, scoped per Rule -- unlike
+    # the three caps above, nothing else bounds how many `PolicyException` rows one Rule
+    # can accumulate. Requires an already-privileged actor (holding the rule's own
+    # approver_role) to create volume, so lower risk than the three above, but the same
+    # "config-driven ceiling, not an unbounded resource" principle applies.
+    max_active_exceptions_per_rule: int = 50
+
     # SEC-003: upload validation limits (see app/contracts/infrastructure/document_scanner.py
     # for the full malware/type-spoofing scope decision).
     document_max_size_bytes: int = 25_000_000  # 25 MB
@@ -254,6 +270,44 @@ class Settings(BaseSettings):
                 "SMTP_HOST must be set in production -- without it, password-reset "
                 "and invite links are written to the application log instead of emailed"
             )
+        if self.environment == "production" and not self.openrouter_api_key:
+            # #116: without this, the first contract upload in production fails with an
+            # opaque 401 from OpenRouter deep inside extraction_service -- not at startup,
+            # and not with any indication of which setting is the actual cause.
+            raise ValueError(
+                "OPENROUTER_API_KEY must be set in production -- without it, every "
+                "contract extraction call fails at first use instead of at startup"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _require_active_anchoring_provider_credentials(self) -> "Settings":
+        """#116: `ANCHORING_PROVIDER` is a plain config switch (`anchoring-providers.md`),
+        not itself production-gated -- a developer can legitimately flip it to
+        `constellation_digital_evidence` in any environment to test against the real
+        Constellation DED API. But doing so with any of the four `CONSTELLATION_DED_*`
+        settings still unset used to fail deep inside `ConstellationAnchoringProvider.
+        submit_hash` (a signing error or a 401), the first time a Decision was actually
+        anchored -- not at startup, and not naming which setting was missing. Checked
+        regardless of `environment`, unlike the production-only secrets above: choosing
+        this provider is itself the signal that these are now required, not the
+        environment."""
+        if self.anchoring_provider == "constellation_digital_evidence":
+            missing = [
+                env_name
+                for env_name, value in (
+                    ("CONSTELLATION_DED_API_KEY", self.constellation_ded_api_key),
+                    ("CONSTELLATION_DED_ORG_ID", self.constellation_ded_org_id),
+                    ("CONSTELLATION_DED_TENANT_ID", self.constellation_ded_tenant_id),
+                    ("CONSTELLATION_DED_PRIVATE_KEY", self.constellation_ded_private_key),
+                )
+                if not value
+            ]
+            if missing:
+                raise ValueError(
+                    "ANCHORING_PROVIDER=constellation_digital_evidence requires these "
+                    f"environment variables, which are not set: {', '.join(missing)}"
+                )
         return self
 
 

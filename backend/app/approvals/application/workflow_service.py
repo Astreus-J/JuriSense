@@ -3,7 +3,9 @@ docs/03-domain/approvals.md "ApprovalWorkflow configuration").
 """
 
 import uuid
+from dataclasses import dataclass
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.approvals.domain.constants import SeverityTier
@@ -17,10 +19,18 @@ from app.approvals.infrastructure.repositories import ApprovalWorkflowRepository
 # `seed_default_workflows`'s docstring). LOW is intentionally left unconfigured: per the
 # routing table, a LOW-severity REVIEW outcome is an undocumented edge case the product
 # doesn't define a workflow for.
+#
+# Product decision (2026-10-12, #181): the chain's final step is seeded as "approver", the
+# real `app.identity.domain.constants.Role` value -- not the string "director", which
+# never existed as an actual RBAC role (rbac.py's own docstring already called `approver`
+# "the generic Director/Approver persona," but this seed never matched it). "Director"
+# stays the product's persona-facing LABEL for this step wherever it's displayed to a
+# user; it is not, and was never meant to be, a distinct technical role with its own
+# permission grid.
 _DEFAULT_WORKFLOW_STEPS: dict[str, list[str]] = {
     SeverityTier.MEDIUM.value: ["legal"],
-    SeverityTier.HIGH.value: ["compliance", "legal", "director"],
-    SeverityTier.CRITICAL.value: ["compliance", "legal", "director"],
+    SeverityTier.HIGH.value: ["compliance", "legal", "approver"],
+    SeverityTier.CRITICAL.value: ["compliance", "legal", "approver"],
 }
 
 
@@ -57,6 +67,48 @@ async def seed_default_workflows(
         repository.add(workflow)
         workflows.append(workflow)
     return workflows
+
+
+@dataclass(frozen=True)
+class DirectorStepBackfillResult:
+    workflows_checked: int
+    workflows_updated: int
+
+
+async def backfill_director_role_to_approver(session: AsyncSession) -> DirectorStepBackfillResult:
+    """Security review (2026-10-12), real finding: #181's fix only changed
+    `_DEFAULT_WORKFLOW_STEPS` -- the template `seed_default_workflows` uses for a
+    brand-new organization going forward. It never touched any `ApprovalWorkflow` row
+    already persisted for an organization registered *before* that fix, each of which
+    still has `"director"` baked into its `steps` JSON from the old template. `"director"`
+    never matched a real `app.identity.domain.constants.Role` (confirmed by this same
+    #181 fix's own docstring), so any such row's HIGH/CRITICAL chain has a step no real
+    user can ever resolve -- fails closed (no bypass), but permanently stalls that step.
+    Running against the real dev database (2026-10-12) confirmed this is not
+    hypothetical: 6 of 9 persisted `ApprovalWorkflow` rows still contained `"director"`.
+
+    One-off remedy, same shape as `app.identity.application.permission_service.
+    backfill_missing_module_permissions`: replaces every `"director"` entry with
+    `"approver"` in place, for every organization, and commits once (there is no
+    per-row failure mode here worth isolating -- a plain list-literal JSON column
+    update, not a new-row insert that could collide on a constraint). Idempotent: a
+    workflow with no `"director"` step is left untouched and not counted as updated.
+    Safe to edit an already-active row in place -- `ApprovalWorkflow`'s own docstring:
+    editing a row never retroactively changes an already-instantiated `ApprovalRequest`
+    (which keeps the `approver_role` it was created with), only future, not-yet-
+    instantiated steps read the row's current `steps`.
+
+    No user-facing route calls this; run manually once to repair organizations that
+    predate #181's fix."""
+    workflows = list((await session.execute(select(ApprovalWorkflow))).scalars())
+    updated = 0
+    for workflow in workflows:
+        if "director" not in workflow.steps:
+            continue
+        workflow.steps = ["approver" if step == "director" else step for step in workflow.steps]
+        updated += 1
+    await session.commit()
+    return DirectorStepBackfillResult(workflows_checked=len(workflows), workflows_updated=updated)
 
 
 async def get_workflow_for_tier(

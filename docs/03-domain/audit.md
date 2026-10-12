@@ -393,6 +393,23 @@ the emission: that it shares its business transaction is covered only by the ato
   `PolicyVersion` used") checkable — the published rule set's exact content and timing is fixed by
   this event, permanently.
 
+**`policy.exception_granted`**
+- Producer: `PolicyException` aggregate (`app.policies.application.exception_service.
+  grant_exception`), on `POST /api/policies/{policy_id}/versions/{version_id}/rules/{rule_id}/
+  exceptions` (STORY-4.4.2).
+- Meaning: an approver holding the waived rule's own `approver_role` granted a time-boxed waiver
+  of one REVIEW-tier `Rule` for one Supplier or ContractVersion, with a mandatory justification.
+- Payload: `policy_exception_id`, `rule_id`, `rule_key`, `supplier_id` (null if the target is a
+  contract version), `contract_version_id` (null if the target is a supplier), `approver_role`,
+  `valid_until`.
+- Consumers: `evaluation_service.evaluate_rule` (an active exception short-circuits CEL evaluation
+  for its rule, producing an `EXEMPTED` `RuleEvaluation` instead); the review-results screen (cites
+  the exception as the reason a would-be `REVIEW` rule did not fire).
+- Audit implications: this is the one event that makes an `EXEMPTED` outcome explainable after the
+  fact — it is never a rule mutation (`Rule.when`/`compiled_*_cel` are untouched), only a
+  documented override input, append-only like every other record in this domain (no update/delete
+  path exists on `PolicyExceptionRepository`).
+
 **`compliance.review_started`**
 - Producer: `ComplianceReview` aggregate, on initiation (`CMP-001`).
 - Meaning: an evaluation run of a `ContractVersion` + supplier evidence against a `PolicyVersion`

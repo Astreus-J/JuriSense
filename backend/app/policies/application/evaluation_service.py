@@ -18,7 +18,7 @@ import celpy
 
 from app.policies.domain.constants import SEVERITY_ORDER, RuleOutcome, Severity
 from app.policies.domain.rule_dsl import describe_when
-from app.policies.infrastructure.models import Rule
+from app.policies.infrastructure.models import PolicyException, Rule
 
 _CEL_ENV = celpy.Environment()
 
@@ -52,6 +52,9 @@ class RuleEvaluationResult:
     severity: str
     approver_role: str | None
     rationale: str
+    # #120: set only when `outcome == EXEMPTED` -- the `PolicyException` that waived this
+    # rule rather than it being CEL-evaluated.
+    exception_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -69,11 +72,35 @@ def _cel_eval(expression: str, context: dict[str, Any]) -> bool:
     return bool(result)
 
 
-def evaluate_rule(rule: Rule, context: dict[str, Any]) -> RuleEvaluationResult:
+def evaluate_rule(
+    rule: Rule, context: dict[str, Any], *, active_exception: PolicyException | None = None
+) -> RuleEvaluationResult:
     """Two-phase evaluation (see `app.policies.domain.rule_dsl`'s module docstring for
     why): first confirm every referenced context field is present (`compiled_presence_cel`)
     -- if not, the outcome is `NOT_APPLICABLE`, distinct from a genuinely non-matching
-    condition. Only once presence is confirmed is `compiled_condition_cel` evaluated."""
+    condition. Only once presence is confirmed is `compiled_condition_cel` evaluated.
+
+    #120: `active_exception`, when given, short-circuits all of that -- the rule is
+    never CEL-evaluated at all, matching its own docstring's "a documented override
+    INPUT, not a rule mutation": `rule.when`/`compiled_*_cel` are never touched, this
+    function simply never reads them for this call."""
+    if active_exception is not None:
+        return RuleEvaluationResult(
+            rule_id=str(rule.id),
+            rule_key=rule.rule_key,
+            rule_name=rule.name,
+            outcome=RuleOutcome.EXEMPTED.value,
+            severity=rule.severity,
+            approver_role=None,
+            rationale=(
+                f"Rule '{rule.rule_key}' is exempted by an active policy exception "
+                f"(granted by role '{active_exception.approver_role}', valid until "
+                f"{active_exception.valid_until.isoformat()}): "
+                f"{active_exception.justification}"
+            ),
+            exception_id=str(active_exception.id),
+        )
+
     present = _cel_eval(rule.compiled_presence_cel, context)
     if not present:
         return RuleEvaluationResult(
@@ -114,12 +141,25 @@ def evaluate_rule(rule: Rule, context: dict[str, Any]) -> RuleEvaluationResult:
 
 
 def evaluate_policy_version(
-    rules: list[Rule], context: dict[str, Any]
+    rules: list[Rule],
+    context: dict[str, Any],
+    *,
+    active_exceptions_by_rule_id: dict[str, PolicyException] | None = None,
 ) -> list[RuleEvaluationResult]:
     """Every rule in `rules` is evaluated independently, order-independent per ADR-010 --
     the list is returned in the same order `rules` was given, but nothing about the
-    result depends on that order."""
-    return [evaluate_rule(rule, context) for rule in rules]
+    result depends on that order.
+
+    #120: `active_exceptions_by_rule_id` (keyed by `str(rule.id)`) is an optional lookup
+    of the one active `PolicyException`, if any, applicable to this specific review's
+    target -- `None`/omitted preserves this function's exact prior behavior (every rule
+    normally CEL-evaluated), which is also what `simulation_service.run_simulation`
+    relies on by never passing it."""
+    exceptions = active_exceptions_by_rule_id or {}
+    return [
+        evaluate_rule(rule, context, active_exception=exceptions.get(str(rule.id)))
+        for rule in rules
+    ]
 
 
 def aggregate_preview(results: list[RuleEvaluationResult]) -> AggregatePreview:

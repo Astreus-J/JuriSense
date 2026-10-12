@@ -5,6 +5,7 @@ against a real `Rule` ORM instance (constructed directly, no database needed -- 
 pure-Python evaluations)."""
 
 import uuid
+from datetime import UTC, datetime, timedelta
 
 from app.policies.application.evaluation_service import (
     aggregate_preview,
@@ -13,7 +14,7 @@ from app.policies.application.evaluation_service import (
 )
 from app.policies.domain.constants import RuleOutcome
 from app.policies.domain.rule_dsl import parse_rule_yaml
-from app.policies.infrastructure.models import Rule
+from app.policies.infrastructure.models import PolicyException, Rule
 
 
 def _rule_from_yaml(yaml_text: str) -> Rule:
@@ -190,5 +191,66 @@ def test_aggregate_preview_approve_when_everything_passes_or_not_applicable() ->
     results = evaluate_policy_version(rules, {})
     aggregate = aggregate_preview(results)
     assert all(r.outcome == RuleOutcome.NOT_APPLICABLE.value for r in results)
+    assert aggregate.status == "APPROVE"
+    assert aggregate.required_approver_roles == ()
+
+
+def _exception_for(rule: Rule) -> PolicyException:
+    return PolicyException(
+        id=uuid.uuid4(),
+        organization_id=uuid.uuid4(),
+        rule_id=rule.id,
+        contract_version_id=uuid.uuid4(),
+        justification="Renewal of an already-reviewed MSA.",
+        approver_role=rule.approver_role,
+        granted_by=uuid.uuid4(),
+        valid_until=datetime.now(UTC) + timedelta(days=30),
+    )
+
+
+def test_evaluate_rule_with_an_active_exception_skips_cel_entirely() -> None:
+    """#120: a rule that would otherwise REVIEW (contract.value.brl=1500000 >= 250000)
+    is EXEMPTED instead when an active exception is given -- `compiled_condition_cel` is
+    never evaluated, proven by a context that would make it match if it were."""
+    rule = _rule_from_yaml(FIN_003_YAML)
+    exception = _exception_for(rule)
+    result = evaluate_rule(
+        rule, {"contract": {"value": {"brl": 1500000}}}, active_exception=exception
+    )
+    assert result.outcome == RuleOutcome.EXEMPTED.value
+    assert result.approver_role is None
+    assert result.exception_id == str(exception.id)
+    assert "Renewal of an already-reviewed MSA" in result.rationale
+
+
+def test_evaluate_policy_version_applies_exception_only_to_its_own_rule_id() -> None:
+    """FIN-003 and FIN-004 both trigger on this context; only FIN-003's exception
+    applies, so FIN-004 still comes back as a real REVIEW."""
+    fin_003 = _rule_from_yaml(FIN_003_YAML)
+    fin_004 = _rule_from_yaml(FIN_004_YAML)
+    exception = _exception_for(fin_003)
+
+    results = evaluate_policy_version(
+        [fin_003, fin_004],
+        {"contract": {"value": {"brl": 1500000}}},
+        active_exceptions_by_rule_id={str(fin_003.id): exception},
+    )
+    outcomes = {r.rule_key: r.outcome for r in results}
+    assert outcomes["FIN-003"] == RuleOutcome.EXEMPTED.value
+    assert outcomes["FIN-004"] == RuleOutcome.REVIEW.value
+
+
+def test_aggregate_preview_treats_exempted_as_non_blocking() -> None:
+    """A rule that would otherwise REVIEW, once exempted, must not make the review's
+    aggregate status REVIEW -- EXEMPTED is excluded from both the BLOCK and REVIEW
+    aggregation checks, same as PASS/NOT_APPLICABLE."""
+    rule = _rule_from_yaml(FIN_003_YAML)
+    exception = _exception_for(rule)
+    results = evaluate_policy_version(
+        [rule],
+        {"contract": {"value": {"brl": 1500000}}},
+        active_exceptions_by_rule_id={str(rule.id): exception},
+    )
+    aggregate = aggregate_preview(results)
     assert aggregate.status == "APPROVE"
     assert aggregate.required_approver_roles == ()
