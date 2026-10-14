@@ -40,6 +40,16 @@ export function AcceptInviteForm({ token }: AcceptInviteFormProps) {
       });
 
       if (response.ok) {
+        const result = (await response.json().catch(() => null)) as {
+          requiresManualLogin?: boolean;
+        } | null;
+        // #131: the account was created either way -- if the follow-up login failed
+        // server-side, send them to a normal sign-in instead of the dashboard rather
+        // than treating this as a dead end.
+        if (result?.requiresManualLogin) {
+          router.push("/login?accountCreated=1");
+          return;
+        }
         router.push("/dashboard");
         router.refresh();
         return;

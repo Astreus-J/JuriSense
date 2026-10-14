@@ -24,13 +24,20 @@ function errorMessage(error: LoginErrorState): { title: string; body?: string } 
   switch (error.kind) {
     case "invalid_credentials":
       return { title: "Invalid email or password." };
-    case "locked":
-      return {
-        title: "Too many failed attempts.",
-        body: error.retryAfterSeconds
-          ? `Try again in about ${Math.ceil(error.retryAfterSeconds / 60)} minute(s).`
-          : "Try again in a few minutes.",
-      };
+    case "locked": {
+      // #134: `retryAfterSeconds` of `0` ("you can try again right now") is falsy, so the
+      // original `? :` skipped straight to the generic fallback message -- actively
+      // misleading in that exact case (told the user to wait when they didn't have to).
+      // Checking for `undefined` explicitly, and special-casing `<= 0`, fixes both ends.
+      let body = "Try again in a few minutes.";
+      if (error.retryAfterSeconds !== undefined) {
+        body =
+          error.retryAfterSeconds > 0
+            ? `Try again in about ${Math.ceil(error.retryAfterSeconds / 60)} minute(s).`
+            : "You can try again now.";
+      }
+      return { title: "Too many failed attempts.", body };
+    }
     case "unexpected":
       return { title: "Something went wrong.", body: "Please try again in a moment." };
   }

@@ -79,7 +79,17 @@ export default async function SupplierDetailPage({ params }: SupplierDetailPageP
           </p>
         </div>
 
-        <SupplierDetailActions supplier={supplier} canUpdate={permissions.canUpdate} />
+        {/* #142 code review (2026-10-14): `key={supplier.id}` forces React to unmount
+            and remount this component on navigation between two different suppliers --
+            without it, the client component instance (and its in-flight recheck-polling
+            state/interval) survives across the navigation and keeps polling the PREVIOUS
+            supplier's checks, misattributing that result to whichever supplier is now
+            displayed. */}
+        <SupplierDetailActions
+          key={supplier.id}
+          supplier={supplier}
+          canUpdate={permissions.canUpdate}
+        />
       </div>
 
       <SupplierProfileCard profile={profile} />

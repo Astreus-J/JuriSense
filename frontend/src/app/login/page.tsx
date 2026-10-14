@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { AuthShell } from "@/components/auth/AuthShell";
 import { LoginForm } from "@/components/auth/LoginForm";
 import { Alert } from "@/components/ui/Alert";
+import { isSafeNextPath } from "@/lib/auth/safe-redirect";
 import { getSession } from "@/lib/auth/session";
 
 export const metadata: Metadata = {
@@ -11,24 +12,12 @@ export const metadata: Metadata = {
   description: "Sign in to JuriSense Gate.",
 };
 
-function isSafeNextPath(next: string | undefined): next is string {
-  if (typeof next !== "string" || next.length === 0) return false;
-  if (next[0] !== "/") return false;
-  // A single leading "/" is required, but a *second* "/" or a "\" right
-  // after it produces a scheme-relative URL once a browser normalizes it
-  // (both "//evil.com" and "/\evil.com" resolve to https://evil.com) --
-  // reject both, plus any embedded backslash anywhere as defense in depth
-  // (found in security review: the original check only rejected "//").
-  if (/^\/[/\\]/.test(next) || next.includes("\\")) return false;
-  return true;
-}
-
 interface LoginPageProps {
-  searchParams: Promise<{ next?: string; expired?: string }>;
+  searchParams: Promise<{ next?: string; expired?: string; accountCreated?: string }>;
 }
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
-  const { next, expired } = await searchParams;
+  const { next, expired, accountCreated } = await searchParams;
   const safeNext = isSafeNextPath(next) ? next : "/dashboard";
 
   // Already signed in: no reason to show the login form again.
@@ -44,6 +33,13 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         {expired === "1" && (
           <Alert tone="warning" title="Your session expired.">
             Sign in again to continue.
+          </Alert>
+        )}
+        {/* #131: accept-invite's own auto-login can fail even though the account was
+            genuinely created -- land here instead of a dead end. */}
+        {accountCreated === "1" && (
+          <Alert tone="success" title="Your account was created.">
+            Sign in with the password you just chose to continue.
           </Alert>
         )}
         <LoginForm next={safeNext} />

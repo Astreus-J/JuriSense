@@ -109,27 +109,44 @@ export const NAV_ITEMS: Record<ModuleKey, NavItem> = {
  * dashboard renders without error for each of the 10 roles" — every role
  * below resolves to a valid, non-empty nav list.
  *
- * Design rationale (persona-driven, see `docs/01-product/personas.md`):
- * - `admin`: full surface, including Integrations and Settings (org/team
- *   management is an admin-only action per `ADR-003`'s default grid).
- * - `procurement`: owns supplier/contract intake and tracks approval status,
- *   but does not author policy (`personas.md`, "no edit rights over
- *   Policy/Rule definitions") — Policies is intentionally omitted.
- * - `legal` / `compliance`: the two policy-authoring roles; both get
- *   Policies, Approvals, and Evidence & Audit.
+ * #137 (2026-10-14): this list and the backend's own `DEFAULT_ROLE_GRID`
+ * (`backend/app/identity/domain/rbac.py`) are two independently maintained
+ * sources of truth for "which roles can see which module" — the backend's
+ * `require_permission()` dependency is the real enforcement, this is only
+ * what's offered as a clickable nav item. They had drifted: this file
+ * omitted several modules the backend actually grants `read` on (and
+ * documented that omission as deliberate, when the backend's own rationale
+ * for the same role said the opposite). Reconciled below against the
+ * backend grid as the authoritative source — every role now shows exactly
+ * the modules it can at least `read`, with ONE documented exception
+ * (`approver`, kept deliberately narrower than its read grant).
+ *
+ * Design rationale (backend-grounded, see `rbac.py`'s own per-role rationale
+ * for the full detail):
+ * - `admin`: full surface (`CRUD` everywhere in the backend grid).
+ * - `procurement`: full CRUD on Suppliers/Contracts; read-only elsewhere it
+ *   has visibility into (Policies, Approvals) — explicitly "needs to see the
+ *   policy/compliance/approval status attached to their own suppliers/
+ *   contracts" per the backend's own comment. No Evidence/Integrations/
+ *   Settings (`_NONE` in the grid).
+ * - `legal` / `compliance`: the two policy-authoring roles (`create`+`update`
+ *   on Policies); both read Suppliers, Contracts, Evidence too.
  * - `privacy` / `security` / `finance`: each owns a category of policy rules
- *   and reviews the contract fields relevant to their domain, but (unlike
- *   Legal/Compliance) is not positioned as a portfolio-wide reviewer, so
- *   Evidence & Audit is left off their nav.
- * - `approver`: intentionally the narrowest — `personas.md` is explicit that
- *   this role has "no policy-authoring or supplier/contract-management
- *   surface" and should not be "buried in low-value" surface area.
- * - `auditor`: read-oriented across the whole portfolio (a GRC auditor needs
- *   to inspect suppliers/contracts/policies/approvals to do their job), with
- *   Evidence & Audit as its natural home — matching the acceptance
- *   criterion's example directly.
- * - `viewer`: the same broad read-only footprint as `auditor`, minus the
- *   admin-only Integrations/Settings surfaces.
+ *   and has an approval queue, but (per the backend's shared rationale for
+ *   these five) is only ever `read` on Suppliers/Contracts/Evidence, same
+ *   breadth as `legal`/`compliance`'s read-only surfaces. `security`
+ *   additionally reads Integrations/Settings — "the only one of these five
+ *   with that visibility" per the backend's own comment.
+ * - `approver`: the one deliberate narrowing — the backend grants it `read`
+ *   on Suppliers/Contracts/Policies/Evidence too, but `personas.md` is
+ *   explicit that this role has "no policy-authoring or supplier/contract-
+ *   management surface" and should not be "buried in low-value" surface
+ *   area, so its nav stays just Dashboard + Approvals.
+ * - `auditor`: read-only on *everything*, including Integrations/Settings —
+ *   the backend's own comment calls these two out by name as included.
+ * - `viewer`: the same read-only footprint as `legal`/`compliance`'s
+ *   read-only surfaces, minus the admin/security/auditor-only
+ *   Integrations/Settings.
  */
 export const ROLE_NAV_ITEMS: Record<Role, ModuleKey[]> = {
   admin: [
@@ -142,14 +159,33 @@ export const ROLE_NAV_ITEMS: Record<Role, ModuleKey[]> = {
     "integrations",
     "settings",
   ],
-  procurement: ["dashboard", "suppliers", "contracts", "approvals"],
-  legal: ["dashboard", "contracts", "policies", "approvals", "evidence"],
+  procurement: ["dashboard", "suppliers", "contracts", "policies", "approvals"],
+  legal: ["dashboard", "suppliers", "contracts", "policies", "approvals", "evidence"],
   compliance: ["dashboard", "suppliers", "contracts", "policies", "approvals", "evidence"],
-  privacy: ["dashboard", "contracts", "policies", "approvals"],
-  security: ["dashboard", "contracts", "policies", "approvals"],
-  finance: ["dashboard", "contracts", "policies", "approvals"],
+  privacy: ["dashboard", "suppliers", "contracts", "policies", "approvals", "evidence"],
+  security: [
+    "dashboard",
+    "suppliers",
+    "contracts",
+    "policies",
+    "approvals",
+    "evidence",
+    "integrations",
+    "settings",
+  ],
+  finance: ["dashboard", "suppliers", "contracts", "policies", "approvals", "evidence"],
+  // Deliberately narrower than its backend read grant -- see the rationale above.
   approver: ["dashboard", "approvals"],
-  auditor: ["dashboard", "suppliers", "contracts", "policies", "approvals", "evidence"],
+  auditor: [
+    "dashboard",
+    "suppliers",
+    "contracts",
+    "policies",
+    "approvals",
+    "evidence",
+    "integrations",
+    "settings",
+  ],
   viewer: ["dashboard", "suppliers", "contracts", "policies", "approvals", "evidence"],
 };
 

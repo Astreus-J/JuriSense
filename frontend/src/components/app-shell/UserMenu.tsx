@@ -25,6 +25,12 @@ export function UserMenu({ fullName, email, role }: UserMenuProps) {
     setSigningOut(true);
     try {
       await fetch("/api/session/logout", { method: "POST" });
+    } catch (error) {
+      // #135: best-effort, same as the Route Handler's own "always clear the local
+      // session no matter what" contract (`src/app/api/session/logout/route.ts`) -- a
+      // network failure here must not surface as an unhandled promise rejection; the
+      // user still gets signed out locally via the redirect below.
+      console.error("Logout request failed", error);
     } finally {
       router.push("/login");
       router.refresh();

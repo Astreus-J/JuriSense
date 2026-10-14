@@ -11,6 +11,7 @@ import {
 } from "@/lib/auth/cookie-config";
 import { isCrossSiteMutation } from "@/lib/auth/csrf";
 import { isJwtLikelyValid } from "@/lib/auth/jwt";
+import { isSafeNextPath } from "@/lib/auth/safe-redirect";
 
 /**
  * Proxy (Next.js 16 renamed Middleware to Proxy — see
@@ -85,13 +86,43 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   const isProtected = matchesPrefix(pathname, PROTECTED_PREFIXES);
   const isAuthOnlyPage = matchesPrefix(pathname, AUTH_ONLY_PAGES);
 
+  // #133: this optimistic `authenticated` check has no way to see a token the backend
+  // revoked out of band (another tab's logout, an admin deactivation) -- its own `exp`
+  // claim can still look "likely valid". Without this, that produces an infinite loop:
+  // `requireSession()` finds the revoked token via the real `/auth/me` check, redirects
+  // here to `/login?expired=1`, but THIS check still calls the same stale cookie
+  // "authenticated" and bounces it straight back to the protected page, which bounces
+  // it right back, forever.
+  //
+  // Code review (2026-10-14): an earlier version of this fix trusted the `expired=1`
+  // query param as proof of real revocation and cleared cookies on that basis --
+  // `expired` is attacker/visitor-controlled (a plain query string on a GET request,
+  // not verified against the backend), so a crafted link could force-clear a victim's
+  // genuinely valid session. Fixed without needing to trust the param at all: just
+  // don't apply the "bounce an authenticated visitor off /login" redirect for this one
+  // landing. The `/login` Server Component itself then runs its own REAL check
+  // (`getSession()` -> `/auth/me`) and correctly decides whether to render the form or
+  // redirect onward -- a verified result either way, with no loop possible (this skip
+  // is a no-op read, not a mutation, so there's nothing here for a forged link to
+  // trigger).
+  const skipAuthOnlyRedirect =
+    pathname === "/login" && request.nextUrl.searchParams.get("expired") === "1";
+
   let response: NextResponse;
   if (!authenticated && isProtected) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("next", pathname);
     response = NextResponse.redirect(loginUrl);
-  } else if (authenticated && isAuthOnlyPage) {
-    response = NextResponse.redirect(new URL("/dashboard", request.url));
+  } else if (authenticated && isAuthOnlyPage && !skipAuthOnlyRedirect) {
+    // #132: `/login` itself redirects an already-authenticated visitor to its own
+    // validated `next` target (`login/page.tsx`) -- but that code only runs if THIS
+    // optimistic check ever lets the request through, which it normally doesn't (an
+    // authenticated visitor hits this branch instead, previously always hardcoded to
+    // `/dashboard`, silently dropping `next`). Mirrored here with the same shared
+    // validator so the two can never disagree about what's safe.
+    const next = pathname === "/login" ? request.nextUrl.searchParams.get("next") : null;
+    const target = isSafeNextPath(next) ? next : "/dashboard";
+    response = NextResponse.redirect(new URL(target, request.url));
   } else {
     response = NextResponse.next();
   }
