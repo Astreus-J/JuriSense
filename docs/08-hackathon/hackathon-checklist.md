@@ -1,6 +1,9 @@
 # Checklist do Hackathon — Status vs. Requisitos
 
-> Data do levantamento: **13/10/2026** (faltam 23 dias para a abertura do julgamento, em 05/11).
+> Data do levantamento: **13/10/2026**. **Atualização 14/10/2026 (confirmado pelo usuário): o
+> prazo real de submissão é 31/10/2026**, não 05/11 como assumido no resto deste documento —
+> faltam 17 dias a partir de hoje (14/10), não 23. Toda a seção "Ordem sugerida de ataque" abaixo
+> precisa ser comprimida de acordo; as datas de semana ali ainda não foram reajustadas.
 > Método: cada item foi conferido contra o repositório real (código, migrations, CI, docs), e não
 > apenas contra os docs de planejamento. Referências: `hackathon-requirements.md`,
 > `fallback-mvp.md`, `submission-plan.md`, `demo-scenario.md`, `pitch.md`, `hackathon-strategy.md`.
@@ -123,17 +126,12 @@ indicados.
   direta de que ICP e Story Protocol foram avaliados e não forçados.
 - [ ] **4.7 Dados do time** — nomes, papéis e contato.
 - [ ] **4.8 Conteúdo da página BUIDL / projeto** — depende de 4.9 para saber os campos exatos.
-- [ ] **4.9 Checagem manual de `dorahacks.io/hackathon/legal-hack-2026`** — trilhas, rubrica de
-  julgamento, formato da submissão, horário e fuso do prazo. Estava prevista para a Semana 1 e não
-  há evidência de que tenha sido feita. **Fazer primeiro: pode mudar o resto desta lista.**
-  *Tentativa automatizada em 2026-10-14*: a página oficial continua bloqueando fetch automático
-  (405), confirmando a limitação já registrada em `hackathon-requirements.md` §2. Via busca/mirror
-  (CompeteHub), dois indícios **não confirmados na página oficial**: o prazo de submissão pode ser
-  **01/11/2026** (não 05/11 como assumido no resto deste documento — um mirror cita 09:01, outro
-  10/31 23:59, divergência de fuso/arredondamento não resolvida), e nenhuma rubrica ou lista de
-  bounties por patrocinador (ICP/Constellation/Story) aparece em nenhuma fonte de terceiros
-  checada. **Ação humana urgente**: abrir a página oficial e confirmar o prazo exato antes de
-  confiar no cronograma deste documento.
+- [ ] **4.9 🟡 Checagem manual de `dorahacks.io/hackathon/legal-hack-2026`** — trilhas, rubrica de
+  julgamento, formato da submissão. **Prazo confirmado pelo usuário em 2026-10-14: 31/10/2026**
+  (não 05/11 como o resto deste documento assumia — ver nota no topo do arquivo). Ainda faltam:
+  rubrica de julgamento e lista exata de bounties por patrocinador (ICP/Constellation/Story) —
+  nenhuma fonte de terceiros checada (CompeteHub) trouxe isso; a página oficial continua
+  bloqueando fetch automático (405).
 - [ ] **4.10 Segunda checagem no DoraHacks** (plano: Semana 5, 25–31/10).
 - [ ] **4.11 Limpeza antes de publicar** — antes de abrir o repositório: confirmar que não há
   segredos (o gitleaks roda no CI, com allowlist da chave Fernet de desenvolvimento), decidir se
