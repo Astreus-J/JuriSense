@@ -17,10 +17,10 @@ Legenda: ✅ feito · 🟡 parcial / precisa de verificação · ⬜ a fazer
 | Área | ✅ | 🟡 | ⬜ | Total |
 |---|---|---|---|---|
 | 1. Pipeline do Hackathon Cut (engenharia) | 12 | 0 | 0 | 12 |
-| 2. Tecnologia de patrocinador e blockchain | 3 | 1 | 2 | 6 |
+| 2. Tecnologia de patrocinador e blockchain | 4 | 1 | 1 | 6 |
 | 3. Prontidão do demo | 0 | 0 | 6 | 6 |
 | 4. Materiais de submissão | 1 | 3 | 7 | 11 |
-| **Total** | **16** | **4** | **15** | **35** |
+| **Total** | **17** | **4** | **14** | **35** |
 
 **Leitura**: o *produto* está essencialmente completo (área 1). O que falta é quase todo
 *empacotamento*: dados e ensaio do demo, ambiente publicado, a credencial da Constellation e todos
@@ -73,11 +73,14 @@ indicados.
 - [ ] **2.4 🟡 O "Verify" faz chamada real ao provedor** — implementado em
   `verification_service.py`; falta conferir ao vivo contra o provedor real depois de 2.5 (hoje só
   consegue verificar contra o transparency log local).
-- [ ] **2.5 Credenciais da Constellation DED** — `CONSTELLATION_DED_API_KEY / ORG_ID / TENANT_ID /
-  PRIVATE_KEY` são emitidas pela Constellation, sem cadastro self-service. Sem elas, o sistema
-  ancora no transparency log local. **É o maior bloqueio para o bounty da Constellation**: peça
-  pelo canal de patrocinadores do hackathon agora. Depois disso, ativar é só configuração
-  (`ANCHORING_PROVIDER=constellation_digital_evidence`).
+- [x] **2.5 Credenciais da Constellation DED** — **obtidas e testadas ao vivo** (sessão de
+  2026-10-12): as 4 credenciais (`CONSTELLATION_DED_API_KEY/ORG_ID/TENANT_ID/PRIVATE_KEY`) estão em
+  `backend/.env`, e um smoke test real contra a API da Constellation funcionou. `ANCHORING_PROVIDER`
+  continua em `transparency_log` por decisão deliberada, não por falta de credencial: alternar para
+  `constellation_digital_evidence` no `.env` compartilhado quebrou 10 testes (o `Settings` lê o
+  mesmo `.env` para runtime e para a suíte de testes) — revertido e documentado diretamente no
+  `.env`. Ativar para a submissão/demo real é só esse flag, mas precisa de uma decisão + ajuste de
+  teste antes, não é mais um bloqueio de credencial.
 - [ ] **2.6 Publicar o transparency log em um remoto público** — o módulo faz commits locais e,
   de propósito, nunca faz push. Enquanto isso não for feito, a alegação "público e verificável por
   terceiros" não vale de ponta a ponta para o fallback. Exige autorização explícita (ação
@@ -123,6 +126,14 @@ indicados.
 - [ ] **4.9 Checagem manual de `dorahacks.io/hackathon/legal-hack-2026`** — trilhas, rubrica de
   julgamento, formato da submissão, horário e fuso do prazo. Estava prevista para a Semana 1 e não
   há evidência de que tenha sido feita. **Fazer primeiro: pode mudar o resto desta lista.**
+  *Tentativa automatizada em 2026-10-14*: a página oficial continua bloqueando fetch automático
+  (405), confirmando a limitação já registrada em `hackathon-requirements.md` §2. Via busca/mirror
+  (CompeteHub), dois indícios **não confirmados na página oficial**: o prazo de submissão pode ser
+  **01/11/2026** (não 05/11 como assumido no resto deste documento — um mirror cita 09:01, outro
+  10/31 23:59, divergência de fuso/arredondamento não resolvida), e nenhuma rubrica ou lista de
+  bounties por patrocinador (ICP/Constellation/Story) aparece em nenhuma fonte de terceiros
+  checada. **Ação humana urgente**: abrir a página oficial e confirmar o prazo exato antes de
+  confiar no cronograma deste documento.
 - [ ] **4.10 Segunda checagem no DoraHacks** (plano: Semana 5, 25–31/10).
 - [ ] **4.11 Limpeza antes de publicar** — antes de abrir o repositório: confirmar que não há
   segredos (o gitleaks roda no CI, com allowlist da chave Fernet de desenvolvimento), decidir se
@@ -133,7 +144,7 @@ indicados.
 
 ## Ordem sugerida de ataque
 
-1. **Hoje**: 4.9 (ler a página do DoraHacks) e 2.5 (pedir a credencial da Constellation).
+1. **Hoje**: 4.9 (ler a página do DoraHacks) — 2.5 já está feito.
 2. **Esta semana (13–17/10)**: 3.1 e 3.2 (seed e contratos de exemplo), 3.5 (chave de IA) e a
    primeira execução de 3.3.
 3. **Semana de 18–24/10**: corrigir o que o ensaio quebrar; iniciar 3.6 (deploy); 4.5 (README).
@@ -144,8 +155,9 @@ indicados.
 
 ## Riscos a acompanhar
 
-- **A credencial da Constellation não chega** → a submissão ancora no transparency log. É um
-  fallback honesto e rotulado, mas enfraquece o caso para o bounty da Constellation. Mitigação:
-  2.5 agora e 2.6, para que o fallback ao menos seja verificável publicamente.
+- **Credencial da Constellation obtida, mas `ANCHORING_PROVIDER` ainda não foi alternado para
+  ela** → risco agora é esquecer de fazer essa troca (e ajustar os 10 testes que dependem do
+  default atual) antes da submissão/demo real. Mitigação: decidir quando fazer a troca e com isso
+  resolver também 2.4 e, via 2.6, reforçar o fallback caso a troca não aconteça a tempo.
 - **Instabilidade da IA gratuita durante a gravação** → 3.5.
 - **Rubrica ou formato desconhecidos** → 4.9 agora, e não na Semana 6.
