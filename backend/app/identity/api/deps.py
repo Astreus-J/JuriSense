@@ -8,7 +8,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from app.core import security
 from app.core.config import get_settings
 from app.core.db import SessionDep
-from app.core.rate_limit import RateLimiter, RateLimitExceededError
+from app.core.rate_limit import RateLimiter, RateLimitExceededError, rate_limit_by_ip
 from app.core.redis import RedisDep
 from app.identity.application.permission_service import PermissionAction, has_permission
 from app.identity.domain.constants import Module, Role
@@ -113,7 +113,7 @@ def rate_limit_by_organization(
     and/or a Celery task (#143) -- a coarser, per-`organization_id` abuse/cost backstop,
     separate from `require_permission`'s authorization check and from plan-limit enforcement
     (`ADR-014`, `BR-ORG-003`). Lives here, not in `app/core/rate_limit.py` (which only has
-    `rate_limit_by_ip`, for the one unauthenticated route), because it depends on
+    `rate_limit_by_ip`, used for unauthenticated routes), because it depends on
     `CurrentUser` to resolve `organization_id` -- `app/core` must not depend on any bounded
     context. Combine with `require_permission` on the same route (both as separate `Depends`
     params); FastAPI resolves `CurrentUser` once per request and shares it across both.
@@ -148,6 +148,25 @@ def rate_limit_by_organization(
             ) from exc
 
     return _check
+
+
+# Security audit (2026-10-12): per-IP backstop on Identity's own unauthenticated endpoints
+# (register, forgot/reset password, accept-invite) -- `rate_limit_by_ip` already existed and
+# is used for the public verification route (#112), but was never wired here even though
+# each of these also does a deliberately slow Argon2id hash per call (register, reset) or a
+# DB write with no other throttle (forgot-password, accept-invite). `login` keeps this too,
+# independent of its existing per-EMAIL lockout (`LoginLockout`) -- a lockout keyed on one
+# victim email does nothing against one attacker IP trying many different emails.
+IdentityRateLimited = Annotated[
+    None,
+    Depends(
+        rate_limit_by_ip(
+            max_requests=get_settings().identity_rate_limit_max_requests,
+            window_seconds=get_settings().identity_rate_limit_window_seconds,
+            key_prefix="identity_public",
+        )
+    ),
+]
 
 
 def get_email_sender() -> EmailSender:

@@ -141,12 +141,15 @@ themselves have received a malicious file:
   than a per-visitor one -- still strictly better than the prior fully-unthrottled state, and no
   code change will be needed in `rate_limit_by_ip` once #153 ships (Starlette/uvicorn populate
   `request.client.host` correctly on their own at that point).
-- Public/pre-authentication endpoints that send email (`/auth/register`, `/auth/password/forgot`) get
-  the same IP-based rate limiting — already an identified, tracked gap (`sprint-01.md` LOW-005,
-  scheduled for Sprint 5) rather than a new finding; this document makes the general rule explicit so
-  every future public endpoint is rate-limited from creation, not retrofitted after an audit finds
-  the gap again. Not yet wired to these two routes — `rate_limit_by_ip` is already generic enough to
-  reuse directly when that lands.
+- Public/pre-authentication endpoints that send email or do a deliberately slow Argon2id hash
+  (`/auth/register`, `/auth/login`, `/auth/password/forgot`, `/auth/password/reset`,
+  `/users/accept-invite`) get the same IP-based rate limiting — identified as `sprint-01.md`
+  LOW-005, **implemented** in the post-pivot cumulative audit
+  (`docs/auditorias/post-pivot-cumulative-2026-10-12.md`): `Settings.identity_rate_limit_max_requests`
+  /`_window_seconds`, a shared `IdentityRateLimited` dependency
+  (`app/identity/api/deps.py`), one budget across all five routes (`key_prefix="identity_public"`)
+  so varying the target email doesn't bypass it. `login`'s existing per-email `LoginLockout` is
+  independent of this, not a replacement for it.
 - Authenticated endpoints get a coarser, per-organization rate limit as a general abuse/cost-control
   backstop, separate from and in addition to plan-limit enforcement (`ADR-014`, `BR-ORG-003`), which
   governs business-limit exceedance, not abuse. **Implemented** (#143) for the endpoints a load test
@@ -244,14 +247,17 @@ data) fed into an LLM:
   product specifically because it handles supplier/contract compliance decisions for other companies
   (ADR-016's own stated reasoning), not treated as a scope-cut candidate under hackathon time
   pressure.
-- This practice already has two real precedents to follow as the template for every future context's
-  audit: `docs/auditorias/sprint-01.md` (Accounts foundation/auth — 2 medium, 4 low findings, both
-  mediums fixed and test-verified the following sprint) and `docs/auditorias/sprint-02.md`
-  (Accounts user management/password recovery — 0 critical, 0 high, 3 low, both prior mediums
-  verified fixed by name-matched tests). New contexts' audits follow the same report shape: scope,
-  method, findings by severity with location/impact/fix, verifications-with-no-findings (documenting
-  what was checked and passed, not only what failed), and a routing table for where each finding's
-  fix lands.
+- This practice already has three real precedents to follow as the template for every future
+  context's audit: `docs/auditorias/sprint-01.md` (Accounts foundation/auth — 2 medium, 4 low
+  findings, both mediums fixed and test-verified the following sprint), `docs/auditorias/
+  sprint-02.md` (Accounts user management/password recovery — 0 critical, 0 high, 3 low, both prior
+  mediums verified fixed by name-matched tests), and `docs/auditorias/
+  post-pivot-cumulative-2026-10-12.md` (the first audit against the full post-pivot system, all 8
+  bounded contexts plus the frontend BFF — 0 critical, 0 high, 6 medium, 8 low; all 6 mediums fixed
+  in the same pass, every cross-tenant-isolation claim backed by a real executed reproduction, not
+  just a code read). New contexts' audits follow the same report shape: scope, method, findings by
+  severity with location/impact/fix, verifications-with-no-findings (documenting what was checked
+  and passed, not only what failed), and a routing table for where each finding's fix lands.
 - A "low" finding is not automatically deferred — `sprint-01.md`/`sprint-02.md` show low findings
   being explicitly routed to a named future sprint or accepted as a documented, reasoned risk, never
   silently dropped. New audits follow the same discipline: every finding gets an explicit

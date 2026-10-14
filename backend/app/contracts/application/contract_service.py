@@ -16,6 +16,7 @@ from app.contracts.application import document_service, extraction_orchestration
 from app.contracts.domain.constants import ContractStatus, ContractVersionStatus
 from app.contracts.domain.errors import (
     ConcurrentVersionConflictError,
+    ContractLimitExceededError,
     ContractNotFoundError,
     ContractVersionNotFoundError,
     InvalidSupplierReferenceError,
@@ -24,6 +25,7 @@ from app.contracts.domain.errors import (
 )
 from app.contracts.infrastructure.models import Contract, ContractVersion
 from app.contracts.infrastructure.repositories import ContractRepository, ContractVersionRepository
+from app.core.config import get_settings
 from app.core.storage import StoragePort
 from app.evidence.application.audit_service import emit_audit_event
 from app.suppliers.application.supplier_service import supplier_belongs_to_organization
@@ -80,6 +82,9 @@ async def upload_contract_version(
                 "title and contract_type are required when creating a new contract "
                 "(no contract_id given)"
             )
+        limit = get_settings().max_contracts_per_organization
+        if await contract_repo.count_by_organization(organization_id) >= limit:
+            raise ContractLimitExceededError(limit)
         contract = Contract(
             organization_id=organization_id,
             supplier_id=supplier_id,

@@ -17,7 +17,7 @@ no audit event). A superseded Decision keeps its package.
 the `EvidencePackage` row is created with its final `merkle_root`/`evidence_count` already set --
 there is no placeholder-then-update step (product decision 2026-10-10, closing #184): both
 `evidence_packages` and `evidence` are append-only end to end, enforced by a DB trigger that
-rejects every UPDATE/DELETE (`infrastructure/append_only.py`), so assembly itself must never need
+rejects every UPDATE/DELETE (`app/core/append_only.py`), so assembly itself must never need
 to update a row after creating it. `recompute()` still independently re-derives the root from the
 persisted `Evidence` rows (not from these in-memory objects), so it continues to catch any drift
 between what was computed and what is actually stored. The canonical encoding, leaf hash, ordering

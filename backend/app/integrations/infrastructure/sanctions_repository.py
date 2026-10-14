@@ -37,6 +37,19 @@ class SanctionsRepository:
         )
         return (result.scalar_one() or 0) > 0
 
+    async def get_latest_extract_date(self, *, list_name: str) -> str | None:
+        """Security audit (2026-10-12): backs the staleness check in `SanctionsAdapter.
+        check` -- `None` if the list has never been refreshed (same as `has_data` being
+        `False`). Every row for one `list_name` shares the same `extract_date`
+        (`replace_list` always deletes+reinserts the whole list from one extract), so
+        any single row's value is the list's own freshness marker."""
+        result = await self._session.execute(
+            select(SanctionsEntry.extract_date)
+            .where(SanctionsEntry.list_name == list_name)
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
     async def find_by_document(self, document: str) -> list[SanctionsEntry]:
         if not document:
             return []

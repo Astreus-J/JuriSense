@@ -230,7 +230,15 @@ async def execute_review(
         session, organization_id=organization_id, contract_version_id=contract_version_id
     )
 
+    # Security audit (2026-10-12): `id` is generated here, in Python, rather than left to
+    # the column's own `default=uuid.uuid4` -- that default is only applied at flush time
+    # (confirmed: a freshly-constructed ORM object's client-side-defaulted PK reads back
+    # as `None` before any flush), and this review is now deliberately never flushed
+    # until its `status`/`completed_at` already hold their FINAL values below, so nothing
+    # can rely on an intermediate flush to populate `review.id` for the audit event right
+    # after this.
     review = ComplianceReview(
+        id=uuid.uuid4(),
         organization_id=organization_id,
         contract_version_id=contract_version_id,
         policy_version_ids=[str(pv.id) for pv in policy_versions],
@@ -238,7 +246,6 @@ async def execute_review(
         supersedes_decision_id=supersedes_decision_id,
     )
     ComplianceReviewRepository(session).add(review)
-    await session.flush()
 
     await emit_audit_event(
         session,
@@ -253,25 +260,41 @@ async def execute_review(
         },
     )
 
-    supplier_id = await get_supplier_id_for_contract_version(
-        session, organization_id=organization_id, contract_version_id=contract_version_id
-    )
-    # #120: every active PolicyException applicable to this review's own supplier/
-    # contract-version target, keyed by rule_id so evaluate_policy_version can look each
-    # pooled rule's up in O(1) without evaluation_service ever touching the repository.
-    active_exceptions = await PolicyExceptionRepository(session).list_active_for_rule_ids(
-        [rule.id for rule in rules],
-        organization_id=organization_id,
-        supplier_id=supplier_id,
-        contract_version_id=contract_version_id,
-        now=datetime.now(UTC),
-    )
-    active_exceptions_by_rule_id = {str(exc.rule_id): exc for exc in active_exceptions}
+    # `no_autoflush`: every `await session.execute(select(...))` between here and setting
+    # `review.status`/`completed_at` to their FINAL values below would otherwise silently
+    # autoflush the pending `review` INSERT first (still carrying `IN_PROGRESS`) -- found
+    # the hard way: moving the assignment earlier in the function alone did not stop that,
+    # since autoflush runs ahead of any new query regardless of where in the function body
+    # it's issued. Suppressing it for this stretch is what actually guarantees `review` is
+    # never flushed until its one and only INSERT already carries its terminal state.
+    with session.no_autoflush:
+        supplier_id = await get_supplier_id_for_contract_version(
+            session, organization_id=organization_id, contract_version_id=contract_version_id
+        )
+        # #120: every active PolicyException applicable to this review's own supplier/
+        # contract-version target, keyed by rule_id so evaluate_policy_version can look
+        # each pooled rule's up in O(1) without evaluation_service touching the repository.
+        active_exceptions = await PolicyExceptionRepository(session).list_active_for_rule_ids(
+            [rule.id for rule in rules],
+            organization_id=organization_id,
+            supplier_id=supplier_id,
+            contract_version_id=contract_version_id,
+            now=datetime.now(UTC),
+        )
+        active_exceptions_by_rule_id = {str(exc.rule_id): exc for exc in active_exceptions}
 
-    results: list[RuleEvaluationResult] = evaluate_policy_version(
-        rules, context, active_exceptions_by_rule_id=active_exceptions_by_rule_id
-    )
-    aggregate: AggregatePreview = aggregate_preview(results)
+        results: list[RuleEvaluationResult] = evaluate_policy_version(
+            rules, context, active_exceptions_by_rule_id=active_exceptions_by_rule_id
+        )
+        aggregate: AggregatePreview = aggregate_preview(results)
+        # Set to its FINAL value here, before `review` is ever flushed (see the
+        # construction comment above) -- so the row's one and only INSERT, whenever the
+        # next flush/commit happens, already carries the terminal status. This is what
+        # makes `compliance_reviews` eligible for the DB-level append-only trigger
+        # (`app/core/append_only.py`): no UPDATE is ever issued against this row, not
+        # even within its own creating transaction.
+        review.status = aggregate.status
+        review.completed_at = datetime.now(UTC)
 
     contract_evidence_refs = await get_evidence_refs_for_contract_version(
         session, organization_id=organization_id, contract_version_id=contract_version_id
@@ -346,8 +369,8 @@ async def execute_review(
                 )
             )
 
-    review.status = aggregate.status
-    review.completed_at = datetime.now(UTC)
+    # review.status/completed_at were already set to their final values above, before
+    # this review row was ever flushed -- see that assignment's own comment.
 
     await emit_audit_event(
         session,

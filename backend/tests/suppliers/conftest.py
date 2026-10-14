@@ -5,6 +5,7 @@ layer; only the manually-verified live calls documented in ADR-017 hit the real 
 """
 
 from collections.abc import Callable
+from datetime import UTC, datetime
 
 import httpx
 import pytest
@@ -13,6 +14,13 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from app.integrations.infrastructure import cnpj_adapter
 from app.integrations.infrastructure.models import SanctionsEntry
 from app.integrations.infrastructure.sanctions_repository import SanctionsRepository
+
+# Security audit (2026-10-12): `SanctionsAdapter.check` now also rejects a stale index
+# (`Settings.sanctions_max_age_seconds`) -- a fixed past date here would eventually
+# (and non-obviously) start failing every test that seeds "fresh" sanctions data as
+# real time passes. "Today" keeps this fixture's own intent (a just-refreshed index)
+# true regardless of when the suite actually runs.
+_SEEDED_EXTRACT_DATE = datetime.now(UTC).date().isoformat()
 
 ACTIVE_CNPJ_RESPONSE = {
     "cnpj": "00000000000191",
@@ -80,7 +88,7 @@ def seed_sanctions_index(db_session_factory: async_sessionmaker) -> Callable:
                             document=hit_document,
                             name_normalized=hit_name or "",
                             raw={"seeded": True},
-                            extract_date="2026-09-28",
+                            extract_date=_SEEDED_EXTRACT_DATE,
                         )
                     )
                 elif list_name == "CEIS" and hit_name:
@@ -90,7 +98,7 @@ def seed_sanctions_index(db_session_factory: async_sessionmaker) -> Callable:
                             document="",
                             name_normalized=hit_name,
                             raw={"seeded": True},
-                            extract_date="2026-09-28",
+                            extract_date=_SEEDED_EXTRACT_DATE,
                         )
                     )
                 else:
@@ -102,11 +110,11 @@ def seed_sanctions_index(db_session_factory: async_sessionmaker) -> Callable:
                             document="00000000000",
                             name_normalized="PLACEHOLDER NON MATCHING ENTRY",
                             raw={"seeded": True},
-                            extract_date="2026-09-28",
+                            extract_date=_SEEDED_EXTRACT_DATE,
                         )
                     )
                 await repo.replace_list(
-                    list_name=list_name, extract_date="2026-09-28", entries=entries
+                    list_name=list_name, extract_date=_SEEDED_EXTRACT_DATE, entries=entries
                 )
 
     return seed

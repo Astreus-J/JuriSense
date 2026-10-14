@@ -3,7 +3,7 @@ from fastapi import APIRouter, HTTPException, Request, status
 from app.core.config import get_settings
 from app.core.db import SessionDep
 from app.core.redis import RedisDep
-from app.identity.api.deps import AccessPayload, CurrentUser, EmailDep
+from app.identity.api.deps import AccessPayload, CurrentUser, EmailDep, IdentityRateLimited
 from app.identity.api.schemas import (
     ForgotPasswordRequest,
     LoginRequest,
@@ -35,7 +35,7 @@ _REGISTRATION_RECEIVED = "Registration received; check your email for next steps
 
 @router.post("/register", response_model=MessageResponse, status_code=status.HTTP_202_ACCEPTED)
 async def register(
-    body: RegisterRequest, session: SessionDep, email_sender: EmailDep
+    body: RegisterRequest, session: SessionDep, email_sender: EmailDep, _: IdentityRateLimited
 ) -> MessageResponse:
     """Identical response whether or not the email exists (MED-002: avoids enumeration).
 
@@ -84,7 +84,7 @@ async def register(
     "/password/forgot", response_model=MessageResponse, status_code=status.HTTP_202_ACCEPTED
 )
 async def forgot_password(
-    body: ForgotPasswordRequest, session: SessionDep, email_sender: EmailDep
+    body: ForgotPasswordRequest, session: SessionDep, email_sender: EmailDep, _: IdentityRateLimited
 ) -> MessageResponse:
     await password_service.request_password_reset(session, email_sender, email=body.email)
     return MessageResponse(detail="If the email is registered, we'll send a recovery link.")
@@ -92,7 +92,11 @@ async def forgot_password(
 
 @router.post("/password/reset", response_model=MessageResponse)
 async def reset_password(
-    body: ResetPasswordRequest, session: SessionDep, redis: RedisDep, email_sender: EmailDep
+    body: ResetPasswordRequest,
+    session: SessionDep,
+    redis: RedisDep,
+    email_sender: EmailDep,
+    _: IdentityRateLimited,
 ) -> MessageResponse:
     try:
         await password_service.reset_password(
@@ -110,7 +114,11 @@ async def reset_password(
 
 @router.post("/login", response_model=TokenResponse)
 async def login(
-    body: LoginRequest, request: Request, session: SessionDep, redis: RedisDep
+    body: LoginRequest,
+    request: Request,
+    session: SessionDep,
+    redis: RedisDep,
+    _: IdentityRateLimited,
 ) -> TokenResponse:
     try:
         tokens = await auth_service.login(

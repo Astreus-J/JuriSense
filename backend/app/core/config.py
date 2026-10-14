@@ -91,6 +91,15 @@ class Settings(BaseSettings):
     # limits, not abuse.
     external_call_rate_limit_max_requests: int = 10
     external_call_rate_limit_window_seconds: int = 60
+    # Security audit (2026-10-12): `rate_limit_by_ip` shipped for #112/#143 on three other
+    # contexts but was never applied to Identity's own public, unauthenticated endpoints
+    # (register/login/forgot-password/reset-password/accept-invite) -- each of those also
+    # does a deliberately slow Argon2id hash per call, making them a cheap CPU-exhaustion
+    # lever with no per-IP backstop (`login` already has a per-EMAIL lockout, which this
+    # is independent of, not a replacement for). Looser than the external-call budget
+    # above since a legitimate user can genuinely retry a login/reset a handful of times.
+    identity_rate_limit_max_requests: int = 20
+    identity_rate_limit_window_seconds: int = 60
 
     # Integration connector credentials at rest (STORY: encrypt integration connector
     # credentials at rest). Environment-variable key, same pattern as jwt_secret_key/
@@ -155,10 +164,21 @@ class Settings(BaseSettings):
     # approver_role) to create volume, so lower risk than the three above, but the same
     # "config-driven ceiling, not an unbounded resource" principle applies.
     max_active_exceptions_per_rule: int = 50
+    # Security audit (2026-10-12): the same POL-004 resource-exhaustion backstop, extended
+    # to Suppliers/Contracts -- unlike Policies, unbounded creation here is also unbounded
+    # *cost*, not just row growth: every `create_supplier` triggers a real CNPJ/sanctions
+    # check, and every contract upload triggers a real AI extraction call.
+    max_suppliers_per_organization: int = 2000
+    max_contracts_per_organization: int = 2000
 
     # SEC-003: upload validation limits (see app/contracts/infrastructure/document_scanner.py
     # for the full malware/type-spoofing scope decision).
     document_max_size_bytes: int = 25_000_000  # 25 MB
+    # Security audit (2026-10-12): DOCX is a zip container with no per-member/total
+    # decompressed-size cap before this -- a crafted file under document_max_size_bytes
+    # (compressed) can still decompress to gigabytes inside the Celery worker (classic
+    # zip-bomb ratio). Checked before `python-docx`/`zipfile` ever reads member contents.
+    docx_max_uncompressed_bytes: int = 200_000_000  # 200 MB
 
     # BR-APR-003's SLA duration is an explicit `TBD` pending customer discovery
     # (docs/03-domain/approvals.md "SLA and escalation") -- a flat 48h (2 "business
@@ -182,6 +202,17 @@ class Settings(BaseSettings):
     # run. Capping candidates per run (oldest first, so the backlog still drains) bounds the
     # worst-case run length regardless of any single tenant's volume.
     decision_reevaluation_batch_size: int = 100
+
+    # Security audit (2026-10-12): `refresh_sanctions_index` existed as a Celery task but
+    # was never on `celery_app.beat_schedule` -- nothing ran it on a cadence, so a list's
+    # index only ever advanced on a manual trigger. CEIS/CNEP/CEPIM extracts are published
+    # roughly daily; this matches that, not a commercial SLA. `_max_age_seconds` is the
+    # separate, independent staleness SIGNAL `SanctionsRepository.has_data` surfaces once
+    # the schedule above is the only thing keeping an index fresh -- generous relative to
+    # the refresh cadence itself (a few missed runs shouldn't immediately flip a tenant's
+    # compliance decisions to "sanctions data unavailable").
+    sanctions_refresh_interval_seconds: int = 86_400
+    sanctions_max_age_seconds: int = 7 * 86_400
     # FEATURE-6.5 (BR-DEC-004): how many re-evaluation reviews a single flagged Decision may
     # run in total, counting its first one. Once the latest one's approval chain has expired
     # and this many have been spent, the Decision stops retrying and

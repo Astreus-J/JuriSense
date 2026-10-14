@@ -64,6 +64,16 @@ class InvalidSupplierReferenceError(ContractsError):
         super().__init__("supplier_id does not reference an existing supplier")
 
 
+class ContractLimitExceededError(ContractsError):
+    """Security audit (2026-10-12): per-organization resource-exhaustion backstop,
+    checked in `contract_service.upload_contract_version` before a new `Contract` row is
+    created -- unbounded Contracts is also unbounded cost (every uploaded version
+    triggers a real AI extraction call), matching the #180 precedent for Policies."""
+
+    def __init__(self, limit: int) -> None:
+        super().__init__(f"This organization has reached its limit of {limit} contracts")
+
+
 class MissingContractMetadataError(ContractsError):
     """Creating a *new* Contract (no `contract_id` given) requires `title` and
     `contract_type`; re-uploading against an existing `contract_id` does not."""

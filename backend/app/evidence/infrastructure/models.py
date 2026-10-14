@@ -5,8 +5,8 @@ from typing import Any
 from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.core.append_only import register_append_only_guards
 from app.core.db import Base
-from app.evidence.infrastructure.append_only import register_append_only_guards
 
 
 class AuditEvent(Base):
@@ -177,4 +177,7 @@ class EvidenceOverrideAddendum(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
-register_append_only_guards(Base.metadata)
+register_append_only_guards(
+    Base.metadata,
+    table_names=("audit_events", "evidence_packages", "evidence", "evidence_override_addenda"),
+)

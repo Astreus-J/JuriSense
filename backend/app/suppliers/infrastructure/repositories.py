@@ -1,7 +1,7 @@
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.suppliers.domain.constants import SupplierCheckStatus
@@ -14,6 +14,17 @@ class SupplierRepository:
 
     def add(self, supplier: Supplier) -> None:
         self._session.add(supplier)
+
+    async def count_by_organization(self, organization_id: uuid.UUID) -> int:
+        """Security audit (2026-10-12): backs `supplier_service.create_supplier`'s
+        per-organization cap -- unbounded Suppliers is also unbounded cost (every
+        creation triggers a real CNPJ/sanctions check)."""
+        result = await self._session.execute(
+            select(func.count()).select_from(Supplier).where(
+                Supplier.organization_id == organization_id
+            )
+        )
+        return result.scalar_one()
 
     async def get_by_id_and_organization(
         self, supplier_id: uuid.UUID, organization_id: uuid.UUID

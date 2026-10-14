@@ -7,6 +7,7 @@ from docx import Document as DocxDocument
 
 from app.ai_services.domain.errors import DocumentParsingError
 from app.ai_services.infrastructure.text_extraction import extract_text
+from app.core.config import get_settings
 
 _MINIMAL_PDF = b"%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF"
 
@@ -49,6 +50,35 @@ def test_docx_extraction_is_synthetic_pagination_and_includes_table_rows() -> No
     assert "Liability shall be unlimited" in full_text
     assert "[TABLE ROW]" in full_text
     assert "99.9%" in full_text
+
+
+def test_docx_decompression_bomb_guard_rejects_an_oversized_declared_uncompressed_size(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Security audit (2026-10-12): a real zip bomb declares a huge uncompressed size
+    while the compressed bytes stay tiny -- the guard reads that declared size from the
+    zip's own metadata, so monkeypatching the limit down to something any ordinary DOCX
+    already exceeds proves the check rejects BEFORE `DocxDocument` ever decompresses
+    anything, without needing to actually construct gigabytes of test data."""
+    monkeypatch.setattr(get_settings(), "docx_max_uncompressed_bytes", 1)
+
+    buf = io.BytesIO()
+    doc = DocxDocument()
+    doc.add_paragraph("Clause 1: Liability shall be unlimited.")
+    doc.save(buf)
+
+    with pytest.raises(DocumentParsingError, match="decompress"):
+        extract_text(buf.getvalue(), DOCX_MIME)
+
+
+def test_docx_within_the_decompression_limit_still_extracts_normally() -> None:
+    buf = io.BytesIO()
+    doc = DocxDocument()
+    doc.add_paragraph("Clause 1: Liability shall be unlimited.")
+    doc.save(buf)
+
+    result = extract_text(buf.getvalue(), DOCX_MIME)
+    assert "Liability shall be unlimited" in "\n".join(result.pages)
 
 
 def test_txt_extraction_utf8() -> None:

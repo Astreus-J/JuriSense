@@ -22,6 +22,7 @@ from app.suppliers.domain.errors import (
     DuplicateSupplierError,
     InvalidStatusTransitionError,
     InvalidTaxIdError,
+    SupplierLimitExceededError,
     SupplierNotFoundError,
     SupplierProfileNotFoundError,
 )
@@ -78,6 +79,8 @@ async def create_supplier(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=exc.message
         ) from exc
+    except SupplierLimitExceededError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=exc.message) from exc
     return SupplierResponse.model_validate(supplier)
 
 

@@ -48,6 +48,16 @@ class InvalidStatusTransitionError(SupplierError):
         super().__init__(reason)
 
 
+class SupplierLimitExceededError(SupplierError):
+    """Security audit (2026-10-12): per-organization resource-exhaustion backstop,
+    checked in `supplier_service.create_supplier` before a new `Supplier` row is
+    created -- unbounded Suppliers is also unbounded cost (every creation triggers a
+    real CNPJ/sanctions check), matching the #180 precedent for Policies."""
+
+    def __init__(self, limit: int) -> None:
+        super().__init__(f"This organization has reached its limit of {limit} suppliers")
+
+
 class ApprovalRequiresCompletedCheckError(SupplierError):
     """BR-SUP-003: a Supplier cannot move to `approved` without at least one `completed`
     SupplierCheck newer than any open (unresolved) sanctions flag."""

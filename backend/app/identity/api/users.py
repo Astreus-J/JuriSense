@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, status
 
 from app.core.db import SessionDep
 from app.core.redis import RedisDep
-from app.identity.api.deps import CurrentAdmin, EmailDep
+from app.identity.api.deps import CurrentAdmin, EmailDep, IdentityRateLimited
 from app.identity.api.schemas import (
     AcceptInviteRequest,
     CreateUserRequest,
@@ -77,7 +77,9 @@ async def list_invites(admin: CurrentAdmin, session: SessionDep) -> list[Invitat
 
 
 @router.post("/accept-invite", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-async def accept_invite(body: AcceptInviteRequest, session: SessionDep) -> UserResponse:
+async def accept_invite(
+    body: AcceptInviteRequest, session: SessionDep, _: IdentityRateLimited
+) -> UserResponse:
     """Public endpoint: the invitee sets their password and joins the invitation's organization."""
     try:
         user = await invite_service.accept_invitation(

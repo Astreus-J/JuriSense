@@ -4,11 +4,16 @@ Never makes a live network call per check: it queries the locally indexed
 `sanctions_entries` table (`SanctionsRepository`), populated on a schedule by
 `refresh_sanctions_index` (`infrastructure/tasks.py`) from the real CEIS/CNEP/CEPIM bulk
 extracts (`sanctions_source.py`). If a list has never been refreshed in an environment,
-this reports `status="unavailable"` — sanctions is a mandatory source
-(`docs/03-domain/supplier-compliance.md` step 3), so an empty/never-refreshed index must
-never be reported as "checked, no hits", which would silently look like a clean supplier.
+or has gone stale (older than `Settings.sanctions_max_age_seconds` -- security audit,
+2026-10-12), this reports `status="unavailable"` — sanctions is a mandatory source
+(`docs/03-domain/supplier-compliance.md` step 3), so an empty, never-refreshed, or stale
+index must never be reported as "checked, no hits", which would silently look like a
+clean supplier.
 """
 
+from datetime import UTC, date, datetime
+
+from app.core.config import get_settings
 from app.integrations.domain.constants import SanctionsList
 from app.integrations.domain.ports import SourceResult
 from app.integrations.infrastructure.sanctions_repository import SanctionsRepository
@@ -48,6 +53,35 @@ class SanctionsAdapter:
                 data={
                     "reason": "sanctions index not yet refreshed for: "
                     + ", ".join(unavailable_lists),
+                    "lists_checked": [],
+                },
+            )
+
+        # Security audit (2026-10-12): `has_data` alone only proves a list was refreshed
+        # at SOME point, not recently -- `refresh_sanctions_index` previously had no
+        # scheduled cadence at all (`celery_app.beat_schedule`), so a once-populated
+        # index could silently go stale for weeks/months while still reporting "ok".
+        # Treated the same as "unavailable" (never as a clean "no hits") -- sanctions is
+        # a mandatory source (`docs/03-domain/supplier-compliance.md` step 3), and a
+        # stale check is not a verified one.
+        max_age = get_settings().sanctions_max_age_seconds
+        now = datetime.now(UTC).date()
+        stale_lists: list[str] = []
+        for lst in lists:
+            extract_date = await self._repository.get_latest_extract_date(list_name=lst.value)
+            if extract_date is None:
+                continue  # already covered by `unavailable_lists` above
+            age_days = (now - date.fromisoformat(extract_date)).days
+            if age_days * 86_400 > max_age:
+                stale_lists.append(lst.value)
+
+        if stale_lists:
+            return SourceResult(
+                source="sanctions",
+                status="unavailable",
+                data={
+                    "reason": "sanctions index is stale (older than "
+                    f"{max_age // 86_400} days) for: " + ", ".join(stale_lists),
                     "lists_checked": [],
                 },
             )

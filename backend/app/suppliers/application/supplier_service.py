@@ -5,6 +5,7 @@ import uuid
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.evidence.application.audit_service import emit_audit_event
 from app.suppliers.application import check_service
 from app.suppliers.domain.constants import (
@@ -16,6 +17,7 @@ from app.suppliers.domain.errors import (
     ApprovalRequiresCompletedCheckError,
     DuplicateSupplierError,
     InvalidStatusTransitionError,
+    SupplierLimitExceededError,
     SupplierNotFoundError,
 )
 from app.suppliers.domain.tax_id import validate_tax_id
@@ -51,6 +53,9 @@ async def create_supplier(
     validate_tax_id(normalized_tax_id, jurisdiction=jurisdiction)
 
     suppliers = SupplierRepository(session)
+    limit = get_settings().max_suppliers_per_organization
+    if await suppliers.count_by_organization(organization_id) >= limit:
+        raise SupplierLimitExceededError(limit)
     if (
         await suppliers.get_by_tax_id_and_organization(normalized_tax_id, organization_id)
         is not None

@@ -52,5 +52,11 @@ celery_app.conf.update(
             "task": "approvals.expire_stale_approval_requests",
             "schedule": _settings.approval_expiry_sweep_interval_seconds,
         },
+        # Security audit (2026-10-12): `refresh_sanctions_index` existed but was never
+        # scheduled -- see `Settings.sanctions_refresh_interval_seconds`'s own docstring.
+        "integrations-refresh-sanctions-index": {
+            "task": "integrations.refresh_sanctions_index",
+            "schedule": _settings.sanctions_refresh_interval_seconds,
+        },
     },
 )

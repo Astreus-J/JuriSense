@@ -32,6 +32,17 @@ class ContractRepository:
     def add(self, contract: Contract) -> None:
         self._session.add(contract)
 
+    async def count_by_organization(self, organization_id: uuid.UUID) -> int:
+        """Security audit (2026-10-12): backs `contract_service.upload_contract_version`'s
+        per-organization cap on new Contracts -- unbounded creation is also unbounded
+        cost (every uploaded version triggers a real AI extraction call)."""
+        result = await self._session.execute(
+            select(func.count()).select_from(Contract).where(
+                Contract.organization_id == organization_id
+            )
+        )
+        return result.scalar_one()
+
     async def get_by_id_and_organization(
         self, contract_id: uuid.UUID, organization_id: uuid.UUID
     ) -> Contract | None:

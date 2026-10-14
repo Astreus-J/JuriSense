@@ -19,6 +19,7 @@ strategy" section) is also out of scope for this phase -- see
 """
 
 import io
+import zipfile
 from dataclasses import dataclass
 
 from docx import Document as DocxDocument
@@ -26,6 +27,7 @@ from pypdf import PdfReader
 from pypdf.errors import PdfReadError
 
 from app.ai_services.domain.errors import DocumentParsingError
+from app.core.config import get_settings
 
 # Synthetic "page" budget for DOCX/TXT, approximating a typical rendered page of a
 # commercial contract (character count, not exact -- document-intelligence.md only
@@ -60,7 +62,30 @@ def _extract_pdf(data: bytes) -> ExtractedDocument:
     return ExtractedDocument(pages=pages, pagination_mode="native")
 
 
+def _reject_docx_decompression_bomb(data: bytes) -> None:
+    """Security audit (2026-10-12): DOCX is a zip container -- the 25MB compressed-size
+    cap (`MaxBodySizeMiddleware`) bounds the uploaded file, not what it decompresses to.
+    A crafted DOCX well under that cap can still decompress to gigabytes (classic
+    zip-bomb ratio), and `DocxDocument(...)` -> `python-docx` -> `zipfile` has no
+    per-member/total decompressed-size cap of its own -- confirmed by reading both
+    libraries' source. Mirrors `app.integrations.infrastructure.sanctions_source`'s own
+    capped-download discipline for exactly this risk class, checked BEFORE
+    `DocxDocument` ever reads any member's content."""
+    limit = get_settings().docx_max_uncompressed_bytes
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            total_uncompressed = sum(info.file_size for info in archive.infolist())
+    except zipfile.BadZipFile as exc:
+        raise DocumentParsingError(f"Could not parse DOCX: {exc}") from exc
+    if total_uncompressed > limit:
+        raise DocumentParsingError(
+            f"DOCX would decompress to {total_uncompressed} bytes, exceeding the "
+            f"{limit}-byte limit"
+        )
+
+
 def _extract_docx(data: bytes) -> ExtractedDocument:
+    _reject_docx_decompression_bomb(data)
     try:
         doc = DocxDocument(io.BytesIO(data))
         parts: list[str] = [p.text for p in doc.paragraphs if p.text]

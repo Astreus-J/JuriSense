@@ -16,6 +16,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, validates
 
+from app.core.append_only import register_append_only_guards
 from app.core.db import Base
 from app.policies.domain.constants import (
     ComplianceReviewStatus,
@@ -368,3 +369,19 @@ class Risk(Base):
     evidence_refs: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+# Security audit (2026-10-12): `compliance_reviews`, `rule_evaluations`, and `policy_exceptions`
+# are append-only by repository convention already (no update/delete method exposed on any of
+# their repositories) -- same gap #184 closed for the Evidence & Audit tables, now closed here
+# too. Scoped to exactly these three, not every table in this file: `policies`/`policy_versions`/
+# `rules` are genuinely mutable by design while a `PolicyVersion` is still `draft` (rule_service's
+# own create/update routes), and `Rule` already has its own ORM-level `@validates` guard
+# (`_guard_frozen`) for the one point it becomes immutable (publish) rather than a DB trigger,
+# since it is conditionally mutable, not append-only from creation. `risks` is not included
+# either: no code path updates a `Risk` row either, but it was not part of this audit's finding
+# and is left for a follow-up pass rather than added speculatively.
+register_append_only_guards(
+    Base.metadata,
+    table_names=("compliance_reviews", "rule_evaluations", "policy_exceptions"),
+)
