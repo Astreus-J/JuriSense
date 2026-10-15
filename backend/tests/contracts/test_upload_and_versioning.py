@@ -3,8 +3,12 @@ against an existing Contract creating a new, immutable ContractVersion (never mu
 prior one -- tested explicitly per the EPIC-3 brief).
 """
 
-import httpx
+import uuid
 
+import httpx
+from sqlalchemy.ext.asyncio import async_sessionmaker
+
+from app.contracts.infrastructure.models import Document
 from app.contracts.infrastructure.repositories import ContractVersionRepository
 from tests.contracts.conftest import (
     HIGH_CONFIDENCE_ENVELOPE,
@@ -107,6 +111,54 @@ async def test_reupload_against_existing_contract_creates_new_version(
     versions = (await client.get(f"/api/contracts/{contract_id}/versions", headers=headers)).json()
     assert len(versions) == 2
     assert {v["version_number"] for v in versions} == {1, 2}
+
+
+async def test_reuploaded_version_gets_a_distinct_never_overwritten_storage_key(
+    client: httpx.AsyncClient, db_session_factory: async_sessionmaker
+) -> None:
+    """ADR-008 addendum (#138, 2026-10-15): this project's versioning guarantee is that each
+    `ContractVersion`'s `Document` gets its own permanent, content-addressed storage key,
+    never overwritten -- not S3-native bucket versioning (enabled only as an additional,
+    unexercised-in-normal-operation backstop; `docs/03-domain/domain-model.md`'s "Document"
+    entity already documented this). Asserts the two real invariants that claim depends on:
+    distinct `document_id`s, and distinct `storage_key`s, across two versions of the same
+    Contract -- not just distinct `ContractVersion` rows (already covered by
+    `test_reupload_against_existing_contract_creates_new_version`)."""
+    headers = await register_org_and_login(client, "storage-key-versioning@example.com")
+    supplier = await create_supplier(client, headers, tax_id="00000000000191")
+
+    first = (
+        await client.post(
+            "/api/contracts/upload",
+            files={"file": ("v1.pdf", pdf_bytes_with_text(), "application/pdf")},
+            data={
+                "supplier_id": supplier["id"],
+                "title": "Storage Key Versioning Contract",
+                "contract_type": "msa",
+            },
+            headers=headers,
+        )
+    ).json()
+    second = (
+        await client.post(
+            "/api/contracts/upload",
+            files={"file": ("v2.pdf", pdf_bytes_with_text(), "application/pdf")},
+            data={"supplier_id": supplier["id"], "contract_id": first["contract_id"]},
+            headers=headers,
+        )
+    ).json()
+
+    first_document_id = uuid.UUID(first["document_id"])
+    second_document_id = uuid.UUID(second["document_id"])
+    assert first_document_id != second_document_id
+
+    async with db_session_factory() as session:
+        first_document = await session.get(Document, first_document_id)
+        second_document = await session.get(Document, second_document_id)
+    assert first_document.storage_key != second_document.storage_key
+    # The first version's object was never touched by the second upload.
+    assert str(first_document_id) in first_document.storage_key
+    assert str(second_document_id) in second_document.storage_key
 
 
 async def test_reupload_with_different_supplier_rejected(client: httpx.AsyncClient) -> None:

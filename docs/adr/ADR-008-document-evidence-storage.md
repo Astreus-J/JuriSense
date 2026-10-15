@@ -2,8 +2,8 @@
 
 ## Status
 Proposed (production backend decision changed 2026-10-15 — self-hosted MinIO, built from source,
-not Cloudflare R2; see that addendum, now resolved; dev-environment tool corrected by the
-2026-09-28 addendum)
+not Cloudflare R2; see that addendum, now resolved; the #138 bucket-versioning gap also resolved
+2026-10-15, see that addendum; dev-environment tool corrected by the 2026-09-28 addendum)
 
 ## Context
 The old architecture (`docs/_legacy/`) assumed per-company VPS filesystem storage
@@ -13,12 +13,21 @@ original file forever, even after re-analysis), and eventually multi-region back
 raw VPS filesystem provides only with extra scripting.
 
 ## Decision
-Use **S3-compatible object storage** with per-organization key prefixes and bucket versioning
-enabled: **self-hosted MinIO** in production (see the 2026-10-15 addendum — originally Cloudflare
-R2, changed below), an S3-compatible dev server in local development (added to `docker-compose.yml`,
-see the 2026-09-28 addendum for which one). All document/evidence writes go through a single storage
-abstraction (`app/core/storage.py`'s `StoragePort`) in the `Contracts & Documents` and `Evidence &
-Audit` contexts so the concrete backend stays swappable.
+Use **S3-compatible object storage** with per-organization key prefixes: **self-hosted MinIO** in
+production (see the 2026-10-15 addendum — originally Cloudflare R2, changed below), an
+S3-compatible dev server in local development (added to `docker-compose.yml`, see the 2026-09-28
+addendum for which one). All document/evidence writes go through a single storage abstraction
+(`app/core/storage.py`'s `StoragePort`) in the `Contracts & Documents` and `Evidence & Audit`
+contexts so the concrete backend stays swappable.
+
+Versioning (#138, resolved 2026-10-15 — see that addendum below) is **application-modeled, not
+S3-native**: every `Document` gets a fresh, content-addressed key keyed by a new `document_id`
+(`app/contracts/application/document_service.py`), never overwritten — a new `ContractVersion`
+always creates a new `Document` row pointing at a new key, matching `docs/03-domain/domain-
+model.md`'s "Document" entity, which already documented this correctly. Bucket versioning IS also
+enabled (`docker-compose.yml`'s `minio-init`, `mc version enable`) but only as a free defense-in-
+depth backstop against a hypothetical future bug that reuses a key — the application's actual
+versioning guarantee never depends on it.
 
 ## Alternatives Considered
 - **Keep raw VPS filesystem** (`/dados/empresas/...`, the pre-pivot decision): rejected — versioning
@@ -30,11 +39,13 @@ Audit` contexts so the concrete backend stays swappable.
   addendum) turns out not to have a clean answer.
 
 ## Consequences
-- One more external dependency (object storage provider) alongside the existing external Postgres
-  (Neon) and AI provider APIs — consistent with the "VPS + external DB + external AI APIs" hosting
-  philosophy already established for this project.
-- Evidence Package immutability (required for the Decision Passport) is easier to guarantee with
-  object lock / versioning than with plain filesystem writes.
+- Originally one more external dependency (object storage provider) alongside the then-external
+  Postgres (Neon) and AI provider APIs; both PostgreSQL and object storage became self-hosted
+  (2026-10-15 addenda, this ADR and `ADR-001`) — the AI provider APIs remain the external
+  dependency the "VPS + external DB + external AI APIs" philosophy originally described.
+- Evidence Package immutability (required for the Decision Passport) is guaranteed by the
+  application-modeled versioning above (never-overwritten, content-addressed keys), with bucket
+  versioning as an additional, redundant backstop — not by object lock, which isn't configured.
 
 ## Addendum (2026-09-28) — dev-environment S3-compatible server changed from MinIO to adobe/s3mock
 
@@ -106,9 +117,41 @@ here as an honest caveat, not as a blocker to proceeding now.
 Status: Resolved (2026-10-15) / Decision: self-hosted MinIO in production, built from official
 AGPLv3 source, unmodified, never redistributed / Decision artifact: this addendum.
 
-Not yet done as part of this addendum (deliberately, per explicit instruction to record the
-decision only): no code, `docker-compose.yml`, `Dockerfile` build stage, or production
-`.env.production.example` change; no `StoragePort` config wiring; `docs/04-architecture/
-deployment.md` and the other documents that still describe R2 as the production backend have not
-been swept for consistency yet — this ADR is the authoritative record of the change, those are a
-follow-up once `#161`/`#162` (Plane, already re-scoped to MinIO) are actually implemented.
+Not yet done as part of THIS addendum, at the time it was written (deliberately, per explicit
+instruction to record the decision only): no code, `docker-compose.yml`, `Dockerfile` build stage,
+or production `.env.production.example` change; no `StoragePort` config wiring; `docs/04-
+architecture/deployment.md` and the other documents that still describe R2 as the production
+backend have not been swept for consistency yet. **All of this was implemented later the same day**
+(`minio/Dockerfile`, `docker-compose.yml`/`docker-compose.prod.yml`, `containers.md`/
+`deployment.md` corrected, `#161`/`#162` updated in Plane) — see the #138 addendum below, which
+covers the one piece (versioning) this addendum didn't.
+
+## Addendum (2026-10-15) — #138: bucket-versioning gap resolved
+
+Found in the 2026-09-28 security/pentest QA round: this ADR's original `Decision` text said
+"bucket versioning enabled" without that ever actually being enabled, and without checking whether
+the application even needs it. Investigation (reading `app/contracts/application/document_
+service.py` and `contract_service.py`): every `Document` is created with a fresh `uuid.uuid4()`
+and a storage key derived from it (`contracts/{organization_id}/{document_id}/{filename}`); no
+code path updates an existing `Document` row or overwrites an existing key — a new `ContractVersion`
+(re-upload, re-negotiation round) always creates a brand-new `Document` with a brand-new key. This
+matches `docs/03-domain/domain-model.md`'s "Document" entity, which already correctly documented
+"a `Document` is itself an immutable version; re-upload creates a new `Document`" — that document
+was already right; this ADR's `Decision` text was the one that drifted from reality.
+
+Decision: the `Document`/`ContractVersion` immutable-row, content-addressed-key model above **is**
+this project's versioning mechanism (Option B from the original gap's framing) — it already fully
+satisfies "per-organization document versioning" with no further application code needed. S3-
+native bucket versioning (Option A) is **additionally** enabled (`docker-compose.yml`'s
+`minio-init`, `mc version enable local/$STORAGE_BUCKET`, inherited by production unchanged) purely
+as a zero-cost defense-in-depth backstop against a hypothetical future bug that reuses a key — the
+same "storage/DB-level backstop under already-correct application logic" pattern this codebase
+already uses for append-only triggers (`app/core/append_only.py`) and unique-constraint races. The
+application's real versioning guarantee never depends on this backstop actually being exercised.
+
+Status: Resolved (2026-10-15) / Decision: application-modeled versioning (already implemented,
+confirmed correct) is primary; MinIO bucket versioning is an additional backstop, now enabled /
+Verified live: two writes to the same key under the now-versioned bucket both survive and are
+individually retrievable (`mc ls --versions`), confirming the backstop actually works, not just
+that the command ran / Decision artifact: this addendum, `docs/adr/ADR-008-document-evidence-
+storage.md`'s `Decision`/`Consequences` sections (corrected above), `docker-compose.yml`.

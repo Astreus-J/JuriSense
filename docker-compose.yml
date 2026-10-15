@@ -140,10 +140,21 @@ services:
       timeout: 3s
       retries: 10
 
-  # One-shot: creates the dev bucket, then exits 0. The OSS MinIO server has no env-var
-  # equivalent of s3mock's old auto-create-bucket behavior, so `mc mb` against the
-  # already-healthy server is the standard way to do this (same `mc` binary the `minio`
-  # image already carries, see ./minio/Dockerfile's own comment).
+  # One-shot: creates the dev bucket (+ enables bucket versioning), then exits 0. The OSS
+  # MinIO server has no env-var equivalent of s3mock's old auto-create-bucket behavior, so
+  # `mc mb`/`mc version` against the already-healthy server is the standard way to do this
+  # (same `mc` binary the `minio` image already carries, see ./minio/Dockerfile's own
+  # comment).
+  #
+  # #138 (ADR-008 bucket-versioning gap): per-ContractVersion storage keys are already
+  # content-addressed by a fresh `document_id` (`app/contracts/application/document_
+  # service.py`) and never overwritten -- no code path updates an existing key, so this
+  # application's real versioning guarantee is the immutable-Document model, not S3
+  # versioning (see ADR-008's 2026-10-15 addendum and `docs/03-domain/domain-model.md`'s
+  # "Document" entity, which already documented this correctly). Bucket versioning is
+  # enabled anyway, below, as a free defense-in-depth backstop against a hypothetical
+  # future bug that reuses a key -- the same "storage-level backstop under already-correct
+  # application logic" pattern this codebase already uses for append-only DB triggers.
   minio-init:
     build:
       context: ./minio
@@ -152,7 +163,8 @@ services:
     command:
       - >
         mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" &&
-        mc mb --ignore-existing local/$$STORAGE_BUCKET
+        mc mb --ignore-existing local/$$STORAGE_BUCKET &&
+        mc version enable local/$$STORAGE_BUCKET
     environment:
       MINIO_ROOT_USER: ${DEV_STORAGE_ACCESS_KEY:-jurisense}
       MINIO_ROOT_PASSWORD: ${DEV_STORAGE_SECRET_KEY:-jurisense-dev-secret}
