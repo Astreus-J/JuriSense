@@ -12,6 +12,16 @@
 > no shell usado). Portanto "feito" significa "implementado no código com testes presentes", e não
 > "testes verificados como verdes hoje". A rubrica oficial do DoraHacks continua desconhecida (ver
 > `hackathon-requirements.md` §2), então os critérios abaixo são os **inferidos**.
+>
+> **Atualização 15/10/2026**: desta vez a suíte de testes **foi executada de verdade** contra a
+> stack real (`docker compose up`, não mock), não só lida no código — ver
+> `docs/07-engineering/performance-baseline.md`. Isso achou e corrigiu 4 bugs reais que
+> silenciosamente ameaçavam o demo inteiro (detalhe na seção "Riscos" abaixo). Também:
+> `gitleaks` rodado de novo manualmente (histórico completo, 128 commits) a pedido do usuário —
+> `no leaks found`, confirmando o item de segurança da 4.11. E a infraestrutura de banco/storage
+> mudou: Postgres e MinIO agora são self-hosted (não mais Neon/Cloudflare R2) — ver os addenda de
+> 2026-10-15 em `ADR-001`/`ADR-008`; isso não muda nenhum item funcional desta checklist, é uma
+> decisão de hosting, não um recurso do produto.
 
 Legenda: ✅ feito · 🟡 parcial / precisa de verificação · ⬜ a fazer
 
@@ -21,9 +31,9 @@ Legenda: ✅ feito · 🟡 parcial / precisa de verificação · ⬜ a fazer
 |---|---|---|---|---|
 | 1. Pipeline do Hackathon Cut (engenharia) | 12 | 0 | 0 | 12 |
 | 2. Tecnologia de patrocinador e blockchain | 4 | 1 | 1 | 6 |
-| 3. Prontidão do demo | 0 | 0 | 6 | 6 |
+| 3. Prontidão do demo | 0 | 1 | 5 | 6 |
 | 4. Materiais de submissão | 1 | 3 | 7 | 11 |
-| **Total** | **17** | **4** | **14** | **35** |
+| **Total** | **17** | **5** | **13** | **35** |
 
 **Leitura**: o *produto* está essencialmente completo (área 1). O que falta é quase todo
 *empacotamento*: dados e ensaio do demo, ambiente publicado, a credencial da Constellation e todos
@@ -105,9 +115,12 @@ indicados.
 - [ ] **3.5 Provedor de IA confiável para o demo** — modelos gratuitos do OpenRouter podem sofrer
   rate limit ou mudar. Providenciar uma chave paga da OpenAI/Anthropic (ADR-005) ou, no mínimo,
   testar os modelos gratuitos no dia anterior à gravação.
-- [ ] **3.6 Ambiente publicado** — VPS + Docker Compose conforme `deployment.md`, acessível
-  durante toda a janela de julgamento (05/11 a 05/12). Hoje só existe o compose de
-  desenvolvimento. O vídeo gravado é o fallback aceito, mas um link ao vivo é mais forte.
+- [ ] **3.6 🟡 Ambiente publicado** — VPS + Docker Compose conforme `deployment.md`, acessível
+  durante toda a janela de julgamento (05/11 a 05/12). Progresso em 15/10: `docker-compose.prod.yml`
+  agora existe (builds de produção, Postgres+MinIO self-hosted sem porta publicada), mas só
+  validado como config YAML — nunca rodado contra uma VPS real, e ainda falta o proxy
+  reverso/TLS (Nginx) antes do backend/frontend pararem de publicar porta direto. O vídeo
+  gravado continua o fallback aceito.
 
 ## 4. Materiais de submissão (`submission-plan.md` §1)
 
@@ -159,3 +172,24 @@ indicados.
   resolver também 2.4 e, via 2.6, reforçar o fallback caso a troca não aconteça a tempo.
 - **Instabilidade da IA gratuita durante a gravação** → 3.5.
 - **Rubrica ou formato desconhecidos** → 4.9 agora, e não na Semana 6.
+
+### Risco fechado em 15/10/2026: teste de carga achou 4 bugs reais que quebrariam o demo em silêncio
+
+Rodar a stack real sob carga (não a suíte mockada) achou e corrigiu, no mesmo dia:
+1. **A âncora blockchain inteira estava quebrada** — faltava o binário `git` na imagem Docker do
+   celery-worker, então **toda** `Decision` falhava ao tentar ancorar (`evidence.submit_anchor`),
+   silenciosamente, em background. Isso é exatamente o passo final do roteiro do demo (3.3/3.4) e
+   da verificação pública (2.4/item 10) — sem esse fix, o demo chegaria até "Decision Passport" e
+   a âncora nunca apareceria, sem nenhum erro visível na hora.
+2. O worker do Celery nunca processava extração de contrato de verdade em produção (ficava
+   tentando pra sempre) — achado só rodando o processo real, invisível nos testes.
+3. O índice de sanções ficava vazio por até 24h após qualquer restart — toda verificação de
+   fornecedor falharia nesse intervalo (sanções é fonte obrigatória).
+4. Uma corrida de requisições concorrentes em `/compliance/reviews` retornava um 500 cru em vez
+   de um 409 limpo.
+
+Todos os 4 corrigidos e verificados ao vivo (não só testados) no mesmo dia — ver
+`docs/07-engineering/performance-baseline.md`. Mitigação adicional recomendada antes do ensaio da
+3.3: depois de rodar o `docker compose up` do ambiente de demo, confirmar nos logs do
+celery-worker que `evidence.submit_anchor` realmente sucede, não só que a review/decision foi
+criada.
