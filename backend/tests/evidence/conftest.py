@@ -27,8 +27,15 @@ def isolated_transparency_log(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
     key instead of writing into the backend's working-directory default
     (`./data/transparency-log`), which would pollute the repo and race across tests that
     otherwise run sequentially today. `monkeypatch.setattr` on the cached `Settings` instance's
-    own attributes (not frozen) restores the real default after each test."""
+    own attributes (not frozen) restores the real default after each test.
+
+    `anchoring_provider` itself is pinned here too (2026-10-15): `backend/.env`'s real runtime
+    value switched to `constellation_digital_evidence` once its credentials were live-verified,
+    but `Settings` reads that same file as the test suite's own `env_file` -- without this pin,
+    `get_provider()` would try the real Constellation DED API in every test here instead of the
+    local, credential-free transparency log this package's tests are actually about."""
     settings = get_settings()
+    monkeypatch.setattr(settings, "anchoring_provider", "transparency_log")
     monkeypatch.setattr(settings, "transparency_log_repo_path", str(tmp_path / "transparency-log"))
     monkeypatch.setattr(
         settings, "transparency_log_signing_key_path", str(tmp_path / "transparency-log-key")

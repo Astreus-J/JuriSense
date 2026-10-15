@@ -106,7 +106,12 @@ def test_constellation_provider_refuses_to_boot_missing_any_one_credential(
 
 
 def test_default_transparency_log_provider_does_not_require_constellation_credentials() -> None:
-    Settings()  # anchoring_provider defaults to "transparency_log"
+    # Explicit, not a bare `Settings()` -- `env_file=".env"` means a bare construction
+    # would otherwise silently pick up whatever ANCHORING_PROVIDER backend/.env's real
+    # runtime value happens to be (now `constellation_digital_evidence`, 2026-10-15),
+    # testing the wrong branch without failing. This test is specifically about the
+    # transparency_log branch, so it pins that explicitly regardless of the real .env.
+    Settings(anchoring_provider="transparency_log")
 
 
 def test_reevaluation_attempt_cap_must_be_at_least_one() -> None:
