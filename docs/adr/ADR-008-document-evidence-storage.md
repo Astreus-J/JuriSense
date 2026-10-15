@@ -1,8 +1,9 @@
 # ADR-008 — Document & Evidence Storage
 
 ## Status
-Proposed (production backend decision unchanged; dev-environment tool corrected by the 2026-09-28
-addendum below)
+Proposed (production backend decision changed 2026-10-15 — self-hosted MinIO, not Cloudflare R2;
+see that addendum for the one open question this leaves; dev-environment tool corrected by the
+2026-09-28 addendum)
 
 ## Context
 The old architecture (`docs/_legacy/`) assumed per-company VPS filesystem storage
@@ -13,19 +14,20 @@ raw VPS filesystem provides only with extra scripting.
 
 ## Decision
 Use **S3-compatible object storage** with per-organization key prefixes and bucket versioning
-enabled: **Cloudflare R2** in production, an S3-compatible dev server in local development (added to
-`docker-compose.yml`, see the addendum below for which one). All document/evidence writes go through
-a single storage abstraction (`app/core/storage.py`'s `StoragePort`) in the `Contracts & Documents`
-and `Evidence & Audit` contexts so the concrete backend stays swappable.
+enabled: **self-hosted MinIO** in production (see the 2026-10-15 addendum — originally Cloudflare
+R2, changed below), an S3-compatible dev server in local development (added to `docker-compose.yml`,
+see the 2026-09-28 addendum for which one). All document/evidence writes go through a single storage
+abstraction (`app/core/storage.py`'s `StoragePort`) in the `Contracts & Documents` and `Evidence &
+Audit` contexts so the concrete backend stays swappable.
 
 ## Alternatives Considered
 - **Keep raw VPS filesystem** (`/dados/empresas/...`, the pre-pivot decision): rejected — versioning
   and durability would need to be hand-rolled; object storage gets this for free and is a similarly
-  low-ops choice given the single-VPS hosting model still holds (R2 is external but billed
-  per-use, not a new server to manage).
-- **Self-hosted MinIO in production too**: viable cost-saving alternative if R2 pricing becomes a
-  concern at scale — kept as a documented fallback, not the default, because R2's zero-egress-fee
-  model fits a document-heavy product better initially.
+  low-ops choice given the single-VPS hosting model still holds.
+- **Cloudflare R2 in production** (this ADR's original decision): superseded 2026-10-15 — see that
+  addendum. Kept as a documented fallback, not the default: R2's zero-egress-fee, fully-managed
+  model is still the lower-ops choice if self-hosted MinIO's image-sourcing question (same
+  addendum) turns out not to have a clean answer.
 
 ## Consequences
 - One more external dependency (object storage provider) alongside the existing external Postgres
@@ -52,8 +54,44 @@ S3-compatible dev server were tried and failed, verified live against the real r
    creation, `put_object`, `get_object`, and `generate_presigned_url` all work unmodified. **This is
    the dev server actually wired into `docker-compose.yml`.**
 
-**This changes nothing about the production decision** (Cloudflare R2) or the application-level
+**This changed nothing about the production decision at the time** (still Cloudflare R2 as of this
+writing — see the 2026-10-15 addendum below for the later change) or the application-level
 abstraction (`StoragePort`) — only which container image `docker-compose.yml`'s dev-only storage
 service runs. If `adobe/s3mock` also becomes unavailable in the future, re-run the same verification
 (pull the candidate image, run it, exercise it with the real `S3CompatibleStorage` client, confirm no
 license/auth gate) before switching `docker-compose.yml` again, and update this addendum.
+
+## Addendum (2026-10-15) — production backend changed from Cloudflare R2 to self-hosted MinIO
+
+Decision (explicit instruction): production object storage is **self-hosted MinIO**, not Cloudflare
+R2 — consistent with how this project's own Plane instance (project management, `project-management/
+plane/`) is already deployed. Rationale: the single-VPS hosting model already runs other self-hosted
+services; adding R2 means one more external SaaS dependency (billing, API surface, data-residency
+question) when a self-hosted option that's already proven to run this project's other tooling is
+available instead. `StoragePort` (`app/core/storage.py`) needs no interface change — MinIO is
+S3-compatible, same as R2; only the production `STORAGE_ENDPOINT_URL`/credentials/bucket config
+differs, same shape of change the dev environment already went through (`adobe/s3mock`, 2026-09-28
+addendum above).
+
+This directly intersects the 2026-09-28 addendum's finding: MinIO's own server image/binary stopped
+being freely distributable (Docker Hub/Quay.io/direct download all return `401`/`410` without a
+paid account) as of that verification. Documenting the decision now, before resolving exactly how
+the production image will be sourced:
+
+Status: TBD / Current preferred option: self-hosted MinIO in production, exact image-sourcing path
+undecided (candidates, not yet evaluated: (a) the same source/account/mirror already used to run
+this project's own Plane deployment's MinIO instance — the most direct read of "assim como o Plane
+usa"; (b) building MinIO from its still-source-available AGPLv3 repository; (c) a paid MinIO
+AGPLv3/Subnet account) / Why undecided: this was recorded as a documentation-only decision per
+explicit instruction, not yet implemented / Resolution: before `#161`/`#162` (re-scoped in Plane
+to self-hosted MinIO, formerly Cloudflare R2 cutover) are implemented, confirm which image-sourcing
+path applies, the same way the 2026-09-28 addendum verified `adobe/s3mock` end-to-end before wiring
+it into `docker-compose.yml` / Decision artifact: this addendum; update it once the sourcing path
+is confirmed, rather than adding a third addendum for the same open question.
+
+Not yet done as part of this addendum (deliberately, per explicit instruction to record the
+decision only): no code, `docker-compose.yml`, or production `.env.production.example` change; no
+`StoragePort` config wiring; `docs/04-architecture/deployment.md` and the other documents that still
+describe R2 as the production backend have not been swept for consistency yet — this ADR is the
+authoritative record of the change, those are a follow-up once the image-sourcing TBD above is
+resolved and real implementation starts.

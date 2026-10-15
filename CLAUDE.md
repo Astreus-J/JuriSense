@@ -91,8 +91,9 @@ Modular monolith (`ADR-002`): one FastAPI deployment, 8 internal bounded context
 through application-layer interfaces (never cross-context ORM access — see
 `docs/04-architecture/components.md` for the explicit boundary rules). PostgreSQL (external, Neon) +
 `pgvector` for retrieval (`ADR-009`), Redis + Celery for async processing with a DB-backed state
-machine for approval workflows (`ADR-006`), S3-compatible object storage — R2 in production, MinIO
-in dev (`ADR-008`), a multi-provider AI gateway (OpenAI + Anthropic, structured output only,
+machine for approval workflows (`ADR-006`), S3-compatible object storage — self-hosted MinIO in
+production (changed from Cloudflare R2, 2026-10-15 addendum), `adobe/s3mock` in dev (`ADR-008`),
+a multi-provider AI gateway (OpenAI + Anthropic, structured output only,
 `ADR-005`), a YAML-authored policy DSL compiling to CEL/JSONLogic (`ADR-004`), and a
 provider-agnostic blockchain `AnchoringProvider` abstraction (`ADR-007`) — no chain SDK is called
 directly anywhere else in the codebase. Hosting stays VPS + Docker Compose with external DB, AI
