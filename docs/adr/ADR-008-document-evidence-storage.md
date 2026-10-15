@@ -1,8 +1,8 @@
 # ADR-008 — Document & Evidence Storage
 
 ## Status
-Proposed (production backend decision changed 2026-10-15 — self-hosted MinIO, not Cloudflare R2;
-see that addendum for the one open question this leaves; dev-environment tool corrected by the
+Proposed (production backend decision changed 2026-10-15 — self-hosted MinIO, built from source,
+not Cloudflare R2; see that addendum, now resolved; dev-environment tool corrected by the
 2026-09-28 addendum)
 
 ## Context
@@ -73,25 +73,42 @@ S3-compatible, same as R2; only the production `STORAGE_ENDPOINT_URL`/credential
 differs, same shape of change the dev environment already went through (`adobe/s3mock`, 2026-09-28
 addendum above).
 
-This directly intersects the 2026-09-28 addendum's finding: MinIO's own server image/binary stopped
-being freely distributable (Docker Hub/Quay.io/direct download all return `401`/`410` without a
-paid account) as of that verification. Documenting the decision now, before resolving exactly how
-the production image will be sourced:
+This directly intersected the 2026-09-28 addendum's finding: MinIO's own server image/binary
+stopped being freely distributable (Docker Hub/Quay.io/direct download all return `401`/`410`
+without a paid account) as of that verification — which is what left the image-sourcing path open
+below, now resolved.
 
-Status: TBD / Current preferred option: self-hosted MinIO in production, exact image-sourcing path
-undecided (candidates, not yet evaluated: (a) the same source/account/mirror already used to run
-this project's own Plane deployment's MinIO instance — the most direct read of "assim como o Plane
-usa"; (b) building MinIO from its still-source-available AGPLv3 repository; (c) a paid MinIO
-AGPLv3/Subnet account) / Why undecided: this was recorded as a documentation-only decision per
-explicit instruction, not yet implemented / Resolution: before `#161`/`#162` (re-scoped in Plane
-to self-hosted MinIO, formerly Cloudflare R2 cutover) are implemented, confirm which image-sourcing
-path applies, the same way the 2026-09-28 addendum verified `adobe/s3mock` end-to-end before wiring
-it into `docker-compose.yml` / Decision artifact: this addendum; update it once the sourcing path
-is confirmed, rather than adding a third addendum for the same open question.
+**Image-sourcing path (resolved, explicit instruction): build MinIO from its official AGPLv3
+source**, unmodified — not the gated pre-built binary/image, not a paid Subnet account. A build
+stage compiles the published `github.com/minio/minio` source (Go) into a binary, copied into the
+production image's runtime stage; the pre-built image's distribution gate doesn't apply since
+nothing is pulled from Docker Hub/Quay.io for this.
+
+**License compliance criteria this path commits to following (AGPLv3, binding going forward, not
+just at adoption time)** — the explicit condition under which this decision was made:
+1. **Never modify MinIO's own source.** AGPLv3 §13 (the clause distinguishing it from plain GPL)
+   only triggers an obligation to offer corresponding source to remote users when the *running
+   program itself has been modified*. Building the unmodified, official source is not
+   modification — this is the entire basis for "free, no obligations" holding here. If anyone
+   ever patches/forks MinIO's own code for a production need, this analysis no longer applies and
+   must be revisited before shipping that change.
+2. **Never redistribute MinIO's binaries/image to third parties.** Running it as this project's
+   own internal backend infrastructure is "use," not "conveying" (GPLv3 §0, inherited by AGPLv3) —
+   the license's restrictions attach to distribution, not to mere use, even commercial use behind
+   a closed-source SaaS. JuriSense Gate's own source is never required to be disclosed under this
+   model; nor is any obligation created toward JuriSense's own end customers (they interact with
+   JuriSense's API, not with MinIO's network interface directly).
+
+This is the standard legal reading of the license text and MinIO's own public position, not a
+substitute for formal legal counsel before general availability of a commercial product — noted
+here as an honest caveat, not as a blocker to proceeding now.
+
+Status: Resolved (2026-10-15) / Decision: self-hosted MinIO in production, built from official
+AGPLv3 source, unmodified, never redistributed / Decision artifact: this addendum.
 
 Not yet done as part of this addendum (deliberately, per explicit instruction to record the
-decision only): no code, `docker-compose.yml`, or production `.env.production.example` change; no
-`StoragePort` config wiring; `docs/04-architecture/deployment.md` and the other documents that still
-describe R2 as the production backend have not been swept for consistency yet — this ADR is the
-authoritative record of the change, those are a follow-up once the image-sourcing TBD above is
-resolved and real implementation starts.
+decision only): no code, `docker-compose.yml`, `Dockerfile` build stage, or production
+`.env.production.example` change; no `StoragePort` config wiring; `docs/04-architecture/
+deployment.md` and the other documents that still describe R2 as the production backend have not
+been swept for consistency yet — this ADR is the authoritative record of the change, those are a
+follow-up once `#161`/`#162` (Plane, already re-scoped to MinIO) are actually implemented.
