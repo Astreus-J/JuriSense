@@ -53,10 +53,20 @@ def test_no_other_context_imports_integrations_infrastructure_directly() -> None
     caller must go through an application-layer port instead (rule 8's symmetric case;
     nothing calls into Integrations yet, so this currently vacuously holds and simply can't
     regress silently).
+
+    One narrow, deliberate exception: `app/core/celery_app.py` imports every context's
+    `infrastructure.models` (not just Integrations') at module import time -- shared-kernel
+    process wiring, not business logic reading/writing Integrations' tables. Load testing
+    the real worker (2026-10-14) found that without this, a standalone Celery process never
+    registers `Base.metadata` for any context whose task module isn't the one that happens
+    to run first, so any FK targeting an unregistered context's table fails to resolve
+    (`NoReferencedTableError`) -- invisible to this test suite's own `conftest.py`, which
+    always imports every context's models regardless of what's under test.
     """
     forbidden = {"app.integrations.infrastructure"}
+    exempt = {APP_DIR / "core" / "celery_app.py"}
     for path in _python_files(APP_DIR):
-        if INTEGRATIONS_DIR in path.parents:
+        if INTEGRATIONS_DIR in path.parents or path in exempt:
             continue
         offending = {m for m in _imported_modules(path) if _starts_with_any(m, forbidden)}
         assert not offending, f"{path} imports Integrations' infrastructure directly: {offending}"

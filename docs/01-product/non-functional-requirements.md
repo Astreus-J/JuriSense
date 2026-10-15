@@ -38,10 +38,14 @@ input.
   own performance target.
 
 Status: TBD / Current preferred option: the targets above as directional design goals / Why
-undecided: no production traffic or load-test data exists yet for this early-stage product / 
-Resolution: establish real targets from load testing once the Hackathon Cut (Phase 8) build is
-functional, and revisit before general availability / Decision artifact: a future `docs/07-
-engineering/performance-baseline.md`.
+undecided: the first real load test (`docs/07-engineering/performance-baseline.md`, 2026-10-14)
+only ran against a single-developer-machine dev environment, not production-equivalent
+infrastructure — enough to confirm the architecture has no correctness bugs under concurrency
+(and, in the process, found and fixed three real bugs invisible to the test suite), not enough to
+set production capacity targets / Resolution: re-run the same baseline against production-
+equivalent infrastructure before general availability / Decision artifact: `docs/07-engineering/
+performance-baseline.md` (now exists; will be updated, not re-created, for the production-grade
+re-run).
 
 ## Availability
 

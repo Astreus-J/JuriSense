@@ -6,7 +6,13 @@ ENV UV_LINK_MODE=copy \
 # libmagic1: python-magic (EPIC-3 upload scanner, SEC-003) loads libmagic via ctypes at
 # import time -- missing on every Debian "slim" base image, so app.contracts.infrastructure
 # .document_scanner would fail on the very first import (i.e. app startup) without this.
-RUN apt-get update && apt-get install -y --no-install-recommends libmagic1 \
+# git: the transparency-log AnchoringProvider (ADR-007, app.evidence.infrastructure.anchoring
+# .transparency_log_provider) shells out to the `git` binary to maintain its append-only log.
+# This image is also what celery-worker/celery-beat build from (docker-compose.yml, `dev`
+# target) -- without it, every evidence.submit_anchor task fails with "git is not installed",
+# found via load testing the real stack (2026-10-14), invisible to the test suite since it
+# mocks the anchoring provider instead of shelling out for real.
+RUN apt-get update && apt-get install -y --no-install-recommends libmagic1 git \
     && rm -rf /var/lib/apt/lists/*
 EXPOSE 8000
 # Código montado como volume pelo compose; uv sync roda no volume do .venv

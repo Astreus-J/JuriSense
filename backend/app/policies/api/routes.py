@@ -3,7 +3,10 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.approvals.domain.errors import NoApprovalWorkflowConfiguredError
+from app.approvals.domain.errors import (
+    DecisionAlreadyExistsError,
+    NoApprovalWorkflowConfiguredError,
+)
 from app.core.db import SessionDep
 from app.identity.api.deps import require_permission
 from app.identity.domain.constants import Module
@@ -461,6 +464,15 @@ async def trigger_review(
         # seed_default_workflows seeds medium/high/critical at registration) -- can for
         # pre-epic data or the undocumented low-severity-reaches-REVIEW edge case
         # (docs/03-domain/approvals.md's routing table leaves `low` unconfigured).
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.message) from exc
+    except DecisionAlreadyExistsError as exc:
+        # Load testing (2026-10-14): concurrent `POST /compliance/reviews` for the same
+        # `contract_version_id` (double-click, retry-on-timeout, two approvers acting at
+        # once) both pass `execute_review`'s own read-then-decide check and race on the
+        # `uq_decisions_one_active_per_contract_version` constraint; `create_decision_for_
+        # review` converts the loser's `IntegrityError` into this domain error, same
+        # backstop role it plays in `approvals.api.routes`. Confirmed live: without this
+        # handler, the loser got an unhandled 500 instead of a clean, retryable 409.
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.message) from exc
     return ComplianceReviewResponse.model_validate(review)
 

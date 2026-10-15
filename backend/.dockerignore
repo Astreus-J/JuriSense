@@ -10,3 +10,7 @@ Dockerfile
 README.md
 .env*
 !.env.example
+# Local dev runtime state (transparency-log AnchoringProvider's git repo + signing key,
+# ADR-007) -- root-owned inside the container, 0600 on the signing key, so the build
+# context scan can't even read it as the host user; never belongs in the image anyway.
+data/

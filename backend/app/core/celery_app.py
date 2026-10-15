@@ -14,10 +14,31 @@ rather than imported directly at the top of this module, so that:
 Redis is already provisioned in `docker-compose.yml`; no new infrastructure
 is required beyond it (see ADR-006 -- Celery + Redis, not a dedicated
 workflow engine).
+
+The model imports at the very top (unrelated to the task-registration concern above --
+these run eagerly, at this module's own import time) are a separate, real bug fix from
+load testing the actual running worker (2026-10-14): no task module imports
+`app.identity`, so `Base.metadata` never registered `User`/`Organization` inside a real
+worker process, and any table with a FK to `users` (e.g. `documents.uploaded_by`) failed
+SQLAlchemy's FK-target resolution the first time a task touched it --
+`contracts.run_contract_extraction` retried every 30s forever rather than ever
+succeeding. Invisible to the test suite (`conftest.py` always imports every context's
+models explicitly, regardless of which task is under test); only visible running the
+real worker end to end. Mirrors `app.main`'s own "import every context so the full
+router/model graph is registered" pattern, applied here so a worker process is correct
+independently of which task happens to run first.
 """
 
 from celery import Celery
+from celery.signals import worker_ready
 
+import app.approvals.infrastructure.models  # noqa: F401
+import app.contracts.infrastructure.models  # noqa: F401
+import app.evidence.infrastructure.models  # noqa: F401
+import app.identity.infrastructure.models  # noqa: F401
+import app.integrations.infrastructure.models  # noqa: F401
+import app.policies.infrastructure.models  # noqa: F401
+import app.suppliers.infrastructure.models  # noqa: F401
 from app.core.config import get_settings
 
 _settings = get_settings()
@@ -60,3 +81,26 @@ celery_app.conf.update(
         },
     },
 )
+
+
+@worker_ready.connect
+def _run_sanctions_refresh_on_startup(**_kwargs: object) -> None:
+    """Load testing (2026-10-14): a plain-interval `beat_schedule` entry does NOT run
+    on beat's own startup -- confirmed empirically (the 900s approval-expiry sweep's
+    first real run only fired 15 real minutes after `beat: Starting...`, not
+    immediately). For `sanctions_refresh_interval_seconds` (24h), that means a freshly
+    started environment has a completely empty sanctions index -- and sanctions is a
+    MANDATORY source (`SanctionsAdapter`'s own docstring), so every single supplier
+    check fails with "mandatory source unavailable" for up to a full day after any
+    restart, confirmed live against this exact dev environment.
+    `approvals.expire_stale_approval_requests`/`reevaluate_stale_decisions` don't get
+    the same treatment: a few extra minutes/hours before their own first sweep is a
+    minor staleness window, not a hard failure of an otherwise-working feature, so
+    there's no need to short the same gap for them.
+
+    Dispatches by task name (`send_task`) rather than importing `refresh_sanctions_index`
+    directly -- `app/core` is shared-kernel wiring, not a caller reaching into a bounded
+    context's internals (`tests/integrations/test_boundary_rules.py`), and `send_task`
+    needs no import at all since the task is already registered via `imports` above.
+    """
+    celery_app.send_task("integrations.refresh_sanctions_index")

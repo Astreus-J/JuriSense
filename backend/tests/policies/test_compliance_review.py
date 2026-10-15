@@ -5,7 +5,10 @@ the result as `ComplianceReview` + `RuleEvaluation` + `Risk` rows with real audi
 """
 
 import httpx
+import pytest
 
+from app.approvals.domain.errors import DecisionAlreadyExistsError
+from app.policies.application import compliance_review_service
 from app.policies.infrastructure.repositories import RuleEvaluationRepository
 from tests.policies.conftest import ACTIVE_CNPJ_RESPONSE, create_supplier, pdf_bytes_with_text
 from tests.suppliers.conftest import register_org_and_login
@@ -411,6 +414,51 @@ async def test_trigger_review_zero_published_policies_defaults_to_approve(
     ).json()
     assert detail["rule_evaluations"] == []
     assert detail["risks"] == []
+
+
+async def test_trigger_review_maps_decision_already_exists_to_conflict(
+    client: httpx.AsyncClient,
+    mock_openrouter,
+    mock_cnpj_registry,
+    seed_sanctions_index,
+    run_contract_extraction_inline,
+    run_supplier_checks_inline,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Load testing (2026-10-14): two concurrent `POST /compliance/reviews` for the same
+    `contract_version_id` (double-click, retry-on-timeout, two approvers acting at once)
+    both read `active_for_version` as empty before either commits, so both attempt to
+    insert an `ACTIVE` Decision -- `create_decision_for_review` already converts the
+    loser's `IntegrityError` on `uq_decisions_one_active_per_contract_version` into
+    `DecisionAlreadyExistsError` (and `tests/approvals/test_concurrency.py` already
+    covers that service-level behavior deterministically), but `trigger_review`'s route
+    had no handler for that error, so the loser got an unhandled 500 instead of a clean,
+    retryable 409 -- confirmed live against the real running stack. True HTTP-level
+    concurrency can't be reproduced hermetically against the SQLite/StaticPool test
+    backend (same limitation noted in `test_concurrency.py`'s own module docstring), so
+    this deterministically forces the race's outcome instead, by making the service call
+    underneath the route raise the exact error the loser gets."""
+    mock_cnpj_registry(data=ACTIVE_CNPJ_RESPONSE)
+    await seed_sanctions_index(hit_document=TAX_ID)
+    mock_openrouter(payload=EVIDENCE_ENVELOPE)
+
+    headers = await register_org_and_login(client, "trigger-conflict-1@example.com")
+    supplier = await create_supplier(client, headers, tax_id=TAX_ID)
+    contract_version_id = await _upload_contract(client, headers, supplier["id"])
+
+    async def _raise_decision_already_exists(*_args, **_kwargs):
+        raise DecisionAlreadyExistsError()
+
+    monkeypatch.setattr(
+        compliance_review_service, "trigger_review", _raise_decision_already_exists
+    )
+
+    response = await client.post(
+        "/api/compliance/reviews",
+        json={"contract_version_id": contract_version_id},
+        headers=headers,
+    )
+    assert response.status_code == 409, response.text
 
 
 async def test_trigger_review_all_rules_not_applicable_defaults_to_approve(
