@@ -5,8 +5,12 @@ from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _DEV_JWT_SECRET = "dev-only-insecure-secret-with-32-bytes-min"  # noqa: S105 -- development only
-_DEV_STORAGE_ACCESS_KEY = "test"
-_DEV_STORAGE_SECRET_KEY = "test"  # noqa: S105 -- development only (local s3mock S3)
+# Matches docker-compose.yml's `minio`/`minio-init` services' own DEV_STORAGE_ACCESS_KEY/
+# DEV_STORAGE_SECRET_KEY defaults (also MinIO's root user/password there) -- kept identical
+# so a host-direct (non-Docker) backend run authenticates against the same running MinIO.
+# >= 8 chars on the secret: MinIO's own MINIO_ROOT_PASSWORD minimum-length requirement.
+_DEV_STORAGE_ACCESS_KEY = "jurisense"
+_DEV_STORAGE_SECRET_KEY = "jurisense-dev-secret"  # noqa: S105 -- development only (local MinIO)
 # A real (correctly-formatted) Fernet key, but publicly known from being committed here --
 # development only, same trust level as _DEV_JWT_SECRET. Generate a real one for production
 # with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
@@ -45,7 +49,9 @@ class Settings(BaseSettings):
     environment: str = "development"
     debug: bool = False
 
-    # External managed database (PostgreSQL)
+    # Self-hosted PostgreSQL + pgvector (ADR-001 addendum 2026-10-15, ADR-009) -- the
+    # default matches docker-compose.yml's `postgres` service, which publishes 5432 to
+    # the host, so this default also works for a host-direct (non-Docker) run.
     database_url: str = "postgresql+asyncpg://jurisense:jurisense@localhost:5432/jurisense"
     database_echo: bool = False
     database_pool_size: int = 5
@@ -54,13 +60,12 @@ class Settings(BaseSettings):
     # Redis on the VPS (cache and queues)
     redis_url: str = "redis://localhost:6379/0"
 
-    # Object storage (S3-compatible): s3mock in dev, Cloudflare R2 in
-    # production -- one abstraction, backend swappable via env var (ADR-008
-    # addendum -- MinIO, the original dev choice, no longer publishes a
-    # freely pullable image). The defaults below are dev-only, matching
-    # docker-compose.yml's `s3mock` service; NEVER use these credentials
-    # in production.
-    storage_endpoint_url: str = "http://localhost:9090"
+    # Object storage (S3-compatible): self-hosted MinIO in both dev and production
+    # (ADR-008's 2026-10-15 addendum -- built from source, see ./minio/Dockerfile) -- one
+    # abstraction, backend swappable via env var. The defaults below are dev-only, matching
+    # docker-compose.yml's `minio` service (port 9000, the S3 API port -- 9001 is the
+    # separate web console); NEVER use these credentials in production.
+    storage_endpoint_url: str = "http://localhost:9000"
     storage_access_key: str = _DEV_STORAGE_ACCESS_KEY
     storage_secret_key: str = _DEV_STORAGE_SECRET_KEY
     storage_bucket: str = "jurisense-dev"
@@ -278,8 +283,8 @@ class Settings(BaseSettings):
             or self.storage_secret_key == _DEV_STORAGE_SECRET_KEY
         ):
             raise ValueError(
-                "STORAGE_ACCESS_KEY/STORAGE_SECRET_KEY must be set in production "
-                "with real Cloudflare R2 credentials (never the s3mock dev credentials)"
+                "STORAGE_ACCESS_KEY/STORAGE_SECRET_KEY must be set in production with "
+                "real production MinIO credentials (never the dev-default credentials)"
             )
         if (
             self.environment == "production"

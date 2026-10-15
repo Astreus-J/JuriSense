@@ -1,24 +1,31 @@
 # JuriSense DEVELOPMENT environment.
-# The database is the external managed PostgreSQL (DATABASE_URL in backend/.env);
-# this file only brings up frontend, backend, Redis, s3mock (S3-compatible
-# object storage, ADR-008), and a Celery worker (async tasks, ADR-006).
+# This file brings up the whole stack locally: frontend, backend, Postgres
+# (+pgvector, ADR-009), Redis, MinIO (S3-compatible object storage, ADR-008),
+# and the Celery worker/beat pair (async tasks, ADR-006).
 # Usage: docker compose up -d
 # Variables: the backend loads backend/.env (env_file); the environment block
-# below only overrides what changes inside the container (e.g. the Redis host).
+# below only overrides what changes inside the container (service hostnames
+# instead of localhost, and DATABASE_URL/STORAGE_* to point at the services
+# below instead of whatever backend/.env has for a non-Docker host run).
 #
-# Object storage: MinIO was ADR-008's original dev choice, but MinIO stopped
-# publishing freely pullable images (Docker Hub, Quay.io, and its own binary
-# releases all now require authentication/a paid plan). LocalStack (the
-# second choice) was tried next, but its "latest" tag now requires a paid
-# license/auth token to start any service, including S3, and its old
-# free-standing S3-only tag was discontinued in 2026-03. `adobe/s3mock`
-# (Apache-2.0, no license gate -- verified live 2026-09-27: pulls and serves
-# put/get/presigned-URL requests against our exact boto3 client) is used
-# instead: same S3 API surface, same `app/core/storage.py` client code, zero
-# application-code impact. See ADR-008's addendum for the full trail.
+# Database (ADR-001 addendum, 2026-10-15): self-hosted Postgres, not Neon --
+# `postgres_data` is a named volume, so `docker compose down` keeps it;
+# `docker compose down -v` drops it (fresh schema, migrations re-applied by
+# the `backend` service's own startup command below).
+#
+# Object storage (ADR-008 addendum, 2026-10-15): self-hosted MinIO, built
+# from its official AGPLv3 source by `./minio/Dockerfile` -- not the
+# pre-built image, which MinIO gated behind a paid account (verified
+# 2026-09-27/28: Docker Hub, Quay.io, and MinIO's own binary releases all
+# return 401/410 unauthenticated). This is also why dev and production now
+# share the exact same object-storage backend (previously `adobe/s3mock` in
+# dev, Cloudflare R2 in production) -- building from source removed the
+# reason dev needed a stand-in. `minio-init` is a one-shot job (`mc mb`)
+# that creates the dev bucket on first boot, since the OSS server has no
+# env-var equivalent of s3mock's old auto-create-bucket behavior.
 # DEV_STORAGE_ACCESS_KEY/DEV_STORAGE_SECRET_KEY below are DEVELOPMENT-only
-# credentials -- production's real backend is Cloudflare R2, with its own
-# credentials set in backend/.env (STORAGE_*), NEVER these.
+# credentials (also used as MinIO's root user/password) -- production has
+# its own, set in backend/.env (STORAGE_*)/the prod compose file, NEVER these.
 
 services:
   frontend:
@@ -47,30 +54,36 @@ services:
       context: ./backend
       target: dev
     container_name: jurisense-backend
+    command: sh -c "uv sync --frozen && uv run alembic upgrade head && uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
     ports:
       - "8000:8000"
     volumes:
       - ./backend:/app
       - backend_venv:/app/.venv
-    # DATABASE_URL (external database) and other secrets come from backend/.env
+    # Other secrets (JWT, SMTP, AI Gateway, anchoring) come from backend/.env;
+    # DATABASE_URL/STORAGE_* are overridden below to reach the sibling
+    # services by their Compose names instead.
     env_file:
       - ./backend/.env
     environment:
       ENVIRONMENT: ${ENVIRONMENT:-development}
       DEBUG: ${DEBUG:-true}
-      # Inside the container, Redis and the object-storage emulator are the
-      # "redis"/"s3mock" services, not localhost
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-jurisense}:${POSTGRES_PASSWORD:-jurisense}@postgres:5432/${POSTGRES_DB:-jurisense}
       REDIS_URL: redis://redis:6379/0
-      STORAGE_ENDPOINT_URL: http://s3mock:9090
-      STORAGE_ACCESS_KEY: ${DEV_STORAGE_ACCESS_KEY:-test}
-      STORAGE_SECRET_KEY: ${DEV_STORAGE_SECRET_KEY:-test}
+      STORAGE_ENDPOINT_URL: http://minio:9000
+      STORAGE_ACCESS_KEY: ${DEV_STORAGE_ACCESS_KEY:-jurisense}
+      STORAGE_SECRET_KEY: ${DEV_STORAGE_SECRET_KEY:-jurisense-dev-secret}
       STORAGE_BUCKET: ${STORAGE_BUCKET:-jurisense-dev}
       CORS_ORIGINS: '${CORS_ORIGINS:-["http://localhost:3000"]}'
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
-      s3mock:
+      minio:
         condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
 
   redis:
     image: redis:7-alpine
@@ -85,28 +98,72 @@ services:
       timeout: 3s
       retries: 10
 
-  # S3-compatible object storage for local development (ADR-008 addendum).
-  # Production's real backend is Cloudflare R2 -- same S3 API, credentials
-  # swapped via backend/.env (STORAGE_*), no code change required.
-  s3mock:
-    image: adobe/s3mock:latest
-    container_name: jurisense-s3mock
+  # Self-hosted PostgreSQL + pgvector (ADR-001 addendum 2026-10-15, ADR-009) --
+  # replaces the external Neon instance for local development.
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: jurisense-postgres
     environment:
-      # Live-verified (2026-10-01): `initialBuckets` does NOT create the bucket on this
-      # image's current "latest" tag (S3Mock 5.x) -- a fresh container came up with zero
-      # buckets despite this var, which only went unnoticed because the long-running dev
-      # container already had its bucket from before this was ever tested fresh. The
-      # correct variable (confirmed live) is documented at
-      # https://github.com/adobe/S3Mock as `COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS`.
-      # A fresh `docker compose down -v && up` needs this to get a usable bucket at all.
-      COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS: ${STORAGE_BUCKET:-jurisense-dev}
+      POSTGRES_USER: ${POSTGRES_USER:-jurisense}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-jurisense}
+      POSTGRES_DB: ${POSTGRES_DB:-jurisense}
     ports:
-      - "9090:9090"
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # Enables the pgvector extension once, on first init -- see that file's own comment.
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9090/"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-jurisense} -d ${POSTGRES_DB:-jurisense}"]
       interval: 5s
       timeout: 3s
       retries: 10
+
+  # Self-hosted S3-compatible object storage for local development (ADR-008 addendum,
+  # 2026-10-15) -- built from MinIO's own official AGPLv3 source by ./minio/Dockerfile,
+  # never the gated pre-built image. Production uses the exact same image/build.
+  minio:
+    build:
+      context: ./minio
+    container_name: jurisense-minio
+    environment:
+      MINIO_ROOT_USER: ${DEV_STORAGE_ACCESS_KEY:-jurisense}
+      MINIO_ROOT_PASSWORD: ${DEV_STORAGE_SECRET_KEY:-jurisense-dev-secret}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # One-shot: creates the dev bucket, then exits 0. The OSS MinIO server has no env-var
+  # equivalent of s3mock's old auto-create-bucket behavior, so `mc mb` against the
+  # already-healthy server is the standard way to do this (same `mc` binary the `minio`
+  # image already carries, see ./minio/Dockerfile's own comment).
+  minio-init:
+    build:
+      context: ./minio
+    container_name: jurisense-minio-init
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >
+        mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" &&
+        mc mb --ignore-existing local/$$STORAGE_BUCKET
+    environment:
+      MINIO_ROOT_USER: ${DEV_STORAGE_ACCESS_KEY:-jurisense}
+      MINIO_ROOT_PASSWORD: ${DEV_STORAGE_SECRET_KEY:-jurisense-dev-secret}
+      STORAGE_BUCKET: ${STORAGE_BUCKET:-jurisense-dev}
+      # `mc` writes its config to $HOME/.mc/ -- the image's `minio` user (uid 1001) has
+      # no writable home directory otherwise (found live: "mkdir /home/minio: permission
+      # denied").
+      HOME: /tmp
+    depends_on:
+      minio:
+        condition: service_healthy
 
   # Celery worker (ADR-006): processes async tasks using the already
   # provisioned Redis as broker/result backend. No real tasks are registered
@@ -128,15 +185,21 @@ services:
     environment:
       ENVIRONMENT: ${ENVIRONMENT:-development}
       DEBUG: ${DEBUG:-true}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-jurisense}:${POSTGRES_PASSWORD:-jurisense}@postgres:5432/${POSTGRES_DB:-jurisense}
       REDIS_URL: redis://redis:6379/0
-      STORAGE_ENDPOINT_URL: http://s3mock:9090
-      STORAGE_ACCESS_KEY: ${DEV_STORAGE_ACCESS_KEY:-test}
-      STORAGE_SECRET_KEY: ${DEV_STORAGE_SECRET_KEY:-test}
+      STORAGE_ENDPOINT_URL: http://minio:9000
+      STORAGE_ACCESS_KEY: ${DEV_STORAGE_ACCESS_KEY:-jurisense}
+      STORAGE_SECRET_KEY: ${DEV_STORAGE_SECRET_KEY:-jurisense-dev-secret}
       STORAGE_BUCKET: ${STORAGE_BUCKET:-jurisense-dev}
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
-
+      minio:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
 
   # Celery Beat: the scheduler that fires periodic tasks (FEATURE-6.4 re-evaluation sweep,
   # EPIC-6 SLA expiry). It is a separate process from the worker, so a crashed scheduler
@@ -156,10 +219,11 @@ services:
     environment:
       ENVIRONMENT: ${ENVIRONMENT:-development}
       DEBUG: ${DEBUG:-true}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-jurisense}:${POSTGRES_PASSWORD:-jurisense}@postgres:5432/${POSTGRES_DB:-jurisense}
       REDIS_URL: redis://redis:6379/0
-      STORAGE_ENDPOINT_URL: http://s3mock:9090
-      STORAGE_ACCESS_KEY: ${DEV_STORAGE_ACCESS_KEY:-test}
-      STORAGE_SECRET_KEY: ${DEV_STORAGE_SECRET_KEY:-test}
+      STORAGE_ENDPOINT_URL: http://minio:9000
+      STORAGE_ACCESS_KEY: ${DEV_STORAGE_ACCESS_KEY:-jurisense}
+      STORAGE_SECRET_KEY: ${DEV_STORAGE_SECRET_KEY:-jurisense-dev-secret}
       STORAGE_BUCKET: ${STORAGE_BUCKET:-jurisense-dev}
     healthcheck:
       # The "[b]eat" pattern matches the running scheduler's command line but not this
@@ -170,10 +234,18 @@ services:
       retries: 5
       start_period: 20s
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
+      minio:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
 
 volumes:
+  postgres_data:
+  minio_data:
   redis_data:
   frontend_node_modules:
   frontend_next:

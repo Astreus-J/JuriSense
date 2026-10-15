@@ -20,11 +20,9 @@ C4Container
         Container(worker, "Celery worker(s)", "Python 3.13 / Celery", "Runs AI extraction jobs, OCR, registry lookups, notification dispatch, blockchain anchoring, approval-timeout checks. New container, not yet in docker-compose.yml — see deployment.md.")
         Container(beat, "Celery beat", "Python 3.13 / Celery beat", "Schedules periodic tasks: approval-reminder sweeps, outbox-event dispatch polling, supplier re-check cadence. New container.")
         ContainerDb(redis, "Redis", "Redis 7", "Celery broker + result backend, refresh-token revocation blocklist (ADR-011), permission-grid cache (ADR-012). Port 6379.")
-        ContainerDb(s3mock, "s3mock", "S3-compatible object storage", "Dev-only stand-in for R2 (ADR-008). New container, not yet in docker-compose.yml.")
+        ContainerDb(minio, "MinIO", "S3-compatible object storage, built from source", "Self-hosted object storage, dev AND production (ADR-008 addendum, 2026-10-15).")
+        ContainerDb(pg, "PostgreSQL", "pgvector/pgvector:pg17", "Self-hosted, dev AND production (ADR-001 addendum, 2026-10-15). pgvector extension enabled (ADR-009) via a docker-entrypoint-initdb.d init script.")
     }
-
-    ContainerDb(pg, "PostgreSQL", "Managed Postgres (Neon), external", "One physical database, one schema per environment. pgvector extension enabled (ADR-009). NOT run in Docker Compose.")
-    Container_Ext(r2, "Cloudflare R2", "S3-compatible object storage", "Production object storage (ADR-008). External.")
     Container_Ext(ai, "OpenAI / Anthropic", "LLM APIs", "External.")
     Container_Ext(anchor, "AnchoringProvider network", "Blockchain network", "External (ADR-007, provider TBD).")
 
@@ -33,8 +31,7 @@ C4Container
     Rel(fe, api, "API calls", "HTTPS/JSON, /api/*")
     Rel(api, pg, "Reads/writes", "asyncpg, TCP 5432, TLS (sslmode)")
     Rel(api, redis, "Cache, blocklist, enqueue tasks", "redis://, TCP 6379")
-    Rel(api, s3mock, "Dev: put/get objects", "S3 API, HTTPS, TCP 9090")
-    Rel(api, r2, "Prod: put/get objects", "S3 API, HTTPS 443")
+    Rel(api, minio, "put/get objects (dev and prod, ADR-008 addendum)", "S3 API, HTTPS, TCP 9000")
     Rel(worker, pg, "Reads/writes (same schema, own transactions)", "asyncpg, TCP 5432, TLS")
     Rel(worker, redis, "Dequeues tasks, writes results", "redis://, TCP 6379")
     Rel(worker, ai, "Extraction/classification calls", "HTTPS 443")
@@ -49,19 +46,21 @@ C4Container
 |---|---|---|---|---|
 | Frontend | Next.js 16, `output: "standalone"`, distroless Node 24 runtime | 3000 | Stateless | Yes (`frontend` service, `dev` target for hot reload) |
 | Backend API | FastAPI, uv-managed, Python 3.13 | 8000 | Stateless (all state in Postgres/Redis/storage) | Yes (`backend` service, `dev` target) |
-| Celery worker | Same image as backend, different entrypoint (`celery -A app.core.celery_app worker`) | none exposed | Stateless | **No — to be added** (ADR-006) |
-| Celery beat | Same image as backend, `celery -A app.core.celery_app beat` | none exposed | Stateless (schedule persisted in Redis/DB) | **No — to be added** (ADR-006) |
+| Celery worker | Same image as backend, different entrypoint (`celery -A app.core.celery_app worker`) | none exposed | Stateless | Yes (`celery-worker` service) |
+| Celery beat | Same image as backend, `celery -A app.core.celery_app beat` | none exposed | Stateless (schedule persisted in Redis/DB) | Yes (`celery-beat` service) |
 | Redis | `redis:7-alpine` | 6379 | Stateful (`redis_data` volume) | Yes, with healthcheck (`condition: service_healthy`) |
-| s3mock (dev only) | `adobe/s3mock` | 9090 | Stateful (named volume) | **No — to be added** (ADR-008) |
+| PostgreSQL | `pgvector/pgvector:pg17` | 5432 | Stateful (`postgres_data` volume) | Yes (`postgres` service, ADR-001 addendum 2026-10-15 -- self-hosted, dev and production) |
+| MinIO | Built from source (`./minio/Dockerfile`), dev and production | 9000 (S3 API), 9001 (console) | Stateful (`minio_data` volume) | Yes (`minio`/`minio-init` services, ADR-008 addendum 2026-10-15) |
 
 External (not containers on this VPS):
 
 | System | Tech | Reached via | State |
 |---|---|---|---|
-| PostgreSQL | Neon managed Postgres | `DATABASE_URL` in `backend/.env` (gitignored), normalized libpq→asyncpg by `app/core/config.py` | Stateful, externally managed |
-| Cloudflare R2 | S3-compatible object storage | S3 API, HTTPS | Stateful, externally managed |
-| OpenAI / Anthropic | LLM APIs | HTTPS REST, API keys from environment | N/A |
+| OpenAI / Anthropic (interim: OpenRouter) | LLM APIs | HTTPS REST, API keys from environment | N/A |
 | AnchoringProvider network | Blockchain (provider TBD, ADR-007) | Provider SDK/RPC, HTTPS | N/A (append-only ledger, not ours to manage) |
+
+PostgreSQL and object storage were external (Neon, Cloudflare R2) until the 2026-10-15 ADR-001/
+ADR-008 addenda moved both to self-hosted containers above -- see those addenda for why.
 
 ## 3. Backend API vs. Celery worker: why the same image, two entrypoints
 
@@ -72,10 +71,9 @@ app.core.celery_app worker --loglevel=info` / `celery -A app.core.celery_app bea
 Dockerfile, no separate dependency set. This keeps the two processes guaranteed to run identical
 application code and avoids drift between "what the API imports" and "what the worker imports"; both
 import all 8 context packages, since a Celery task dispatched by `Contracts & Documents` and one
-dispatched by `Evidence & Audit` both need to run in the same worker pool. `docker-compose.yml`
-should add both as new services pointing at `build: { context: ./backend, target: dev }` (dev) /
-the `runner` stage (prod), sharing the `backend/.env` env file and the same `documents_data` /
-future s3mock volume access as the `backend` service.
+dispatched by `Evidence & Audit` both need to run in the same worker pool. Both services build
+from `{ context: ./backend, target: dev }` (dev, `docker-compose.yml`) / the `runner` stage
+(production, `docker-compose.prod.yml`), sharing the `backend/.env` env file like `backend` does.
 
 ## 4. Protocols and ports, end to end
 
@@ -83,24 +81,22 @@ future s3mock volume access as the `backend` service.
 |---|---|---|---|
 | Browser → Frontend | HTTPS | 443 (Cloudflare) → 3000 (container) | Cloudflare terminates TLS at the edge in production; see `deployment.md` |
 | Frontend → Backend API | HTTPS/REST, JSON | 443 → 8000 | `NEXT_PUBLIC_API_URL`, prefixed `/api`; CORS restricted to `CORS_ORIGINS` (`app/core/config.py`) |
-| Backend API / Worker → PostgreSQL | PostgreSQL wire protocol via `asyncpg` | 5432 | TLS via `ssl` param (normalized from libpq `sslmode` — see `app/core/config.py::_normalize_database_url`); Neon's `-pooler` endpoints get `prepared_statement_cache_size=0` |
+| Backend API / Worker → PostgreSQL | PostgreSQL wire protocol via `asyncpg` | 5432 | TLS via `ssl` param, normalized from libpq `sslmode` (`app/core/config.py::_normalize_database_url`) -- a no-op against the self-hosted instance's plain URL, kept for any future managed-Postgres use |
 | Backend API / Worker / Beat → Redis | RESP (`redis://`) | 6379 | Broker + result backend (Celery), revocation blocklist, permission-grid cache |
-| Backend API / Worker → Object storage | S3 API over HTTPS | 9090 (s3mock dev) / 443 (R2 prod) | Same abstraction, different endpoint/credentials per environment (ADR-008) |
+| Backend API / Worker → Object storage | S3 API over HTTPS | 9000 | Self-hosted MinIO, same endpoint/credentials shape in dev and production (ADR-008 addendum) |
 | Worker → AI providers | HTTPS/REST | 443 | Long-running extraction; Backend API also calls AI providers directly for small, low-latency tasks (see `ai-architecture.md` §2) |
 | Worker → AnchoringProvider | HTTPS or chain RPC, provider-specific | 443 (typical) | Only from `Evidence & Audit`'s Celery tasks, never from the request/response cycle (`blockchain-architecture.md`) |
 | Public verifier → Backend API | HTTPS/REST | 443 → 8000 | Unauthenticated `GET /api/public/verify/{...}` route only — see `security-architecture.md` §5 |
 
-## 5. What changes vs. today's `docker-compose.yml`
+## 5. What changed vs. the original `docker-compose.yml` (historical, now executed)
 
-Today's file runs exactly `frontend`, `backend`, `redis` — no Postgres (external Neon, unchanged by
-the pivot), no worker, no object storage. To reach the target state:
+This section originally described a target state the repo hadn't reached yet (no worker/beat, no
+object storage, external Neon). All of it has since landed: `celery-worker`/`celery-beat` services
+exist; object storage is self-hosted MinIO, not s3mock, in both dev and production (ADR-008
+addendum, 2026-10-15); PostgreSQL is self-hosted too (ADR-001 addendum, same date). The current
+`docker-compose.yml` (dev) and `docker-compose.prod.yml` (production overlay) are the source of
+truth for the actual service list — kept here only as a record of the sequence, not as a to-do.
 
-1. Add a `worker` service (Celery worker) and a `beat` service (Celery beat), both built from
-   `./backend` like `backend` is, sharing `backend/.env` and adding `REDIS_URL` the same way.
-2. Add a `s3mock` service for local dev object storage (ADR-008), exposing 9090, and a
-   `STORAGE_*` env block on `backend`/`worker` pointing at it in dev and at R2 credentials in prod.
-3. The existing `documents_data` volume (`/dados/empresas`, the pre-pivot VPS-filesystem model) is
-   superseded by object storage for new writes; it is not removed outright until the migration item
-   in `data-architecture.md` §4 is executed.
-
-No changes are needed to the `frontend` service's shape.
+The pre-pivot `documents_data`/`/dados/empresas` VPS-filesystem volume's removal (superseded by
+object storage) is still tracked separately in `data-architecture.md` §4 — unrelated to the
+infrastructure-hosting changes above.

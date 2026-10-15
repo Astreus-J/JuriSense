@@ -1,0 +1,101 @@
+# JuriSense PRODUCTION override -- layered on top of docker-compose.yml, never replacing
+# it (that file keeps working exactly as-is for local development):
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Scope of THIS file (2026-10-15): production-mode builds (the `runner`/distroless stage
+# of each Dockerfile, not `dev`) and self-hosted PostgreSQL+pgvector / MinIO for
+# production (ADR-001 addendum and ADR-008 addendum, both 2026-10-15 -- no more Neon, no
+# more Cloudflare R2). Internal-only services (postgres, redis, minio) publish no host
+# ports here, per Plane #146/#147's own stated intent ("no host ports published for
+# Redis... no direct host exposure for backend/frontend/Celery").
+#
+# Deliberately NOT in scope of this file yet (separate, still-open Plane tickets under
+# the Production Deployment EPIC, #145-178): a reverse proxy / TLS termination (#150,
+# #151) -- so `backend`/`frontend` still publish host ports below, until that lands and
+# takes over as the only internet-reachable service; secrets-management hardening
+# (#154-156); a dedicated one-shot migration step (#166) -- run migrations manually
+# before first boot: `docker compose -f docker-compose.yml -f docker-compose.prod.yml
+# run --rm backend alembic upgrade head`; healthchecks-for-every-service sweep (#163/
+# #164); backup/restore (#167-170); VPS/network hardening (#171-173); CI validation for
+# infra changes (#174/#175); ADR-018 + operator docs (#176-178).
+#
+# Secrets: provide via `.env.production` (gitignored, same pattern as backend/.env) --
+# `docker compose --env-file .env.production -f docker-compose.yml -f
+# docker-compose.prod.yml up -d`. No defaults are given below for real credentials
+# (POSTGRES_PASSWORD, DEV_STORAGE_SECRET_KEY's production equivalent) -- an unset value
+# surfaces as an obviously broken container rather than silently reusing a dev default.
+
+services:
+  frontend:
+    build:
+      target: runner
+    volumes: !reset []
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+      API_URL: ${API_URL:-http://backend:8000/api}
+
+  backend:
+    build:
+      target: runner
+    # No `uv sync`/`--reload` (the runner image's .venv is already complete and
+    # immutable) and no inline `alembic upgrade head` -- see the one-shot migration
+    # note above; running migrations from every replica's own startup command is not
+    # the production pattern (#166).
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    volumes: !reset []
+    environment:
+      ENVIRONMENT: production
+      DEBUG: "false"
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      STORAGE_ENDPOINT_URL: http://minio:9000
+      STORAGE_ACCESS_KEY: ${PROD_STORAGE_ACCESS_KEY}
+      STORAGE_SECRET_KEY: ${PROD_STORAGE_SECRET_KEY}
+
+  postgres:
+    ports: !reset []
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+
+  minio:
+    ports: !reset []
+    environment:
+      MINIO_ROOT_USER: ${PROD_STORAGE_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${PROD_STORAGE_SECRET_KEY}
+
+  minio-init:
+    environment:
+      MINIO_ROOT_USER: ${PROD_STORAGE_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${PROD_STORAGE_SECRET_KEY}
+      STORAGE_BUCKET: ${STORAGE_BUCKET}
+      HOME: /tmp
+
+  redis:
+    ports: !reset []
+
+  celery-worker:
+    build:
+      target: runner
+    command: celery -A app.core.celery_app worker --loglevel=info
+    volumes: !reset []
+    environment:
+      ENVIRONMENT: production
+      DEBUG: "false"
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      STORAGE_ENDPOINT_URL: http://minio:9000
+      STORAGE_ACCESS_KEY: ${PROD_STORAGE_ACCESS_KEY}
+      STORAGE_SECRET_KEY: ${PROD_STORAGE_SECRET_KEY}
+
+  celery-beat:
+    build:
+      target: runner
+    command: celery -A app.core.celery_app beat --loglevel=info --schedule=/tmp/celerybeat-schedule
+    volumes: !reset []
+    environment:
+      ENVIRONMENT: production
+      DEBUG: "false"
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      STORAGE_ENDPOINT_URL: http://minio:9000
+      STORAGE_ACCESS_KEY: ${PROD_STORAGE_ACCESS_KEY}
+      STORAGE_SECRET_KEY: ${PROD_STORAGE_SECRET_KEY}

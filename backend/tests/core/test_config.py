@@ -42,7 +42,7 @@ def test_production_refuses_short_jwt_secret() -> None:
 
 def test_production_refuses_dev_storage_credentials() -> None:
     with pytest.raises(ValidationError, match="STORAGE_ACCESS_KEY"):
-        Settings(**_prod_kwargs(storage_access_key="test"))
+        Settings(**_prod_kwargs(storage_access_key="jurisense"))
 
 
 def test_production_refuses_missing_smtp_host() -> None:
