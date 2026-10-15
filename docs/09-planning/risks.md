@@ -82,6 +82,16 @@ context, not a separate list.
   integration-effort failure. The fallback below is accordingly the project's **active default
   today**, not a hypothetical. See `ADR-007` and `docs/06-blockchain/anchoring-providers.md` §3 for
   the full findings.
+- **Update (2026-10-15)**: both gaps this risk's mitigation left open are now closed. (1) The
+  Constellation DED credentials (live-verified 2026-10-12) were switched in as the active
+  `ANCHORING_PROVIDER` — the fallback below is no longer the default; verified live with a real
+  anchor submitted to the actual Constellation DED API. (2) The fallback's own "publicly,
+  independently verifiable" claim is now true end to end, not just locally honest: its git
+  history was pushed, with explicit user authorization, to `https://github.com/Astreus-J/
+  jurisense-transparency-log` (public, anonymously clonable, verified live) — see the full
+  account in `app/evidence/infrastructure/anchoring/transparency_log_provider.py`'s own
+  docstring. Re-pushing as new fallback anchors accumulate is a manual operational step, not
+  automated.
 - **Original description**: `ADR-007` is "Proposed — pending technical spike (Phase 8)." All three
   candidate `AnchoringProvider` adapters — Constellation Network, a generic EVM L2 testnet,
   ICP/Caffeine AI — are unvalidated against this codebase today, and Phase 8 is the last phase

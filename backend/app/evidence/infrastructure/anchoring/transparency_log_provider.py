@@ -1,8 +1,10 @@
 """The last-resort `AnchoringProvider` fallback (docs/09-planning/risks.md risk 4): "a trivial
 hash + timestamp signed by JuriSense's own key, published to a public, git-backed transparency
-log." Active as the project's default today (`Settings.anchoring_provider`) because Constellation
-DED credentials are not self-service -- see `docs/06-blockchain/anchoring-providers.md`'s spike
-findings -- not because this is the preferred long-term choice.
+log." No longer the active default as of 2026-10-15 (`Settings.anchoring_provider` is now
+`constellation_digital_evidence`, all 4 credentials live-verified) -- this remains the fallback
+`get_provider_by_name` resolves to for any anchor already anchored under it, and the honest
+backstop if Constellation DED ever becomes unreachable. See `docs/06-blockchain/anchoring-
+providers.md`'s spike findings for why this was ever the default in the first place.
 
 ## Non-negotiable labeling requirement (risks.md risk 4)
 `provider_name` is `"transparency_log"`, never anything that could be mistaken for a real chain.
@@ -15,13 +17,18 @@ the first line of defense against it being presented as something it is not.
 This module performs real, local `git` operations against `repo_path` -- `git init` (once),
 appending a line to `entries.jsonl`, and a real commit per anchor, so the log genuinely has the
 tamper-evidence property a git history provides (a rewritten past commit changes every
-descendant's hash). What this module does NOT do is push `repo_path` to a public remote -- doing
-that is an outward-facing action (creating or writing to a publicly reachable repository) this
-module's own test suite has no business triggering on every run, and is the one step the
-spike's report flags as needing the user's explicit go-ahead before this fallback's "public,
-third-party-checkable" claim is actually true end to end. Until that push exists, this is an
-honest, tamper-evident LOCAL log -- `provider_name`'s fallback labeling already covers this gap in
-the product's own claims, so no caller is misled either way.
+descendant's hash). This module itself still never pushes `repo_path` to a remote -- that stays
+an outward-facing action this module's own test suite has no business triggering on every run --
+but the push this docstring used to say was missing now exists, done once manually (2026-10-15,
+explicit user authorization, Plane #207): the real `repo_path` content (git history,
+`entries.jsonl`, `PUBLIC_KEY.txt`) was pushed to `https://github.com/Astreus-J/jurisense-
+transparency-log` (public, anonymously clonable -- verified live), and that repo's `origin`
+remote is configured on the running `repo_path` for future manual/periodic re-pushes as new
+anchors accumulate. This is an **operational step, not automated** -- nothing re-pushes on a
+schedule; re-run `git push` from `repo_path` (inside the celery-worker container, where `git` and
+the real repo live) whenever the public mirror needs to catch up, e.g. before a demo (checklist
+3.4) or submission. With this, the "public, third-party-checkable" claim is true end to end, not
+just locally honest.
 
 ## Key management
 `signing_key_path` is a single hex-encoded Ed25519 private key, generated once on first use and

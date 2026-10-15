@@ -139,11 +139,14 @@ deadline, and the one the project ships with today while Plane #198 is open.
 
 This gives the tamper-evidence property a git history provides (rewriting a past commit changes
 every descendant's hash) and a verifiable signature, but **not** third-party, consensus-backed
-finality — the repository must still be pushed to a public remote for "anyone can check this
-independently" to be concretely true, which this backend deliberately does not do on its own (an
-outward-facing action, not a per-request side effect). `provider == "transparency_log"` on every
-`BlockchainAnchor` is the non-negotiable signal every caller (Decision Passport, public
-verification page) must render as a labeled fallback, never as a blockchain anchor.
+finality — the repository still needed to be pushed to a public remote for "anyone can check this
+independently" to be concretely true, which this backend deliberately never does on its own (an
+outward-facing action, not a per-request side effect). That push now exists (2026-10-15, explicit
+user authorization): `https://github.com/Astreus-J/jurisense-transparency-log`, public and
+anonymously clonable, verified live. Re-pushing as new fallback anchors accumulate stays a manual
+operational step. `provider == "transparency_log"` on every `BlockchainAnchor` is the
+non-negotiable signal every caller (Decision Passport, public verification page) must render as a
+labeled fallback, never as a blockchain anchor.
 
 ## Path C — ICP / Caffeine AI
 

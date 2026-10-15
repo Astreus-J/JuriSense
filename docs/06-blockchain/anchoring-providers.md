@@ -89,14 +89,17 @@ submission (`POST /fingerprints`) needs an `X-API-Key` plus an `org_id`/`tenant_
 issues directly — no self-service signup exists. This is tracked as Plane #198 (request through
 the Legal Hack 2026 sponsor channel), not as further spike work.
 
-**Active default until #198 resolves: the transparency-log fallback**
-(`docs/09-planning/risks.md` risk 4) — `app.evidence.infrastructure.anchoring.
-transparency_log_provider.TransparencyLogAnchoringProvider`. Fully implemented and tested (real
-local `git` operations, Ed25519-signed entries), and the one the project ships with today
-(`Settings.anchoring_provider` defaults to `"transparency_log"`). Every caller renders this as a
-labeled fallback, never as a blockchain anchor — see that module's own docstring for exactly what
-"public" still requires (pushing its repo to a public remote, a deliberately separate,
-outward-facing step this backend does not perform on its own).
+**The transparency-log fallback** (`docs/09-planning/risks.md` risk 4) — `app.evidence.
+infrastructure.anchoring.transparency_log_provider.TransparencyLogAnchoringProvider`. Fully
+implemented and tested (real local `git` operations, Ed25519-signed entries). Was the project's
+active default until #198 resolved (2026-10-12: all 4 Constellation DED credentials live-verified)
+and `ANCHORING_PROVIDER` was switched to `constellation_digital_evidence` (2026-10-15) — this
+provider now only serves already-anchored entries and acts as a backstop if Constellation DED
+becomes unreachable. Every caller renders this as a labeled fallback, never as a blockchain anchor
+regardless of whether it's active. Its own public-pushing gap (pushing `repo_path` to a public
+remote, a deliberately separate, outward-facing step this backend does not perform on its own) is
+also resolved (2026-10-15, explicit user authorization): see that module's own docstring for the
+real public URL and why re-pushing stays a manual operational step, not automated.
 
 **The EVM L2 and ICP/Caffeine AI candidates were not built.** The spike's own order (Constellation
 first) did not need to fall back to them — Constellation's integration effort was low, and its
