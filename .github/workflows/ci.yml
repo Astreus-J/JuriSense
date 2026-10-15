@@ -14,16 +14,21 @@ jobs:
     # Postgres and Redis are faked in-process by the test suite (sqlite+aiosqlite,
     # fakeredis -- see tests/conftest.py), so neither needs a service here. Object
     # storage is not: contract-upload tests make real boto3 calls against
-    # `settings.storage_endpoint_url` (default `http://localhost:9090`, same as
-    # docker-compose.yml's `s3mock` service) -- without this service, every test that
-    # touches storage fails with `EndpointConnectionError` (confirmed live: 29 failures,
-    # GitHub Actions run 36800916271, 2026-10-01, after this gap went unnoticed through
-    # several pushes once EPIC-3 added storage-backed contract tests).
+    # `settings.storage_endpoint_url` (default `http://localhost:9000`, ADR-008's
+    # 2026-10-15 addendum moved dev/prod to self-hosted MinIO, S3 API port 9000) --
+    # without a service listening there, every test that touches storage fails/times out
+    # with `EndpointConnectionError` (confirmed live: 29 failures, GitHub Actions run
+    # 36800916271, 2026-10-01, the first time this gap went unnoticed; found again live
+    # 2026-10-15 when this port changed and the service below didn't, run 38745891727).
+    # `adobe/s3mock` stays CI's own test backend regardless of the dev/prod decision --
+    # CI only needs *some* working S3-compatible endpoint on the port the app defaults
+    # to, not the real MinIO build (which would need a registry-hosted image to run as a
+    # GitHub Actions service container, not worth it just for this).
     services:
       s3mock:
         image: adobe/s3mock:latest
         ports:
-          - 9090:9090
+          - 9000:9090
         env:
           # Live-verified (2026-10-01): the env var docker-compose.yml used
           # (`initialBuckets`) does NOT create the bucket on this image's current
