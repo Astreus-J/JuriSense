@@ -2,12 +2,21 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, LogOut, User } from "lucide-react";
+import { Check, ChevronDown, LogOut, Monitor, Moon, Sun } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 import { cn } from "@/lib/cn";
 import { formatRoleLabel } from "@/lib/auth/types";
 import type { Role } from "@/lib/auth/types";
+import type { ThemePreference } from "@/lib/theme";
 import { useDropdownMenu } from "./useDropdownMenu";
+import { useThemePreference } from "./useThemePreference";
+
+const THEME_OPTIONS: Array<{ value: ThemePreference; label: string; icon: LucideIcon }> = [
+  { value: "system", label: "System", icon: Monitor },
+  { value: "light", label: "Light", icon: Sun },
+  { value: "dark", label: "Dark", icon: Moon },
+];
 
 interface UserMenuProps {
   fullName: string;
@@ -20,6 +29,7 @@ export function UserMenu({ fullName, email, role }: UserMenuProps) {
   const { open, setOpen, containerRef, triggerRef, registerItem, handleItemKeyDown } =
     useDropdownMenu();
   const [signingOut, setSigningOut] = useState(false);
+  const [theme, setTheme] = useThemePreference();
 
   async function handleSignOut() {
     setSigningOut(true);
@@ -46,49 +56,72 @@ export function UserMenu({ fullName, email, role }: UserMenuProps) {
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
         className={cn(
-          "flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm",
+          "flex items-center gap-2 rounded-md px-2 py-1 text-left text-sm",
           "hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
         )}
       >
         <span
           aria-hidden="true"
-          className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground"
+          className="flex size-7 shrink-0 items-center justify-center rounded-md bg-foreground text-xs font-semibold text-background"
         >
           {initials(fullName)}
         </span>
         <span className="hidden min-w-0 flex-col leading-tight sm:flex">
-          <span className="truncate font-medium text-foreground">{fullName}</span>
+          <span className="truncate text-[14px] font-medium text-foreground">{fullName}</span>
           <span className="truncate text-xs text-foreground-muted">{formatRoleLabel(role)}</span>
         </span>
-        <ChevronDown className="size-4 shrink-0 text-foreground-muted" aria-hidden="true" />
+        <span className="sr-only sm:hidden">{fullName}, account menu</span>
+        <ChevronDown className="size-3.5 shrink-0 text-foreground-muted" aria-hidden="true" />
       </button>
 
       {open && (
-        <ul
+        <div
           role="menu"
-          aria-label="User menu"
-          className="absolute right-0 z-20 mt-1 w-56 rounded-md border border-border bg-surface-raised py-1 shadow-lg"
+          aria-label="Account"
+          className="absolute right-0 z-30 mt-1 w-60 rounded-md border border-border bg-surface-raised py-1 shadow-lg"
         >
-          <li className="flex items-center gap-2 px-3 py-2 text-xs text-foreground-muted" role="none">
-            <User className="size-3.5 shrink-0" aria-hidden="true" />
-            <span className="truncate">{email}</span>
-          </li>
-          <li role="none" className="my-1 border-t border-border" />
-          <li role="none">
-            <button
-              ref={registerItem(0)}
-              role="menuitem"
-              type="button"
-              onKeyDown={handleItemKeyDown}
-              onClick={handleSignOut}
-              disabled={signingOut}
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-danger hover:bg-danger-surface focus-visible:outline-none focus-visible:bg-danger-surface disabled:opacity-60"
-            >
-              <LogOut className="size-4 shrink-0" aria-hidden="true" />
-              {signingOut ? "Signing out…" : "Sign out"}
-            </button>
-          </li>
-        </ul>
+          <div className="px-3 py-2" role="none">
+            <p className="truncate text-sm font-medium text-foreground">{fullName}</p>
+            <p className="truncate text-xs text-foreground-muted">{email}</p>
+          </div>
+          <div role="separator" className="my-1 border-t border-border" />
+          <div role="group" aria-label="Theme">
+            <p className="px-3 pb-1 pt-1.5 text-[12px] font-medium uppercase tracking-wider text-foreground-muted" aria-hidden="true">
+              Theme
+            </p>
+            {THEME_OPTIONS.map((option, index) => (
+              <button
+                key={option.value}
+                ref={registerItem(index)}
+                role="menuitemradio"
+                aria-checked={theme === option.value}
+                type="button"
+                onKeyDown={handleItemKeyDown}
+                onClick={() => setTheme(option.value)}
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-foreground hover:bg-surface-muted focus-visible:outline-none focus-visible:bg-surface-muted"
+              >
+                <option.icon className="size-4 shrink-0 text-foreground-muted" aria-hidden="true" />
+                <span className="flex-1">{option.label}</span>
+                {theme === option.value && (
+                  <Check className="size-4 shrink-0 text-primary" aria-hidden="true" />
+                )}
+              </button>
+            ))}
+          </div>
+          <div role="separator" className="my-1 border-t border-border" />
+          <button
+            ref={registerItem(THEME_OPTIONS.length)}
+            role="menuitem"
+            type="button"
+            onKeyDown={handleItemKeyDown}
+            onClick={handleSignOut}
+            disabled={signingOut}
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-danger hover:bg-danger-surface focus-visible:outline-none focus-visible:bg-danger-surface disabled:opacity-60"
+          >
+            <LogOut className="size-4 shrink-0" aria-hidden="true" />
+            {signingOut ? "Signing out…" : "Sign out"}
+          </button>
+        </div>
       )}
     </div>
   );

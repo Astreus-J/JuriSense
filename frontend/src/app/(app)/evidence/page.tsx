@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ExternalLink } from "lucide-react";
 
+import { PageHeader } from "@/components/ui/PageHeader";
 import { DecisionLookupForm } from "@/components/evidence/DecisionLookupForm";
 
 export const metadata: Metadata = { title: "Evidence & Audit — JuriSense Gate" };
@@ -18,25 +19,30 @@ export const metadata: Metadata = { title: "Evidence & Audit — JuriSense Gate"
 export default function EvidencePage() {
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Evidence & Audit</h1>
-        <p className="mt-1 text-sm text-foreground-muted">
-          Look up the complete, reproducible &quot;why was this approved?&quot; record for any
-          decision.
-        </p>
-      </div>
-      <div className="rounded-xl border border-border bg-surface p-6">
+      <PageHeader
+        title="Evidence & Audit"
+        description='Look up the complete, reproducible "why was this approved?" record for any decision.'
+      />
+      <section aria-labelledby="decision-lookup-title" className="max-w-2xl space-y-3">
+        <h2 id="decision-lookup-title" className="text-base font-semibold text-foreground">
+          Find a Decision Passport
+        </h2>
         <DecisionLookupForm />
-      </div>
-      <Link
-        href="/verify"
-        target="_blank"
-        rel="noreferrer"
-        className="inline-flex items-center gap-1.5 text-sm font-medium text-foreground-muted hover:text-foreground"
-      >
-        <ExternalLink className="size-4" aria-hidden="true" />
-        Open the public verification page (no login required, shareable)
-      </Link>
+      </section>
+      <p className="border-t border-border pt-4">
+        <Link
+          href="/verify"
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+        >
+          <ExternalLink className="size-4" aria-hidden="true" />
+          Open the public verification page
+        </Link>
+        <span className="ml-2 text-sm text-foreground-muted">
+          No login required; shareable with external auditors.
+        </span>
+      </p>
     </div>
   );
 }

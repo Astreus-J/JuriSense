@@ -34,24 +34,20 @@ export function OrganizationPlanPanel({ organization }: OrganizationPlanPanelPro
   ];
 
   return (
-    <div className="rounded-xl border border-border bg-surface p-6">
-      <div>
-        <h2 className="text-lg font-semibold text-foreground">{organization.name}</h2>
-        <p className="mt-1 text-sm text-foreground-muted">
-          {PLAN_LABELS[organization.plan]} plan
-        </p>
+    <section aria-label="Plan and usage" className="space-y-3">
+      <div className="flex flex-wrap items-baseline gap-x-3">
+        <h2 className="text-base font-semibold text-foreground">{organization.name}</h2>
+        <p className="text-sm text-foreground-muted">{PLAN_LABELS[organization.plan]} plan</p>
       </div>
 
-      <dl className="mt-6 grid grid-cols-2 gap-6 sm:grid-cols-4">
+      <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-4">
         {usageItems.map((item) => (
-          <div key={item.label}>
-            <dt className="text-xs font-medium uppercase tracking-wide text-foreground-muted">
-              {item.label}
-            </dt>
-            <dd className="mt-1 text-xl font-semibold text-foreground">{item.value}</dd>
+          <div key={item.label} className="bg-surface px-4 py-3">
+            <dt className="text-xs text-foreground-muted">{item.label}</dt>
+            <dd className="mt-0.5 text-lg font-semibold tabular-nums text-foreground">{item.value}</dd>
           </div>
         ))}
       </dl>
-    </div>
+    </section>
   );
 }

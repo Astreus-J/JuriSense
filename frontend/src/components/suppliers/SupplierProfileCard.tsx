@@ -1,3 +1,6 @@
+import { Hourglass } from "lucide-react";
+
+import { EmptyState } from "@/components/ui/EmptyState";
 import { cn } from "@/lib/cn";
 import {
   ADDRESS_FLAG_LABELS,
@@ -33,8 +36,8 @@ function ProfileField({
 
   return (
     <div>
-      <dt className="text-xs font-medium uppercase tracking-wide text-foreground-muted">{label}</dt>
-      <dd className={cn("mt-1 text-sm font-medium", toneClass)}>{value}</dd>
+      <dt className="text-xs text-foreground-muted">{label}</dt>
+      <dd className={cn("mt-0.5 text-sm font-medium", toneClass)}>{value}</dd>
     </div>
   );
 }
@@ -49,22 +52,25 @@ function ProfileField({
 export function SupplierProfileCard({ profile }: SupplierProfileCardProps) {
   if (!profile) {
     return (
-      <section className="rounded-xl border border-dashed border-border bg-surface px-6 py-10 text-center">
-        <p className="text-sm font-medium text-foreground">Verification in progress</p>
-        <p className="mx-auto mt-1 max-w-sm text-sm text-foreground-muted">
-          This supplier hasn&apos;t completed a verification check yet. Its profile will appear
-          here once the check finishes — usually within a few minutes. Use &quot;Run
-          verification check&quot; below if it has been longer than that.
-        </p>
-      </section>
+      <EmptyState
+        icon={Hourglass}
+        title="Verification in progress"
+        description={
+          <>
+            This supplier hasn&apos;t completed a verification check yet. Its profile will
+            appear here once the check finishes, usually within a few minutes. Use
+            &quot;Run verification check&quot; above if it has been longer than that.
+          </>
+        }
+      />
     );
   }
 
   return (
-    <section className="space-y-4 rounded-xl border border-border bg-surface p-6">
-      <h2 className="text-sm font-semibold text-foreground">Verification profile</h2>
+    <section className="space-y-4">
+      <h2 className="text-base font-semibold text-foreground">Verification profile</h2>
 
-      <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <dl className="grid gap-x-6 gap-y-4 border-y border-border py-4 sm:grid-cols-2 lg:grid-cols-4">
         <ProfileField label="Registry status" value={REGISTRY_STATUS_LABELS[profile.registryStatus]} />
         <ProfileField
           label="Sanctions check"
@@ -90,7 +96,7 @@ export function SupplierProfileCard({ profile }: SupplierProfileCardProps) {
       </dl>
 
       {profile.sanctionsHit && profile.sanctionsDetail.length > 0 && (
-        <div className="space-y-2 rounded-lg border border-danger-border bg-danger-surface p-4">
+        <div className="space-y-2 rounded-md border border-danger-border bg-danger-surface p-3">
           <p className="text-sm font-semibold text-danger">Sanctions matches</p>
           <ul className="space-y-2">
             {profile.sanctionsDetail.map((entry, index) => (
@@ -110,7 +116,7 @@ export function SupplierProfileCard({ profile }: SupplierProfileCardProps) {
         </div>
       )}
 
-      <details className="rounded-lg border border-border bg-surface-muted p-4 text-sm">
+      <details className="rounded-md border border-border p-3 text-sm">
         <summary className="cursor-pointer font-medium text-foreground">
           Raw registry data
         </summary>

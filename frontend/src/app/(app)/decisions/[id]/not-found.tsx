@@ -2,6 +2,7 @@ import Link from "next/link";
 import { SearchX } from "lucide-react";
 
 import { buttonClasses } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 /**
  * Rendered when `getDecisionPassport()` 404s in `[id]/page.tsx` (via `notFound()`) — a
@@ -10,18 +11,17 @@ import { buttonClasses } from "@/components/ui/Button";
  */
 export default function DecisionPassportNotFound() {
   return (
-    <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border bg-surface px-6 py-16 text-center">
-      <div className="flex size-12 items-center justify-center rounded-full bg-surface-muted">
-        <SearchX className="size-6 text-foreground-muted" aria-hidden="true" />
-      </div>
-      <h1 className="text-lg font-semibold text-foreground">Decision not found</h1>
-      <p className="max-w-sm text-sm text-foreground-muted">
-        This decision doesn&apos;t exist, isn&apos;t part of your organization, or has no evidence
-        package yet.
-      </p>
-      <Link href="/evidence" className={buttonClasses("secondary", "mt-1")}>
-        Back to Evidence & Audit
-      </Link>
-    </div>
+    <EmptyState
+      as="h1"
+      icon={SearchX}
+      title="Decision not found"
+      description={<>This decision doesn&apos;t exist, isn&apos;t part of your organization, or has no evidence
+        package yet.</>}
+      action={
+        <Link href="/evidence" className={buttonClasses("secondary")}>
+          Back to Evidence & Audit
+        </Link>
+      }
+    />
   );
 }

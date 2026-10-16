@@ -1,7 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
-
+import { PageHeader } from "@/components/ui/PageHeader";
 import { CreatePolicyForm } from "@/components/policies/CreatePolicyForm";
 import { requireSession } from "@/lib/auth/session";
 
@@ -23,23 +21,12 @@ export default async function NewPolicyPage() {
   await requireSession();
 
   return (
-    <div className="max-w-lg space-y-6">
-      <Link
-        href="/policies"
-        className="inline-flex items-center gap-1 text-sm font-medium text-foreground-muted hover:text-foreground"
-      >
-        <ArrowLeft className="size-4" aria-hidden="true" />
-        Back to policies
-      </Link>
-
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Create a policy</h1>
-        <p className="mt-1 text-sm text-foreground-muted">
-          JuriSense creates its first draft version automatically — you&apos;ll add rules
-          to it next, then publish when it&apos;s ready to apply to compliance reviews.
-        </p>
-      </div>
-
+    <div className="max-w-lg space-y-5">
+      <PageHeader
+        breadcrumbs={[{ label: "Policies", href: "/policies" }, { label: "Create policy" }]}
+        title="Create a policy"
+        description="JuriSense creates its first draft version automatically. You'll add rules to it next, then publish when it's ready to apply to compliance reviews."
+      />
       <CreatePolicyForm />
     </div>
   );

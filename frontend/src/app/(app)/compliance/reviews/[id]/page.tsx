@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
 
 import { Alert } from "@/components/ui/Alert";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { ComplianceReviewResults } from "@/components/compliance/ComplianceReviewResults";
 import { ApiError } from "@/lib/auth/backend";
 import { readAccessToken } from "@/lib/auth/cookies";
@@ -37,8 +36,8 @@ export default async function ComplianceReviewPage({
 
   if (!permissions.canRead) {
     return (
-      <div className="space-y-6">
-        <BackLink contractId={contractId} />
+      <div className="space-y-5">
+        <PageHeader title="Compliance review" breadcrumbs={breadcrumbsFor(contractId)} />
         <Alert tone="danger" title="You don't have access to compliance reviews.">
           Ask an administrator to grant you the &quot;compliance reviews&quot; read permission
           for this organization.
@@ -56,8 +55,8 @@ export default async function ComplianceReviewPage({
     if (error instanceof ApiError && (error.status === 404 || error.status === 400)) notFound();
     if (error instanceof ApiError && error.status === 403) {
       return (
-        <div className="space-y-6">
-          <BackLink contractId={contractId} />
+        <div className="space-y-5">
+          <PageHeader title="Compliance review" breadcrumbs={breadcrumbsFor(contractId)} />
           <Alert tone="danger" title="You don't have access to this compliance review.">
             Ask an administrator to grant you the &quot;compliance reviews&quot; read
             permission for this organization.
@@ -70,24 +69,22 @@ export default async function ComplianceReviewPage({
 
   return (
     <div className="space-y-6">
-      <BackLink contractId={contractId} />
-      <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-        Compliance review
-      </h1>
+      <PageHeader
+        title="Compliance review"
+        description="The decision, the risks behind it, and every rule that was evaluated, each with its evidence."
+        breadcrumbs={breadcrumbsFor(contractId)}
+      />
       <ComplianceReviewResults detail={detail} />
     </div>
   );
 }
 
-function BackLink({ contractId }: { contractId?: string }) {
-  if (!contractId) return null;
-  return (
-    <Link
-      href={`/contracts/${contractId}`}
-      className="inline-flex items-center gap-1 text-sm font-medium text-foreground-muted hover:text-foreground"
-    >
-      <ArrowLeft className="size-4" aria-hidden="true" />
-      Back to contract
-    </Link>
-  );
+function breadcrumbsFor(contractId?: string) {
+  return contractId
+    ? [
+        { label: "Contracts", href: "/contracts" },
+        { label: "Contract", href: `/contracts/${contractId}` },
+        { label: "Compliance review" },
+      ]
+    : [{ label: "Compliance review" }];
 }

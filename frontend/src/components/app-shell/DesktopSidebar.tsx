@@ -11,15 +11,17 @@ interface DesktopSidebarProps {
 
 export function DesktopSidebar({ navItems, memberships, activeOrganizationId }: DesktopSidebarProps) {
   return (
-    <aside className="hidden w-64 shrink-0 flex-col border-r border-border bg-surface px-4 py-5 md:flex">
-      <div className="mb-6 px-1">
+    <aside className="hidden w-56 shrink-0 flex-col border-r border-border bg-surface-muted md:flex">
+      <div className="flex h-14 shrink-0 items-center border-b border-border px-4">
         <Brand />
       </div>
-      <SidebarContent
-        navItems={navItems}
-        memberships={memberships}
-        activeOrganizationId={activeOrganizationId}
-      />
+      <div className="flex-1 overflow-y-auto px-3 py-4">
+        <SidebarContent
+          navItems={navItems}
+          memberships={memberships}
+          activeOrganizationId={activeOrganizationId}
+        />
+      </div>
     </aside>
   );
 }

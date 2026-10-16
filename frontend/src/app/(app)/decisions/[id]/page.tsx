@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
 
 import { Alert } from "@/components/ui/Alert";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { DecisionPassportView } from "@/components/evidence/DecisionPassportView";
 import { ApiError } from "@/lib/auth/backend";
 import { readAccessToken } from "@/lib/auth/cookies";
@@ -32,8 +31,8 @@ export default async function DecisionPassportPage({ params }: DecisionPassportP
 
   if (!permissions.canRead) {
     return (
-      <div className="space-y-6">
-        <BackLink />
+      <div className="space-y-5">
+        <PageHeader title="Decision Passport" breadcrumbs={BREADCRUMBS} />
         <Alert tone="danger" title="You don't have access to the Decision Passport.">
           Ask an administrator to grant you the &quot;evidence&quot; read permission for this
           organization.
@@ -51,8 +50,8 @@ export default async function DecisionPassportPage({ params }: DecisionPassportP
     if (error instanceof ApiError && (error.status === 404 || error.status === 400)) notFound();
     if (error instanceof ApiError && error.status === 403) {
       return (
-        <div className="space-y-6">
-          <BackLink />
+        <div className="space-y-5">
+          <PageHeader title="Decision Passport" breadcrumbs={BREADCRUMBS} />
           <Alert tone="danger" title="You don't have access to this decision.">
             Ask an administrator to grant you the &quot;evidence&quot; read permission for this
             organization.
@@ -65,21 +64,17 @@ export default async function DecisionPassportPage({ params }: DecisionPassportP
 
   return (
     <div className="space-y-6">
-      <BackLink />
-      <h1 className="text-2xl font-semibold tracking-tight text-foreground">Decision Passport</h1>
+      <PageHeader
+        title="Decision Passport"
+        description="The complete, reproducible record of why this decision was reached."
+        breadcrumbs={BREADCRUMBS}
+      />
       <DecisionPassportView passport={passport} />
     </div>
   );
 }
 
-function BackLink() {
-  return (
-    <Link
-      href="/evidence"
-      className="inline-flex items-center gap-1 text-sm font-medium text-foreground-muted hover:text-foreground"
-    >
-      <ArrowLeft className="size-4" aria-hidden="true" />
-      Back to Evidence & Audit
-    </Link>
-  );
-}
+const BREADCRUMBS = [
+  { label: "Evidence & Audit", href: "/evidence" },
+  { label: "Decision Passport" },
+];

@@ -1,11 +1,10 @@
+import { StatusBadge } from "@/components/shared/StatusBadge";
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
 
 import { Alert } from "@/components/ui/Alert";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { CreateDraftVersionButton } from "@/components/policies/CreateDraftVersionButton";
-import { PolicyStatusBadge } from "@/components/policies/PolicyStatusBadge";
 import { PolicyVersionList } from "@/components/policies/PolicyVersionList";
 import { ApiError } from "@/lib/auth/backend";
 import { readAccessToken } from "@/lib/auth/cookies";
@@ -38,8 +37,8 @@ export default async function PolicyDetailPage({ params }: PolicyDetailPageProps
     if (error instanceof ApiError && (error.status === 404 || error.status === 400)) notFound();
     if (error instanceof ApiError && error.status === 403) {
       return (
-        <div className="space-y-6">
-          <BackLink />
+        <div className="space-y-5">
+          <PageHeader title="Policy" breadcrumbs={BREADCRUMBS} />
           <Alert tone="danger" title="You don't have access to this policy.">
             Ask an administrator to grant you the &quot;policies&quot; read permission for
             this organization.
@@ -53,27 +52,23 @@ export default async function PolicyDetailPage({ params }: PolicyDetailPageProps
   const versions = await listPolicyVersions(accessToken, id);
 
   return (
-    <div className="space-y-8">
-      <BackLink />
+    <div className="space-y-6">
+      <PageHeader
+        breadcrumbs={[BREADCRUMBS[0], { label: policy.name }]}
+        title={policy.name}
+        meta={
+          <>
+            <StatusBadge kind="policy" value={policy.status} />
+            <span className="text-sm tabular-nums text-foreground-muted">
+              Created {formatDateTime(policy.createdAt)}
+            </span>
+          </>
+        }
+        actions={permissions.canCreate ? <CreateDraftVersionButton policyId={policy.id} /> : undefined}
+      />
 
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground">{policy.name}</h1>
-            <PolicyStatusBadge status={policy.status} />
-          </div>
-          <p className="mt-1 text-sm text-foreground-muted">
-            Created {formatDateTime(policy.createdAt)}
-          </p>
-        </div>
-
-        {permissions.canCreate && <CreateDraftVersionButton policyId={policy.id} />}
-      </div>
-
-      <div className="space-y-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-muted">
-          Versions
-        </h2>
+      <section className="space-y-3">
+        <h2 className="text-base font-semibold text-foreground">Versions</h2>
         {versions.length === 0 ? (
           // A Policy is only ever created together with its first draft version
           // (`policy_service.create_policy`) — this is a defensive branch for an
@@ -84,19 +79,9 @@ export default async function PolicyDetailPage({ params }: PolicyDetailPageProps
         ) : (
           <PolicyVersionList policyId={policy.id} versions={versions} />
         )}
-      </div>
+      </section>
     </div>
   );
 }
 
-function BackLink() {
-  return (
-    <Link
-      href="/policies"
-      className="inline-flex items-center gap-1 text-sm font-medium text-foreground-muted hover:text-foreground"
-    >
-      <ArrowLeft className="size-4" aria-hidden="true" />
-      Back to policies
-    </Link>
-  );
-}
+const BREADCRUMBS = [{ label: "Policies", href: "/policies" }, { label: "Policy" }];

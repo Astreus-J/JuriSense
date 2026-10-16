@@ -17,21 +17,23 @@ interface NavLinkProps {
 
 export function NavLink({ href, label, icon }: NavLinkProps) {
   const pathname = usePathname();
-  const isActive = pathname === href || pathname.startsWith(`${href}/`);
+  // `/settings/organization` should keep Settings highlighted for sibling settings routes.
+  const section = href.startsWith("/settings") ? "/settings" : href;
+  const isActive = pathname === section || pathname.startsWith(`${section}/`);
 
   return (
     <Link
       href={href}
       aria-current={isActive ? "page" : undefined}
       className={cn(
-        "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+        "flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-[14px] font-medium transition-colors",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
         isActive
-          ? "bg-primary/10 text-primary"
-          : "text-foreground-muted hover:bg-surface-muted hover:text-foreground",
+          ? "bg-surface text-foreground shadow-[inset_2px_0_0_var(--primary)] ring-1 ring-border"
+          : "text-foreground-muted hover:bg-surface hover:text-foreground",
       )}
     >
-      {icon}
+      <span className={isActive ? "text-primary" : undefined}>{icon}</span>
       {label}
     </Link>
   );

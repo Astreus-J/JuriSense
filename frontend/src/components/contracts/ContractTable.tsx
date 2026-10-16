@@ -1,6 +1,5 @@
-import Link from "next/link";
-
-import { ContractStatusBadge } from "./ContractStatusBadge";
+import { StatusBadge } from "@/components/shared/StatusBadge";
+import { DataTable, RowLink, Td, Th, Tr } from "@/components/ui/DataTable";
 import { formatDateTime } from "@/lib/format";
 import type { Contract } from "@/lib/contracts/types";
 
@@ -13,42 +12,37 @@ interface ContractTableProps {
 
 export function ContractTable({ contracts, supplierNames }: ContractTableProps) {
   return (
-    <div className="overflow-x-auto rounded-xl border border-border bg-surface">
-      <table className="w-full text-left text-sm">
-        <thead className="border-b border-border bg-surface-muted text-xs uppercase tracking-wide text-foreground-muted">
-          <tr>
-            <th className="px-4 py-3 font-medium">Title</th>
-            <th className="px-4 py-3 font-medium">Supplier</th>
-            <th className="px-4 py-3 font-medium">Type</th>
-            <th className="px-4 py-3 font-medium">Status</th>
-            <th className="px-4 py-3 font-medium">Updated</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-border">
-          {contracts.map((contract) => (
-            <tr key={contract.id} className="hover:bg-surface-muted">
-              <td className="px-4 py-3 font-medium text-foreground">
-                <Link
-                  href={`/contracts/${contract.id}`}
-                  className="rounded hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
-                >
-                  {contract.title}
-                </Link>
-              </td>
-              <td className="px-4 py-3 text-foreground-muted">
-                {supplierNames.get(contract.supplierId) ?? "—"}
-              </td>
-              <td className="px-4 py-3 text-foreground-muted">{contract.contractType}</td>
-              <td className="px-4 py-3">
-                <ContractStatusBadge status={contract.status} />
-              </td>
-              <td className="px-4 py-3 whitespace-nowrap text-foreground-muted">
-                {formatDateTime(contract.updatedAt)}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <DataTable caption="Uploaded contracts, most recently updated first">
+      <thead>
+        <tr>
+          <Th>Title</Th>
+          <Th>Supplier</Th>
+          <Th>Type</Th>
+          <Th>Status</Th>
+          <Th numeric>Updated</Th>
+        </tr>
+      </thead>
+      <tbody>
+        {contracts.map((contract) => (
+          <Tr key={contract.id}>
+            <Td className="w-full">
+              <RowLink href={`/contracts/${contract.id}`}>{contract.title}</RowLink>
+            </Td>
+            <Td muted className="whitespace-nowrap">
+              {supplierNames.get(contract.supplierId) ?? "—"}
+            </Td>
+            <Td muted className="whitespace-nowrap">
+              {contract.contractType}
+            </Td>
+            <Td>
+              <StatusBadge kind="contract" value={contract.status} />
+            </Td>
+            <Td numeric muted className="whitespace-nowrap">
+              {formatDateTime(contract.updatedAt)}
+            </Td>
+          </Tr>
+        ))}
+      </tbody>
+    </DataTable>
   );
 }

@@ -1,11 +1,10 @@
 "use client";
 
+import { StatusBadge } from "@/components/shared/StatusBadge";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/Button";
 import { RuleForm } from "./RuleForm";
-import { RuleResultBadge } from "./RuleResultBadge";
-import { SeverityBadge } from "./SeverityBadge";
 import { buildRuleYamlDraft } from "@/lib/policies/ruleYaml";
 import { describeWhen } from "@/lib/policies/types";
 import type { Rule } from "@/lib/policies/types";
@@ -44,19 +43,19 @@ export function RuleListItem({ policyId, versionId, rule, canEdit }: RuleListIte
   }
 
   return (
-    <li className="space-y-3 rounded-xl border border-border bg-surface p-4">
+    <li className="space-y-2 border-b border-border pb-4 last:border-b-0">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="font-mono text-xs text-foreground-muted">{rule.ruleKey}</p>
           <h3 className="text-sm font-semibold text-foreground">{rule.name}</h3>
         </div>
-        <div className="flex items-center gap-2">
-          <RuleResultBadge status={rule.resultStatus} />
-          <SeverityBadge severity={rule.severity} />
+        <div className="flex items-center gap-1.5">
+          <StatusBadge kind="ruleResult" value={rule.resultStatus} />
+          <StatusBadge kind="severity" value={rule.severity} />
         </div>
       </div>
 
-      <p className="rounded-md bg-surface-muted px-3 py-2 font-mono text-xs text-foreground-muted">
+      <p className="rounded border border-border bg-surface-muted px-2.5 py-1.5 font-mono text-xs text-foreground-muted">
         WHEN {describeWhen(rule.when)}
       </p>
 
@@ -68,7 +67,7 @@ export function RuleListItem({ policyId, versionId, rule, canEdit }: RuleListIte
 
       {canEdit && (
         <div className="flex justify-end">
-          <Button type="button" variant="secondary" onClick={() => setEditing(true)}>
+          <Button type="button" size="sm" variant="secondary" onClick={() => setEditing(true)}>
             Edit rule
           </Button>
         </div>

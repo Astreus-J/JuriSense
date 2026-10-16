@@ -1,7 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
-
+import { PageHeader } from "@/components/ui/PageHeader";
 import { CreateSupplierForm } from "@/components/suppliers/CreateSupplierForm";
 import { requireSession } from "@/lib/auth/session";
 
@@ -25,25 +23,12 @@ export default async function NewSupplierPage() {
   await requireSession();
 
   return (
-    <div className="max-w-lg space-y-6">
-      <Link
-        href="/suppliers"
-        className="inline-flex items-center gap-1 text-sm font-medium text-foreground-muted hover:text-foreground"
-      >
-        <ArrowLeft className="size-4" aria-hidden="true" />
-        Back to suppliers
-      </Link>
-
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-          Register a supplier
-        </h1>
-        <p className="mt-1 text-sm text-foreground-muted">
-          JuriSense automatically starts a verification check against official and public
-          sources as soon as the supplier is registered.
-        </p>
-      </div>
-
+    <div className="max-w-lg space-y-5">
+      <PageHeader
+        breadcrumbs={[{ label: "Suppliers", href: "/suppliers" }, { label: "Register supplier" }]}
+        title="Register a supplier"
+        description="JuriSense automatically starts a verification check against official and public sources as soon as the supplier is registered."
+      />
       <CreateSupplierForm />
     </div>
   );

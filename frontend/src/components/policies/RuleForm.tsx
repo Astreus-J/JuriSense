@@ -90,7 +90,7 @@ export function RuleForm({ policyId, versionId, mode, ruleId, initialYaml, onCan
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 rounded-xl border border-border bg-surface p-4">
+    <form onSubmit={handleSubmit} className="space-y-4 rounded-lg border border-border-strong bg-surface-muted p-4">
       {error && (
         <Alert tone="danger" title={error.title}>
           {error.body}
@@ -107,7 +107,7 @@ export function RuleForm({ policyId, versionId, mode, ruleId, initialYaml, onCan
         disabled={submitting}
         placeholder={RULE_YAML_PLACEHOLDER}
         hint="Author the rule exactly as policy YAML — see docs/03-domain/policy-engine.md for the full rule, severity, and operator grammar."
-        className="font-mono text-xs"
+        className="font-mono text-xs!"
       />
 
       <div className="flex items-center gap-2">

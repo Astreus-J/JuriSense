@@ -1,12 +1,11 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 
-import { Badge } from "@/components/ui/Badge";
+import { StatusBadge } from "@/components/shared/StatusBadge";
 import { formatRoleLabel, isRole } from "@/lib/auth/types";
 import { formatDateTime } from "@/lib/format";
 import type { ApprovalRequest } from "@/lib/approvals/types";
 import { ApprovalActions } from "./ApprovalActions";
-import { ApprovalRequestStatusBadge } from "./ApprovalRequestStatusBadge";
 
 interface ApprovalRequestRowProps {
   request: ApprovalRequest;
@@ -20,6 +19,10 @@ interface ApprovalRequestRowProps {
  * (`ComplianceReviewResults`) for the WHY/EVIDENCE/POLICY/SOURCE behind it, rather than
  * re-fetching or re-rendering any rule evaluations here.
  *
+ * Layout: what is being asked (step + role, when, link to the evidence) on the left, the
+ * decision controls on the right from `md` up, stacked on narrow screens. A divided list row
+ * rather than a card: the inbox is a queue to work through, so rows must scan quickly.
+ *
  * `canUpdate` is a UI-only hint (`getApprovalPermissions`) — a read-only-role viewer still
  * sees the full request (role, step, timing, link to evidence), just without the
  * Approve/Reject controls.
@@ -30,26 +33,32 @@ export function ApprovalRequestRow({ request, canUpdate }: ApprovalRequestRowPro
     : request.approverRole;
 
   return (
-    <li className="space-y-3 rounded-xl border border-border bg-surface p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <li className="grid gap-4 py-4 md:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] md:gap-8">
+      <div className="space-y-2">
         <div className="flex flex-wrap items-center gap-2">
-          <Badge tone="neutral">
-            Step {request.stepNumber} · {roleLabel}
-          </Badge>
-          <ApprovalRequestStatusBadge status={request.status} />
+          <h2 className="text-sm font-semibold text-foreground">
+            Step {request.stepNumber} approval
+          </h2>
+          <StatusBadge kind="approvalRequest" value={request.status} />
         </div>
-        <span className="text-xs text-foreground-muted">
-          Requested {formatDateTime(request.requestedAt)}
-        </span>
+        <dl className="space-y-0.5 text-sm">
+          <div className="flex gap-2">
+            <dt className="w-20 shrink-0 text-foreground-muted">Approver</dt>
+            <dd>{roleLabel}</dd>
+          </div>
+          <div className="flex gap-2">
+            <dt className="w-20 shrink-0 text-foreground-muted">Requested</dt>
+            <dd className="tabular-nums">{formatDateTime(request.requestedAt)}</dd>
+          </div>
+        </dl>
+        <Link
+          href={`/compliance/reviews/${request.complianceReviewId}`}
+          className="inline-flex items-center gap-1 rounded text-sm font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+        >
+          View compliance review and evidence
+          <ArrowRight className="size-3.5" aria-hidden="true" />
+        </Link>
       </div>
-
-      <Link
-        href={`/compliance/reviews/${request.complianceReviewId}`}
-        className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
-      >
-        View compliance review
-        <ArrowRight className="size-3.5" aria-hidden="true" />
-      </Link>
 
       {canUpdate && <ApprovalActions requestId={request.id} />}
     </li>

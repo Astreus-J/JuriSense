@@ -1,8 +1,8 @@
+import { StatusBadge } from "@/components/shared/StatusBadge";
 import Link from "next/link";
 
 import { formatDateTime } from "@/lib/format";
 import type { ComplianceReview } from "@/lib/compliance/types";
-import { ComplianceStatusBadge } from "./ComplianceStatusBadge";
 
 interface ComplianceReviewHistoryProps {
   contractId: string;
@@ -21,19 +21,17 @@ export function ComplianceReviewHistory({ contractId, reviews }: ComplianceRevie
   const newestFirst = [...reviews].reverse();
 
   return (
-    <section className="space-y-2 rounded-xl border border-border bg-surface p-4">
-      <h2 className="text-xs font-semibold uppercase tracking-wide text-foreground-muted">
-        Compliance review history
-      </h2>
-      <ul className="divide-y divide-border">
+    <section className="space-y-1">
+      <h2 className="text-base font-semibold text-foreground">Compliance reviews</h2>
+      <ul className="divide-y divide-border border-y border-border">
         {newestFirst.map((review) => (
           <li key={review.id}>
             <Link
               href={`/compliance/reviews/${review.id}?contractId=${contractId}`}
-              className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm hover:underline"
+              className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus-ring"
             >
-              <ComplianceStatusBadge status={review.status} />
-              <span className="text-foreground-muted">{formatDateTime(review.startedAt)}</span>
+              <StatusBadge kind="decision" value={review.status} />
+              <span className="tabular-nums text-foreground-muted">{formatDateTime(review.startedAt)}</span>
             </Link>
           </li>
         ))}

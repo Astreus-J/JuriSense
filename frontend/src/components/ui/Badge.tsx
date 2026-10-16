@@ -12,6 +12,24 @@ const TONE_CLASSES: Record<BadgeTone, string> = {
   danger: "bg-danger-surface text-danger border-danger-border",
 };
 
+/** Left-rail accent for rows/blocks whose state matters (risks, failed rules, decisions). */
+export const TONE_RAIL_CLASSES: Record<BadgeTone, string> = {
+  neutral: "border-l-border-strong",
+  info: "border-l-info",
+  success: "border-l-success",
+  warning: "border-l-warning",
+  danger: "border-l-danger",
+};
+
+/** Text color for a tone, for icon+label marks that are not pills. */
+export const TONE_TEXT_CLASSES: Record<BadgeTone, string> = {
+  neutral: "text-foreground-muted",
+  info: "text-info",
+  success: "text-success",
+  warning: "text-warning",
+  danger: "text-danger",
+};
+
 export interface BadgeProps {
   tone: BadgeTone;
   icon?: ReactNode;
@@ -20,15 +38,14 @@ export interface BadgeProps {
 }
 
 /**
- * Small status pill — the first Badge primitive in this design system (Suppliers is the
- * first screen that needs one). Status is never color-only (persona: "Never communicate
+ * Compact status tag (square-ish, not a pill: reads as a data label, not a button). Status is never color-only (persona: "Never communicate
  * status by color alone"): pair a tone with a label, and optionally an icon.
  */
 export function Badge({ tone, icon, children, className }: BadgeProps) {
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium",
+        "inline-flex items-center gap-1 whitespace-nowrap rounded border px-1.5 py-0.5 text-xs font-medium leading-4",
         TONE_CLASSES[tone],
         className,
       )}

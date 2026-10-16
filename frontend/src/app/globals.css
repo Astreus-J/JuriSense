@@ -45,6 +45,7 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-serif: var(--font-source-serif), ui-serif, Georgia, serif;
 
   --color-surface: var(--surface);
   --color-surface-muted: var(--surface-muted);
@@ -76,8 +77,13 @@
   --color-focus-ring: var(--focus-ring);
 }
 
+/* Theme resolution (light / dark / system):
+ *  - No explicit choice (<html> has no data-theme): follow the OS via prefers-color-scheme.
+ *  - data-theme="dark" / "light" (set by the ThemeToggle + the pre-hydration script in
+ *    app/layout.tsx): wins over the OS. The dark VALUES are identical in both blocks. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
     --background: #0a0a0a;
     --foreground: #ededed;
 
@@ -112,10 +118,67 @@
   }
 }
 
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --background: #0a0a0a;
+  --foreground: #ededed;
+
+  --surface: #0b0f19;
+  --surface-muted: #111827;
+  --surface-raised: #161e2e;
+  --border: #263041;
+  --border-strong: #37415a;
+  --foreground-muted: #94a3b8;
+
+  --primary: #3b82f6;
+  --primary-hover: #60a5fa;
+  --primary-foreground: #0b0f19;
+
+  --danger: #f87171;
+  --danger-surface: #2a1315;
+  --danger-border: #7f1d1d;
+
+  --warning: #fbbf24;
+  --warning-surface: #2a2011;
+  --warning-border: #78350f;
+
+  --success: #4ade80;
+  --success-surface: #10241a;
+  --success-border: #14532d;
+
+  --info: #22d3ee;
+  --info-surface: #0b2530;
+  --info-border: #155e75;
+
+  --focus-ring: #60a5fa;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+/* Base size 17px (browser default 16px): every rem-based Tailwind size (text-xs/sm/base,
+   spacing) scales ~6% from here, so the whole UI reads larger without per-component edits. */
+html {
+  font-size: 106.25%;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  font-feature-settings: "calt", "kern";
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Headings: tighter tracking, balanced wrapping. */
+h1, h2, h3 {
+  text-wrap: balance;
+}
+
+/* Native <dialog> (ConfirmDialog): backdrop uses a neutral scrim, not a themed color. */
+dialog::backdrop {
+  background: rgb(0 0 0 / 0.45);
 }
 
 /* Smooth in-page anchor scrolling (landing nav -> #features/#pricing/#faq) for users who

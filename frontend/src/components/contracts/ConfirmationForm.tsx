@@ -7,6 +7,7 @@ import { CheckCircle2, ShieldAlert } from "lucide-react";
 
 import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
+import { controlClasses } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/cn";
 import { expectedTypeForPath, formatFieldPath, getLeafAtPath } from "@/lib/contracts/extractedData";
@@ -14,9 +15,7 @@ import { formatConfidence } from "@/lib/format";
 import type { LeafType } from "@/lib/contracts/extractedData";
 import type { ContractFields, ExtractedLeaf } from "@/lib/contracts/types";
 
-const INPUT_CLASSES =
-  "w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground shadow-sm " +
-  "focus:outline-none focus:ring-2 focus:ring-focus-ring focus:border-transparent disabled:cursor-not-allowed disabled:opacity-60";
+const INPUT_CLASSES = `w-full ${controlClasses}`;
 
 interface ConfirmationFormProps {
   contractId: string;
@@ -258,7 +257,7 @@ export function ConfirmationForm({
       );
     }
     return (
-      <section className="space-y-3 rounded-xl border border-warning-border bg-warning-surface p-6">
+      <section className="space-y-3 rounded-lg border border-warning-border bg-warning-surface p-4">
         <div className="flex items-center gap-2">
           <ShieldAlert className="size-4 text-warning" aria-hidden="true" />
           <h2 className="text-sm font-semibold text-foreground">This version needs confirmation</h2>
@@ -284,7 +283,7 @@ export function ConfirmationForm({
 
   if (!canUpdate) {
     return (
-      <section className="space-y-3 rounded-xl border border-warning-border bg-warning-surface p-6">
+      <section className="space-y-3 rounded-lg border border-warning-border bg-warning-surface p-4">
         <div className="flex items-center gap-2">
           <ShieldAlert className="size-4 text-warning" aria-hidden="true" />
           <h2 className="text-sm font-semibold text-foreground">
@@ -297,7 +296,7 @@ export function ConfirmationForm({
         </p>
         <ul className="space-y-2">
           {entries.map(({ path, leaf }) => (
-            <li key={path} className="rounded-lg border border-border bg-surface p-3 text-sm">
+            <li key={path} className="rounded-md border border-border bg-surface p-3 text-sm">
               <p className="font-medium text-foreground">{formatFieldPath(path)}</p>
               <p className="mt-0.5 text-foreground-muted">
                 AI extracted: <span className="text-foreground">{describeValue(leaf.value)}</span> ·{" "}
@@ -311,7 +310,7 @@ export function ConfirmationForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 rounded-xl border border-warning-border bg-warning-surface p-6">
+    <form onSubmit={handleSubmit} className="space-y-4 rounded-lg border border-warning-border bg-warning-surface p-4">
       <div className="flex items-center gap-2">
         <ShieldAlert className="size-4 text-warning" aria-hidden="true" />
         <h2 className="text-sm font-semibold text-foreground">
@@ -333,7 +332,7 @@ export function ConfirmationForm({
         {entries.map(({ path, leaf }) => {
           const state = fieldStates[path];
           return (
-            <li key={path} className="space-y-3 rounded-lg border border-border bg-surface p-4">
+            <li key={path} className="space-y-3 rounded-md border border-border bg-surface p-3">
               <div>
                 <p className="text-sm font-semibold text-foreground">{formatFieldPath(path)}</p>
                 <p className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-foreground-muted">

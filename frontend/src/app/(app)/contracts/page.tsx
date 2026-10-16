@@ -3,6 +3,8 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 
 import { Alert } from "@/components/ui/Alert";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { buttonClasses } from "@/components/ui/Button";
 import { ContractTable } from "@/components/contracts/ContractTable";
 import { ApiError } from "@/lib/auth/backend";
@@ -56,22 +58,19 @@ export default async function ContractsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Contracts</h1>
-          <p className="mt-1 max-w-2xl text-sm text-foreground-muted">
-            Every contract your organization has uploaded, with the structured, cited
-            extraction behind each version.
-          </p>
-        </div>
-        {!forbidden && permissions.canCreate && (
-          <Link href="/contracts/new" className={buttonClasses("primary")}>
-            <Plus className="size-4" aria-hidden="true" />
-            Upload contract
-          </Link>
-        )}
-      </div>
+    <div className="space-y-5">
+      <PageHeader
+        title="Contracts"
+        description="Every contract your organization has uploaded, with the structured, cited extraction behind each version."
+        actions={
+          !forbidden && permissions.canCreate ? (
+            <Link href="/contracts/new" className={buttonClasses("primary")}>
+              <Plus className="size-4" aria-hidden="true" />
+              Upload contract
+            </Link>
+          ) : undefined
+        }
+      />
 
       {forbidden ? (
         <Alert tone="danger" title="You don't have access to Contracts.">
@@ -88,24 +87,23 @@ export default async function ContractsPage() {
 }
 
 function ContractsEmptyState({ canCreate }: { canCreate: boolean }) {
-  const Icon = NAV_ITEMS.contracts.icon;
   return (
-    <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border bg-surface px-6 py-16 text-center">
-      <div className="flex size-12 items-center justify-center rounded-full bg-surface-muted">
-        <Icon className="size-6 text-foreground-muted" aria-hidden="true" />
-      </div>
-      <h2 className="text-lg font-semibold text-foreground">No contracts yet</h2>
-      <p className="max-w-sm text-sm text-foreground-muted">
-        {canCreate
+    <EmptyState
+      icon={NAV_ITEMS.contracts.icon}
+      title="No contracts yet"
+      description={
+        canCreate
           ? "Upload your first contract to start tracking its structured, cited extraction against your policies."
-          : "No contracts have been uploaded for your organization yet."}
-      </p>
-      {canCreate && (
-        <Link href="/contracts/new" className={buttonClasses("primary", "mt-1")}>
-          <Plus className="size-4" aria-hidden="true" />
-          Upload contract
-        </Link>
-      )}
-    </div>
+          : "No contracts have been uploaded for your organization yet."
+      }
+      action={
+        canCreate ? (
+          <Link href="/contracts/new" className={buttonClasses("primary")}>
+            <Plus className="size-4" aria-hidden="true" />
+            Upload contract
+          </Link>
+        ) : undefined
+      }
+    />
   );
 }

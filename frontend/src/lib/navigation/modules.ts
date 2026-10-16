@@ -4,6 +4,7 @@ import {
   Gavel,
   LayoutDashboard,
   Plug,
+  ScrollText,
   Settings,
   ShieldCheck,
   Truck,
@@ -83,7 +84,7 @@ export const NAV_ITEMS: Record<ModuleKey, NavItem> = {
     key: "evidence",
     label: "Evidence & Audit",
     href: "/evidence",
-    icon: FileCheck2,
+    icon: ScrollText,
     comingSoonDescription:
       "Every Decision Passport and the append-only audit trail behind it, in one place.",
   },

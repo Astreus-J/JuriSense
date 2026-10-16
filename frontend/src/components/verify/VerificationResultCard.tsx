@@ -1,26 +1,6 @@
-import { AlertTriangle, CheckCircle2, Clock, SearchX } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
-
-import { Badge } from "@/components/ui/Badge";
-import type { BadgeTone } from "@/components/ui/Badge";
+import { StatusBadge } from "@/components/shared/StatusBadge";
 import { formatDateTime } from "@/lib/format";
-import type { PublicVerificationResult, VerificationStatus } from "@/lib/evidence/types";
-
-/**
- * FEATURE-8.3 (`docs/06-blockchain/verification.md` step 5): the three outcomes the doc
- * names, plus `pending` (this product's own addition for a submission whose underlying
- * network hasn't finalized yet). Never color-only (persona: "status is never color-only") --
- * every tone pairs with an icon and a plain-language label.
- */
-const STATUS_CONFIG: Record<
-  VerificationStatus,
-  { tone: BadgeTone; icon: LucideIcon; label: string }
-> = {
-  verified: { tone: "success", icon: CheckCircle2, label: "Verified" },
-  mismatch: { tone: "danger", icon: AlertTriangle, label: "Mismatch" },
-  pending: { tone: "info", icon: Clock, label: "Pending" },
-  not_found: { tone: "neutral", icon: SearchX, label: "Not found" },
-};
+import type { PublicVerificationResult } from "@/lib/evidence/types";
 
 /**
  * Non-negotiable per `docs/09-planning/risks.md` risk 4: a `transparency_log` provider must
@@ -39,13 +19,11 @@ function providerLabel(provider: string): string {
 }
 
 export function VerificationResultCard({ result }: { result: PublicVerificationResult }) {
-  const { tone, icon: Icon, label } = STATUS_CONFIG[result.status];
-
+  // FEATURE-8.3: verified / mismatch / not_found, plus this product's own `pending`; never
+  // color-only -- the shared `verification` status map pairs each with an icon and a label.
   return (
-    <div className="space-y-4 rounded-xl border border-border bg-surface p-6">
-      <Badge tone={tone} icon={<Icon className="size-4" aria-hidden="true" />}>
-        {label}
-      </Badge>
+    <div className="space-y-4 rounded-lg border border-border bg-surface p-6" role="status">
+      <StatusBadge kind="verification" value={result.status} />
 
       <p className="text-sm text-foreground-muted">{resultMessage(result)}</p>
 

@@ -21,25 +21,50 @@ interface MobileNavProps {
 export function MobileNav({ children }: MobileNavProps) {
   const [open, setOpen] = useState(false);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
+    const trigger = triggerRef.current;
     document.body.style.overflow = "hidden";
     closeButtonRef.current?.focus();
 
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key === "Escape") {
+        setOpen(false);
+        return;
+      }
+      if (event.key !== "Tab" || !panelRef.current) return;
+      // Focus trap: keep Tab / Shift+Tab inside the drawer while it is open.
+      const focusable = panelRef.current.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+      if (event.shiftKey && (active === first || !panelRef.current.contains(active))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (active === last || !panelRef.current.contains(active))) {
+        event.preventDefault();
+        first.focus();
+      }
     }
     document.addEventListener("keydown", handleKeyDown);
     return () => {
       document.body.style.overflow = "";
       document.removeEventListener("keydown", handleKeyDown);
+      // Restore focus to the control that opened the drawer.
+      trigger?.focus();
     };
   }, [open]);
 
   return (
     <>
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen(true)}
         aria-haspopup="dialog"
@@ -58,7 +83,8 @@ export function MobileNav({ children }: MobileNavProps) {
             aria-hidden="true"
           />
           <div
-            className="absolute inset-y-0 left-0 flex w-72 max-w-[80vw] flex-col bg-surface px-4 py-5 shadow-xl"
+            ref={panelRef}
+            className="absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col overflow-y-auto bg-surface-muted px-3 py-4 shadow-xl"
             // Closes the drawer whenever a nav link inside it is clicked,
             // without needing a callback prop passed across the Server/Client
             // boundary (`children` here is server-rendered `SidebarContent`).
@@ -66,7 +92,7 @@ export function MobileNav({ children }: MobileNavProps) {
               if ((event.target as HTMLElement).closest("a")) setOpen(false);
             }}
           >
-            <div className="mb-6 flex items-center justify-between px-1">
+            <div className="mb-5 flex items-center justify-between px-1">
               <Brand />
               <button
                 ref={closeButtonRef}

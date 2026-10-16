@@ -10,7 +10,7 @@ interface AuthShellProps {
 }
 
 /**
- * Shared centered-card layout for the two unauthenticated auth screens
+ * Shared centered layout for the two unauthenticated auth screens
  * (login, invite acceptance). Deliberately plain: no marketing copy,
  * no imagery — this is a utility screen, not a landing page (the
  * "calm, precise" visual direction from the frontend-engineer persona /
@@ -24,9 +24,9 @@ export function AuthShell({ heading, subtext, children, footer }: AuthShellProps
       <div className="w-full max-w-sm space-y-6">
         <Brand className="justify-center" />
 
-        <div className="rounded-xl border border-border bg-surface p-6 shadow-sm">
+        <div className="rounded-lg border border-border bg-surface p-6">
           <div className="mb-6 space-y-1 text-center">
-            <h1 className="text-xl font-semibold text-foreground">{heading}</h1>
+            <h1 className="font-serif text-2xl font-semibold tracking-tight text-foreground">{heading}</h1>
             {subtext && <p className="text-sm text-foreground-muted">{subtext}</p>}
           </div>
           {children}

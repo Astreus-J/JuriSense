@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 
 import { Alert } from "@/components/ui/Alert";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { ApprovalRequestRow } from "@/components/approvals/ApprovalRequestRow";
 import { ApiError, listPendingApprovalRequests } from "@/lib/approvals/backend";
 import { getApprovalPermissions } from "@/lib/approvals/permissions";
@@ -38,14 +40,19 @@ export default async function ApprovalsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Approvals</h1>
-        <p className="mt-1 max-w-2xl text-sm text-foreground-muted">
-          Approval requests routed to your role, with a link to the compliance review and
-          evidence behind each one.
-        </p>
-      </div>
+    <div className="space-y-5">
+      <PageHeader
+        title="Approvals"
+        description="Approval requests routed to your role, with a link to the compliance review and evidence behind each one."
+        meta={
+          !forbidden && approvalRequests.length > 0 ? (
+            <span className="text-sm text-foreground-muted">
+              <span className="font-medium tabular-nums text-foreground">{approvalRequests.length}</span>{" "}
+              pending {approvalRequests.length === 1 ? "request" : "requests"}
+            </span>
+          ) : undefined
+        }
+      />
 
       {forbidden ? (
         <Alert tone="danger" title="You don't have access to Approvals.">
@@ -53,9 +60,13 @@ export default async function ApprovalsPage() {
           this organization.
         </Alert>
       ) : approvalRequests.length === 0 ? (
-        <ApprovalsEmptyState />
+        <EmptyState
+          icon={NAV_ITEMS.approvals.icon}
+          title="Your inbox is empty"
+          description="No approval requests are currently routed to your role. New requests appear here as soon as a compliance review triggers a rule that needs your sign-off."
+        />
       ) : (
-        <ul className="space-y-3">
+        <ul className="divide-y divide-border border-y border-border">
           {approvalRequests.map((approvalRequest) => (
             <ApprovalRequestRow
               key={approvalRequest.id}
@@ -65,22 +76,6 @@ export default async function ApprovalsPage() {
           ))}
         </ul>
       )}
-    </div>
-  );
-}
-
-function ApprovalsEmptyState() {
-  const Icon = NAV_ITEMS.approvals.icon;
-  return (
-    <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border bg-surface px-6 py-16 text-center">
-      <div className="flex size-12 items-center justify-center rounded-full bg-surface-muted">
-        <Icon className="size-6 text-foreground-muted" aria-hidden="true" />
-      </div>
-      <h2 className="text-lg font-semibold text-foreground">Your inbox is empty</h2>
-      <p className="max-w-sm text-sm text-foreground-muted">
-        No approval requests are currently routed to your role. New requests appear here as
-        soon as a compliance review triggers a rule that needs your sign-off.
-      </p>
     </div>
   );
 }

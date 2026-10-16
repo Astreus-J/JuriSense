@@ -1,6 +1,7 @@
+import { DecisionMark } from "@/components/shared/StatusBadge";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { formatDateTime } from "@/lib/format";
 import type { ComplianceReviewDetail } from "@/lib/compliance/types";
-import { ComplianceStatusBadge } from "./ComplianceStatusBadge";
 import { RiskCard } from "./RiskCard";
 import { RuleEvaluationRow } from "./RuleEvaluationRow";
 
@@ -30,31 +31,46 @@ export function ComplianceReviewResults({ detail }: { detail: ComplianceReviewDe
 
   return (
     <div className="space-y-8">
-      <section className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border border-border bg-surface p-4">
-        <ComplianceStatusBadge status={review.status} />
-        <span className="text-sm text-foreground-muted">
-          Started {formatDateTime(review.startedAt)}
-        </span>
-        <span className="text-sm text-foreground-muted">
-          {review.completedAt ? `Completed ${formatDateTime(review.completedAt)}` : "Not yet completed"}
-        </span>
-        <span className="text-sm text-foreground-muted">
-          Evaluated against {review.policyVersionIds.length} published policy version
-          {review.policyVersionIds.length === 1 ? "" : "s"}
-        </span>
+      <section
+        aria-label="Decision"
+        className="flex flex-wrap items-center justify-between gap-x-8 gap-y-3 border-b border-border pb-5"
+      >
+        <DecisionMark value={review.status} caption="Decision" />
+        <dl className="grid grid-cols-2 gap-x-8 gap-y-1 text-sm sm:grid-cols-3">
+          <div>
+            <dt className="text-xs text-foreground-muted">Started</dt>
+            <dd className="tabular-nums">{formatDateTime(review.startedAt)}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-foreground-muted">Completed</dt>
+            <dd className="tabular-nums">
+              {review.completedAt ? formatDateTime(review.completedAt) : "Not yet completed"}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-xs text-foreground-muted">Policy coverage</dt>
+            <dd className="tabular-nums">
+              {review.policyVersionIds.length} published version
+              {review.policyVersionIds.length === 1 ? "" : "s"}
+            </dd>
+          </div>
+        </dl>
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold text-foreground">Risks</h2>
+        <h2 className="text-base font-semibold text-foreground">Risks</h2>
 
         {risks.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-border bg-surface px-6 py-10 text-center text-sm text-foreground-muted">
-            {review.status === "APPROVE"
-              ? "No risks found — all rules passed or were not applicable."
-              : "No risks were recorded for this review."}
-          </p>
+          <EmptyState
+            title={review.status === "APPROVE" ? "No risks found" : "No risks recorded"}
+            description={
+              review.status === "APPROVE"
+                ? "All rules passed or were not applicable."
+                : "No risks were recorded for this review."
+            }
+          />
         ) : (
-          <ul className="space-y-3">
+          <ul className="space-y-4">
             {risks.map((risk) => (
               <RiskCard key={risk.id} risk={risk} />
             ))}
@@ -63,20 +79,23 @@ export function ComplianceReviewResults({ detail }: { detail: ComplianceReviewDe
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold text-foreground">
-          Evaluated rules ({ruleEvaluations.length})
+        <h2 className="text-base font-semibold text-foreground">
+          Evaluated rules <span className="font-normal tabular-nums text-foreground-muted">({ruleEvaluations.length})</span>
         </h2>
 
         {ruleEvaluations.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-border bg-surface px-6 py-10 text-center text-sm text-foreground-muted">
-            {review.policyVersionIds.length === 0
-              ? "No rules were evaluated — no policy was published in this organization yet when this review ran."
-              : "No rules were evaluated — the published policy version(s) in place when this review ran had no rules defined."}
-          </p>
+          <EmptyState
+            title="No rules were evaluated"
+            description={
+              review.policyVersionIds.length === 0
+                ? "No policy was published in this organization yet when this review ran."
+                : "The published policy version(s) in place when this review ran had no rules defined."
+            }
+          />
         ) : (
           <>
             {actionableEvaluations.length > 0 && (
-              <ul className="space-y-3">
+              <ul className="space-y-4">
                 {actionableEvaluations.map((evaluation) => (
                   <RuleEvaluationRow key={evaluation.id} evaluation={evaluation} />
                 ))}
@@ -84,8 +103,8 @@ export function ComplianceReviewResults({ detail }: { detail: ComplianceReviewDe
             )}
 
             {quietEvaluations.length > 0 && (
-              <details className="group rounded-xl border border-border bg-surface-muted">
-                <summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium text-foreground-muted hover:text-foreground">
+              <details className="group">
+                <summary className="cursor-pointer list-none rounded text-sm font-medium text-foreground-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring">
                   {/* QA review (2026-10-01): this previously said "Show all N evaluated
                    * rules," overstating what the disclosure itself reveals — the REVIEW/BLOCK
                    * rows above are already visible, so opening this only adds the
@@ -97,7 +116,7 @@ export function ComplianceReviewResults({ detail }: { detail: ComplianceReviewDe
                     Hide passed / not applicable rules
                   </span>
                 </summary>
-                <ul className="space-y-3 border-t border-border p-4">
+                <ul className="mt-4 space-y-4">
                   {quietEvaluations.map((evaluation) => (
                     <RuleEvaluationRow key={evaluation.id} evaluation={evaluation} />
                   ))}
