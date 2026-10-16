@@ -1,7 +1,8 @@
 # ADR-007 — Blockchain Anchoring Provider Abstraction
 
 ## Status
-Accepted (spike concluded 2026-10-07, STORY-8.1.1) — see "Spike findings" below.
+Accepted (spike concluded 2026-10-07, STORY-8.1.1) — see "Spike findings" below. Credentials
+provisioned and the adapter switched active 2026-10-15 — see that addendum.
 
 ## Context
 The mission brief originally assumed Chainlink as the blockchain partner. Research on 2026-09-27
@@ -75,9 +76,28 @@ for them.
 - Hackathon narrative and product architecture stay decoupled from any single sponsor's roadmap.
 - `06-blockchain/*` documents the abstraction and privacy model now; the concrete adapter choice is
   explicitly deferred and tracked, not silently assumed.
-- Until Constellation DED credentials are provisioned (Plane #198), every `BlockchainAnchor`'s
-  `provider` is `"transparency_log"` — every caller that renders this to a human (the Decision
+- Until Constellation DED credentials were provisioned (Plane #198), every `BlockchainAnchor`'s
+  `provider` was `"transparency_log"` — every caller that renders this to a human (the Decision
   Passport, the public verification page) must show it as a labeled fallback, never as a
-  blockchain anchor (`docs/09-planning/risks.md` risk 4's non-negotiable labeling requirement).
-  Flipping `Settings.anchoring_provider` to `"constellation_digital_evidence"` the moment credentials arrive
-  changes nothing above the `AnchoringProvider` interface.
+  blockchain anchor (`docs/09-planning/risks.md` risk 4's non-negotiable labeling requirement). That
+  changed 2026-10-15 — see the addendum below — but the labeling requirement itself does not: a
+  caller still renders whichever provider is actually active truthfully, never assuming which one
+  that is.
+
+## Addendum (2026-10-15) — Constellation DED credentials provisioned, adapter switched active
+
+All 4 Constellation DED credentials (`CONSTELLATION_DED_API_KEY`/`ORG_ID`/`TENANT_ID`/
+`PRIVATE_KEY`) arrived and were live-verified 2026-10-12. `Settings.anchoring_provider` was
+switched from `transparency_log` to `constellation_digital_evidence` 2026-10-15 — the config-only
+change this ADR's own Consequences section anticipated. Verified live the same day: a real
+compliance decision's automatic anchor submission called the actual Constellation DED API
+(`POST /fingerprints` → 200), and a follow-up `GET` on that fingerprint returned
+`"status":"FINALIZED_COMMITMENT"` with a real `batchGlobalSnapshotHash`/`batchMetagraphSnapshotHash`
+— genuine inclusion in Constellation's snapshot-based consensus, not merely accepted into an
+internal queue. The `transparency_log` adapter remains fully implemented as the fallback if
+Constellation DED ever becomes unreachable; it is no longer the default.
+
+This is a runtime configuration value (`ANCHORING_PROVIDER`), not a permanent architectural fact —
+anyone citing "which provider is active" in a live demo or pitch should reconfirm it at that moment
+rather than relying on this document alone, exactly as `docs/09-planning/risks.md` risk 4's
+labeling requirement already implies.
