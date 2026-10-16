@@ -84,7 +84,7 @@ export function MobileNav({ children }: MobileNavProps) {
           />
           <div
             ref={panelRef}
-            className="absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col overflow-y-auto bg-surface-muted px-3 py-4 shadow-xl"
+            className="absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col overflow-y-auto sidebar-surface px-3 py-4 shadow-xl"
             // Closes the drawer whenever a nav link inside it is clicked,
             // without needing a callback prop passed across the Server/Client
             // boundary (`children` here is server-rendered `SidebarContent`).
@@ -93,7 +93,7 @@ export function MobileNav({ children }: MobileNavProps) {
             }}
           >
             <div className="mb-5 flex items-center justify-between px-1">
-              <Brand />
+              <Brand onDark />
               <button
                 ref={closeButtonRef}
                 type="button"

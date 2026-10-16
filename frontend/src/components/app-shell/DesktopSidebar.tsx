@@ -11,9 +11,9 @@ interface DesktopSidebarProps {
 
 export function DesktopSidebar({ navItems, memberships, activeOrganizationId }: DesktopSidebarProps) {
   return (
-    <aside className="hidden w-56 shrink-0 flex-col border-r border-border bg-surface-muted md:flex">
+    <aside className="hidden w-56 shrink-0 flex-col border-r border-border sidebar-surface md:flex">
       <div className="flex h-14 shrink-0 items-center border-b border-border px-4">
-        <Brand />
+        <Brand onDark />
       </div>
       <div className="flex-1 overflow-y-auto px-3 py-4">
         <SidebarContent
