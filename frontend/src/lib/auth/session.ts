@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 
 import { ApiError, fetchCurrentUser } from "./backend";
 import { readAccessToken } from "./cookies";
+import { getMyOrganization } from "@/lib/organization/backend";
+import { getOrganizationPermissions } from "@/lib/organization/permissions";
 import type { SessionUser } from "./types";
 
 /**
@@ -27,12 +29,35 @@ export const getSession = cache(async (): Promise<SessionUser | null> => {
   if (!accessToken) return null;
 
   try {
-    return await fetchCurrentUser(accessToken);
+    const user = await fetchCurrentUser(accessToken);
+    return await withOrganizationName(user, accessToken);
   } catch (error) {
     if (error instanceof ApiError && error.status === 401) return null;
     throw error;
   }
 });
+
+/**
+ * `GET /auth/me` carries only `organization_id`; the organization's name lives behind
+ * `GET /organizations/me`, which the backend gates on the `organization_settings` read
+ * permission (admin/security/auditor by default). Best-effort: for other roles, or on any
+ * failure, the membership keeps `organizationName: null` and the shell falls back to a
+ * short id rather than blocking the whole session on a display label.
+ */
+async function withOrganizationName(user: SessionUser, accessToken: string): Promise<SessionUser> {
+  if (!getOrganizationPermissions(user.role).canReadOrgPanel) return user;
+  try {
+    const organization = await getMyOrganization(accessToken);
+    return {
+      ...user,
+      memberships: user.memberships.map((m) =>
+        m.organizationId === organization.id ? { ...m, organizationName: organization.name } : m,
+      ),
+    };
+  } catch {
+    return user;
+  }
+}
 
 /** For Server Components that require an authenticated session (e.g. the app shell layout). */
 export async function requireSession(): Promise<SessionUser> {
