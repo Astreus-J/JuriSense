@@ -22,7 +22,7 @@ export default function Plans({ content }: { content: LandingContent }) {
         ))}
       </div>
 
-      <div className="mt-12 rounded-2xl border border-slate-200 bg-slate-50 p-8">
+      <div className="mt-12 rounded-2xl border border-slate-200 bg-landing-band p-8">
         <h3 className="text-center font-semibold text-slate-900">{plans.includedTitle}</h3>
         <ul className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {plans.included.map((item) => (
