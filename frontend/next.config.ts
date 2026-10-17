@@ -46,6 +46,9 @@ const nextConfig: NextConfig = {
   // Standalone build: produces server.js with only the dependencies it needs, so the
   // Docker image doesn't need the full node_modules tree.
   output: "standalone",
+  // The floating dev-mode indicator (build error/warning count badge) is dev-only
+  // noise on top of the real UI -- turned off rather than just repositioned.
+  devIndicators: false,
   async headers() {
     return [
       {
