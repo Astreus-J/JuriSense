@@ -6,6 +6,7 @@
  * here depends on a secret or a server-only API.
  */
 
+import type { Translator } from "@/lib/i18n/translate";
 import type { EvidenceRef } from "./types";
 
 /**
@@ -14,10 +15,12 @@ import type { EvidenceRef } from "./types";
  * connected to conclusions"). When the richer fields are present, add the document/page or
  * supplier-profile context. No document viewer exists yet (out of scope per this story's
  * brief), so this stays plain text — e.g. "contract.value.brl (document doc-1, page 2,
+
  * chars 120-145)" or "supplier.sanctions_hit (supplier profile)".
  */
-export function describeEvidenceRef(ref: EvidenceRef): string {
-  const contextPath = typeof ref.context_path === "string" ? ref.context_path : "Unknown field";
+export function describeEvidenceRef(ref: EvidenceRef, { t }: Translator): string {
+  const contextPath =
+    typeof ref.context_path === "string" ? ref.context_path : t("compliance.evidence.unknownField");
   const source = typeof ref.source === "string" ? ref.source : null;
 
   if (source === "contract_extracted_field") {
@@ -36,15 +39,15 @@ export function describeEvidenceRef(ref: EvidenceRef): string {
         : null;
 
     const parts: string[] = [];
-    if (documentId) parts.push(`document ${documentId}`);
-    if (page !== null) parts.push(`page ${page}`);
-    if (textSpan) parts.push(`chars ${textSpan.start}-${textSpan.end}`);
+    if (documentId) parts.push(t("compliance.evidence.document", { id: documentId }));
+    if (page !== null) parts.push(t("compliance.evidence.page", { page }));
+    if (textSpan) parts.push(t("compliance.evidence.chars", { start: textSpan.start, end: textSpan.end }));
 
     return parts.length > 0 ? `${contextPath} (${parts.join(", ")})` : contextPath;
   }
 
   if (source === "supplier_profile") {
-    return `${contextPath} (supplier profile)`;
+    return `${contextPath} (${t("compliance.evidence.supplierProfile")})`;
   }
 
   return contextPath;

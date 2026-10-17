@@ -1,9 +1,9 @@
-import type { Metadata } from "next";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { CreateSupplierForm } from "@/components/suppliers/CreateSupplierForm";
 import { requireSession } from "@/lib/auth/session";
+import { getI18n, pageTitle } from "@/lib/i18n/server";
 
-export const metadata: Metadata = { title: "Register supplier — JuriSense Gate" };
+export const generateMetadata = pageTitle("meta.supplierNew");
 
 /**
  * A dedicated route rather than a modal (persona: "Do not over-design" — a three-field
@@ -21,13 +21,17 @@ export const metadata: Metadata = { title: "Register supplier — JuriSense Gate
  */
 export default async function NewSupplierPage() {
   await requireSession();
+  const { t } = await getI18n();
 
   return (
     <div className="max-w-lg space-y-5">
       <PageHeader
-        breadcrumbs={[{ label: "Suppliers", href: "/suppliers" }, { label: "Register supplier" }]}
-        title="Register a supplier"
-        description="JuriSense automatically starts a verification check against official and public sources as soon as the supplier is registered."
+        breadcrumbs={[
+          { label: t("nav.suppliers"), href: "/suppliers" },
+          { label: t("suppliers.new.breadcrumb") },
+        ]}
+        title={t("suppliers.new.title")}
+        description={t("suppliers.new.description")}
       />
       <CreateSupplierForm />
     </div>

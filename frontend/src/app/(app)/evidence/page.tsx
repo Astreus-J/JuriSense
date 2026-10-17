@@ -1,11 +1,11 @@
-import type { Metadata } from "next";
 import Link from "next/link";
 import { ExternalLink } from "lucide-react";
 
 import { PageHeader } from "@/components/ui/PageHeader";
 import { DecisionLookupForm } from "@/components/evidence/DecisionLookupForm";
+import { getI18n, pageTitle } from "@/lib/i18n/server";
 
-export const metadata: Metadata = { title: "Evidence & Audit — JuriSense Gate" };
+export const generateMetadata = pageTitle("meta.evidence");
 
 /**
  * STORY-7.3.1: the Decision Passport's one entry point from the nav shell. A full
@@ -16,16 +16,17 @@ export const metadata: Metadata = { title: "Evidence & Audit — JuriSense Gate"
  * reachable without a session on its own, but surfaced here too so a signed-in user can grab
  * its shareable link (e.g. to hand to an external auditor) without leaving the app.
  */
-export default function EvidencePage() {
+export default async function EvidencePage() {
+  const { t } = await getI18n();
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Evidence & Audit"
-        description='Look up the complete, reproducible "why was this approved?" record for any decision.'
+        title={t("nav.evidence")}
+        description={t("evidence.description")}
       />
       <section aria-labelledby="decision-lookup-title" className="max-w-2xl space-y-3">
         <h2 id="decision-lookup-title" className="text-base font-semibold text-foreground">
-          Find a Decision Passport
+          {t("evidence.lookupTitle")}
         </h2>
         <DecisionLookupForm />
       </section>
@@ -37,10 +38,10 @@ export default function EvidencePage() {
           className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
         >
           <ExternalLink className="size-4" aria-hidden="true" />
-          Open the public verification page
+          {t("evidence.openVerify")}
         </Link>
         <span className="ml-2 text-sm text-foreground-muted">
-          No login required; shareable with external auditors.
+          {t("evidence.verifyNote")}
         </span>
       </p>
     </div>

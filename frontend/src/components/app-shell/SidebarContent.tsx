@@ -1,3 +1,4 @@
+import { getI18n } from "@/lib/i18n/server";
 import type { NavItem } from "@/lib/navigation/modules";
 import type { Membership } from "@/lib/auth/types";
 import { NavLink } from "./NavLink";
@@ -13,22 +14,24 @@ interface SidebarContentProps {
 const ADMIN_KEYS = new Set(["integrations", "settings"]);
 
 /** The nav content shared by the persistent desktop sidebar and the mobile drawer. */
-export function SidebarContent({ navItems, memberships, activeOrganizationId }: SidebarContentProps) {
+export async function SidebarContent({ navItems, memberships, activeOrganizationId }: SidebarContentProps) {
+  const { t } = await getI18n();
   const workspaceItems = navItems.filter((item) => !ADMIN_KEYS.has(item.key));
   const adminItems = navItems.filter((item) => ADMIN_KEYS.has(item.key));
 
   return (
     <div className="flex h-full flex-col gap-5">
       <OrgSwitcher memberships={memberships} activeOrganizationId={activeOrganizationId} />
-      <nav aria-label="Primary" className="flex flex-1 flex-col gap-5">
+      <nav aria-label={t("shell.primaryNav")} className="flex flex-1 flex-col gap-5">
         <NavGroup items={workspaceItems} />
-        {adminItems.length > 0 && <NavGroup label="Administration" items={adminItems} />}
+        {adminItems.length > 0 && <NavGroup label={t("shell.administration")} items={adminItems} />}
       </nav>
     </div>
   );
 }
 
-function NavGroup({ items, label }: { items: NavItem[]; label?: string }) {
+async function NavGroup({ items, label }: { items: NavItem[]; label?: string }) {
+  const { t } = await getI18n();
   return (
     <div className="space-y-0.5">
       {label && (
@@ -40,7 +43,7 @@ function NavGroup({ items, label }: { items: NavItem[]; label?: string }) {
         <NavLink
           key={item.key}
           href={item.href}
-          label={item.label}
+          label={t(`nav.${item.key}`)}
           // Render the icon here, server-side, into a plain ReactNode
           // (Next.js Server→Client Components can only cross the boundary
           // as serializable elements, never as raw component/function

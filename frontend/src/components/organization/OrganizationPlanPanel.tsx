@@ -1,12 +1,16 @@
-import { PLAN_LABELS } from "@/lib/organization/types";
+import { INTL_LOCALES } from "@/lib/i18n/config";
+import { getI18n } from "@/lib/i18n/server";
+import type { Translator } from "@/lib/i18n/translate";
 import type { Organization } from "@/lib/organization/types";
 
 interface OrganizationPlanPanelProps {
   organization: Organization;
 }
 
-function formatLimit(value: number | null): string {
-  return value === null ? "Unlimited" : value.toLocaleString();
+function formatLimit(value: number | null, { t, locale }: Translator): string {
+  return value === null
+    ? t("organization.plan.unlimited")
+    : value.toLocaleString(INTL_LOCALES[locale]);
 }
 
 /**
@@ -16,28 +20,33 @@ function formatLimit(value: number | null): string {
  * the *team* section below it renders (`getOrganizationPermissions(role).canManageTeam`),
  * not this panel.
  */
-export function OrganizationPlanPanel({ organization }: OrganizationPlanPanelProps) {
+export async function OrganizationPlanPanel({ organization }: OrganizationPlanPanelProps) {
+  const i18n = await getI18n();
+  const { t, locale } = i18n;
   const usageItems = [
     {
-      label: "Seats",
-      value: `${organization.activeUserCount} / ${formatLimit(organization.userLimit)}`,
+      label: t("organization.plan.seats"),
+      value: `${organization.activeUserCount} / ${formatLimit(organization.userLimit, i18n)}`,
     },
-    { label: "Suppliers", value: formatLimit(organization.supplierLimit) },
+    { label: t("organization.plan.suppliers"), value: formatLimit(organization.supplierLimit, i18n) },
     {
-      label: "Storage",
+      label: t("organization.plan.storage"),
       value:
         organization.storageLimitGb === null
-          ? "Unlimited"
-          : `${organization.storageLimitGb.toLocaleString()} GB`,
+          ? t("organization.plan.unlimited")
+          : `${organization.storageLimitGb.toLocaleString(INTL_LOCALES[locale])} GB`,
     },
-    { label: "AI executions / month", value: formatLimit(organization.aiExecutionLimit) },
+    {
+      label: t("organization.plan.aiExecutions"),
+      value: formatLimit(organization.aiExecutionLimit, i18n),
+    },
   ];
 
   return (
-    <section aria-label="Plan and usage" className="space-y-3">
+    <section aria-label={t("organization.plan.aria")} className="space-y-3">
       <div className="flex flex-wrap items-baseline gap-x-3">
         <h2 className="text-base font-semibold text-foreground">{organization.name}</h2>
-        <p className="text-sm text-foreground-muted">{PLAN_LABELS[organization.plan]} plan</p>
+        <p className="text-sm text-foreground-muted">{t("organization.plan.planName", { plan: t(`status.plan.${organization.plan}`) })}</p>
       </div>
 
       <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-4">

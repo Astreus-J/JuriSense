@@ -1,5 +1,3 @@
-import type { Metadata } from "next";
-
 import { InvitationsList } from "@/components/organization/InvitationsList";
 import { InviteUserForm } from "@/components/organization/InviteUserForm";
 import { OrganizationPlanPanel } from "@/components/organization/OrganizationPlanPanel";
@@ -8,10 +6,11 @@ import { Alert } from "@/components/ui/Alert";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { readAccessToken } from "@/lib/auth/cookies";
 import { requireSession } from "@/lib/auth/session";
+import { getI18n, pageTitle } from "@/lib/i18n/server";
 import { ApiError, getMyOrganization, listInvites, listUsers } from "@/lib/organization/backend";
 import { getOrganizationPermissions } from "@/lib/organization/permissions";
 
-export const metadata: Metadata = { title: "Organization — JuriSense Gate" };
+export const generateMetadata = pageTitle("meta.organizationSettings");
 
 /**
  * The "Settings" module's one real screen today: the organization's plan/usage panel plus
@@ -28,6 +27,7 @@ export const metadata: Metadata = { title: "Organization — JuriSense Gate" };
  */
 export default async function OrganizationSettingsPage() {
   const user = await requireSession();
+  const { t } = await getI18n();
   const permissions = getOrganizationPermissions(user.role);
   // `requireSession()` above already guarantees a valid token exists; the `!` below mirrors
   // the same non-null assumption `getSession()` makes right after its own read.
@@ -59,14 +59,13 @@ export default async function OrganizationSettingsPage() {
   return (
     <div className="space-y-8">
       <PageHeader
-        title="Organization"
-        description="Your organization's plan, usage, and team."
+        title={t("organization.title")}
+        description={t("organization.description")}
       />
 
       {forbidden || !organization ? (
-        <Alert tone="danger" title="You don't have access to organization settings.">
-          Ask an administrator to grant you the &quot;organization settings&quot; read
-          permission for this organization.
+        <Alert tone="danger" title={t("organization.noAccessTitle")}>
+          {t("organization.noAccessBody")}
         </Alert>
       ) : (
         <div className="space-y-8">
@@ -76,9 +75,9 @@ export default async function OrganizationSettingsPage() {
             <>
               <section className="space-y-3">
                 <div>
-                  <h2 className="text-base font-semibold text-foreground">Team</h2>
+                  <h2 className="text-base font-semibold text-foreground">{t("organization.team.title")}</h2>
                   <p className="text-sm text-foreground-muted">
-                    Everyone with access to this organization, and their role.
+                    {t("organization.team.description")}
                   </p>
                 </div>
                 <TeamTable members={members} currentUserId={user.id} />
@@ -86,23 +85,22 @@ export default async function OrganizationSettingsPage() {
 
               <section className="max-w-2xl space-y-3">
                 <div>
-                  <h2 className="text-base font-semibold text-foreground">Invite someone</h2>
+                  <h2 className="text-base font-semibold text-foreground">{t("organization.invite.title")}</h2>
                   <p className="text-sm text-foreground-muted">
-                    They&apos;ll receive an email with a link to set their own password.
+                    {t("organization.invite.description")}
                   </p>
                 </div>
                 <InviteUserForm />
               </section>
 
               <section className="space-y-3">
-                <h2 className="text-base font-semibold text-foreground">Pending invitations</h2>
+                <h2 className="text-base font-semibold text-foreground">{t("organization.invitations.title")}</h2>
                 <InvitationsList invitations={invitations} />
               </section>
             </>
           ) : (
-            <Alert tone="info" title="Read-only access">
-              You can view your organization&apos;s plan and usage. Team management is
-              restricted to administrators.
+            <Alert tone="info" title={t("organization.readOnlyTitle")}>
+              {t("organization.readOnlyBody")}
             </Alert>
           )}
         </div>

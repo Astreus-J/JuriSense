@@ -1,12 +1,17 @@
+import { INTL_LOCALES } from "@/lib/i18n/config";
+import type { Locale } from "@/lib/i18n/config";
+
 /**
- * Locale-aware date/time formatting (persona: "Never manually concatenate currency/date
- * strings when standard formatting APIs exist"). `undefined` locale defers to the
- * runtime's/browser's own locale rather than hard-coding one.
+ * Locale-aware date/time/number formatting (persona: "Never manually concatenate currency/date
+ * strings when standard formatting APIs exist"). Every helper takes the active app `Locale`
+ * (from `getI18n()` on the server or `useI18n()` in the browser) and maps it to a BCP 47 tag
+ * (`en` -> en-US, `pt` -> pt-BR) rather than deferring to the runtime's own locale, so server
+ * and client always render the same string for the same user choice.
  */
-export function formatDateTime(iso: string): string {
+export function formatDateTime(iso: string, locale: Locale): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
-  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(
+  return new Intl.DateTimeFormat(INTL_LOCALES[locale], { dateStyle: "medium", timeStyle: "short" }).format(
     date,
   );
 }
@@ -20,10 +25,10 @@ export function formatDateTime(iso: string): string {
  * após notificação por escrito") rather than an absolute date when the contract itself
  * has no fixed calendar deadline for that obligation. Falls back to the raw string
  * rather than crashing the whole page. */
-export function formatDate(iso: string): string {
+export function formatDate(iso: string, locale: Locale): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
-  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(date);
+  return new Intl.DateTimeFormat(INTL_LOCALES[locale], { dateStyle: "medium" }).format(date);
 }
 
 /**
@@ -38,20 +43,25 @@ export function formatDate(iso: string): string {
  * coerce to `0` — misrepresenting "unknown/unconfirmed value" as "confirmed zero," and
  * disagreeing with every other field's "—" placeholder for the identical null case.
  */
-export function formatCurrency(amount: number | null | undefined, currency?: string | null): string {
+export function formatCurrency(
+  amount: number | null | undefined,
+  locale: Locale,
+  currency?: string | null,
+): string {
   if (amount === null || amount === undefined) return "—";
-  if (!currency) return new Intl.NumberFormat(undefined).format(amount);
+  const tag = INTL_LOCALES[locale];
+  if (!currency) return new Intl.NumberFormat(tag).format(amount);
   try {
-    return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(amount);
+    return new Intl.NumberFormat(tag, { style: "currency", currency }).format(amount);
   } catch {
-    return `${new Intl.NumberFormat(undefined).format(amount)} ${currency}`;
+    return `${new Intl.NumberFormat(tag).format(amount)} ${currency}`;
   }
 }
 
 /** `0.973` -> `"97%"`. Confidence scores are a ratio, never money/a count — kept in its own
  * helper rather than reusing `Intl.NumberFormat`'s percent style ad hoc at every call site. */
-export function formatConfidence(confidence: number): string {
-  return new Intl.NumberFormat(undefined, { style: "percent", maximumFractionDigits: 0 }).format(
+export function formatConfidence(confidence: number, locale: Locale): string {
+  return new Intl.NumberFormat(INTL_LOCALES[locale], { style: "percent", maximumFractionDigits: 0 }).format(
     confidence,
   );
 }

@@ -4,6 +4,7 @@ import { useEffect } from "react";
 
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
+import { useI18n } from "@/lib/i18n/client";
 
 /**
  * Segment error boundary for the whole authenticated app. Never exposes the
@@ -25,6 +26,8 @@ export default function AppError({
   error: Error & { digest?: string };
   retry: () => void;
 }) {
+  const { t } = useI18n();
+
   useEffect(() => {
     console.error(error);
   }, [error]);
@@ -32,10 +35,10 @@ export default function AppError({
   return (
     <div className="flex min-h-[60vh] items-center justify-center p-6">
       <div className="w-full max-w-md space-y-4">
-        <Alert tone="danger" title="Something went wrong.">
-          This page ran into an unexpected error. You can try again, or come back later.
+        <Alert tone="danger" title={t("errors.somethingWentWrong")}>
+          {t("errors.unexpectedPage")}
         </Alert>
-        <Button onClick={() => retry()}>Try again</Button>
+        <Button onClick={() => retry()}>{t("common.tryAgain")}</Button>
       </div>
     </div>
   );

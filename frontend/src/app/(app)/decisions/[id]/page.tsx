@@ -1,4 +1,3 @@
-import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { Alert } from "@/components/ui/Alert";
@@ -7,10 +6,11 @@ import { DecisionPassportView } from "@/components/evidence/DecisionPassportView
 import { ApiError } from "@/lib/auth/backend";
 import { readAccessToken } from "@/lib/auth/cookies";
 import { requireSession } from "@/lib/auth/session";
+import { getI18n, pageTitle } from "@/lib/i18n/server";
 import { getDecisionPassport } from "@/lib/evidence/backend";
 import { getEvidencePermissions } from "@/lib/evidence/permissions";
 
-export const metadata: Metadata = { title: "Decision Passport — JuriSense Gate" };
+export const generateMetadata = pageTitle("meta.decision");
 
 interface DecisionPassportPageProps {
   // Next 16: `params` is a Promise.
@@ -25,6 +25,11 @@ interface DecisionPassportPageProps {
  */
 export default async function DecisionPassportPage({ params }: DecisionPassportPageProps) {
   const user = await requireSession();
+  const { t } = await getI18n();
+  const breadcrumbs = [
+    { label: t("nav.evidence"), href: "/evidence" },
+    { label: t("decisions.title") },
+  ];
   const { id } = await params;
   const accessToken = (await readAccessToken())!;
   const permissions = getEvidencePermissions(user.role);
@@ -32,10 +37,9 @@ export default async function DecisionPassportPage({ params }: DecisionPassportP
   if (!permissions.canRead) {
     return (
       <div className="space-y-5">
-        <PageHeader title="Decision Passport" breadcrumbs={BREADCRUMBS} />
-        <Alert tone="danger" title="You don't have access to the Decision Passport.">
-          Ask an administrator to grant you the &quot;evidence&quot; read permission for this
-          organization.
+        <PageHeader title={t("decisions.title")} breadcrumbs={breadcrumbs} />
+        <Alert tone="danger" title={t("decisions.noAccessTitle")}>
+          {t("decisions.noAccessBody")}
         </Alert>
       </div>
     );
@@ -51,10 +55,9 @@ export default async function DecisionPassportPage({ params }: DecisionPassportP
     if (error instanceof ApiError && error.status === 403) {
       return (
         <div className="space-y-5">
-          <PageHeader title="Decision Passport" breadcrumbs={BREADCRUMBS} />
-          <Alert tone="danger" title="You don't have access to this decision.">
-            Ask an administrator to grant you the &quot;evidence&quot; read permission for this
-            organization.
+          <PageHeader title={t("decisions.title")} breadcrumbs={breadcrumbs} />
+          <Alert tone="danger" title={t("decisions.noAccessThisTitle")}>
+            {t("decisions.noAccessBody")}
           </Alert>
         </div>
       );
@@ -65,16 +68,11 @@ export default async function DecisionPassportPage({ params }: DecisionPassportP
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Decision Passport"
-        description="The complete, reproducible record of why this decision was reached."
-        breadcrumbs={BREADCRUMBS}
+        title={t("decisions.title")}
+        description={t("decisions.description")}
+        breadcrumbs={breadcrumbs}
       />
       <DecisionPassportView passport={passport} />
     </div>
   );
 }
-
-const BREADCRUMBS = [
-  { label: "Evidence & Audit", href: "/evidence" },
-  { label: "Decision Passport" },
-];

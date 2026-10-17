@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { getI18n } from "@/lib/i18n/server";
 import { getNavItemsForRole } from "@/lib/navigation/modules";
 import type { SessionUser } from "@/lib/auth/types";
 import { DesktopSidebar } from "./DesktopSidebar";
@@ -20,8 +21,9 @@ interface AppShellProps {
  * Accessibility: a skip link is the first focusable element, and `<main id="main"
  * tabIndex={-1}>` is its target (programmatic focus only, so it never shows a focus ring).
  */
-export function AppShell({ user, children }: AppShellProps) {
+export async function AppShell({ user, children }: AppShellProps) {
   const navItems = getNavItemsForRole(user.role);
+  const { t } = await getI18n();
 
   return (
     <div className="flex h-screen overflow-hidden bg-surface text-sm text-foreground">
@@ -29,7 +31,7 @@ export function AppShell({ user, children }: AppShellProps) {
         href="#main"
         className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-50 focus:rounded-md focus:bg-primary focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-primary-foreground focus:outline-none focus:ring-2 focus:ring-focus-ring focus:ring-offset-2"
       >
-        Skip to content
+        {t("shell.skipToContent")}
       </a>
       <DesktopSidebar
         navItems={navItems}

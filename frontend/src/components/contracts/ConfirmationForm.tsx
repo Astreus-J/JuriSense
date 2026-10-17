@@ -10,6 +10,8 @@ import { Badge } from "@/components/ui/Badge";
 import { controlClasses } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/cn";
+import { useI18n } from "@/lib/i18n/client";
+import type { Translator } from "@/lib/i18n/translate";
 import { expectedTypeForPath, formatFieldPath, getLeafAtPath } from "@/lib/contracts/extractedData";
 import { formatConfidence } from "@/lib/format";
 import type { LeafType } from "@/lib/contracts/extractedData";
@@ -31,8 +33,8 @@ type FieldMode = "accept" | "correct";
 type FieldState = { mode: FieldMode; raw: string };
 type FormErrorState = { title: string; body?: string } | null;
 
-function describeValue(value: unknown): string {
-  if (typeof value === "boolean") return value ? "Yes" : "No";
+function describeValue(value: unknown, { t }: Translator): string {
+  if (typeof value === "boolean") return value ? t("contracts.confirm.yes") : t("contracts.confirm.no");
   if (typeof value === "object" && value !== null) return JSON.stringify(value);
   return String(value ?? "—");
 }
@@ -52,27 +54,28 @@ function initialRawValue(value: unknown, type: LeafType): string {
 function parseCorrectionValue(
   type: LeafType,
   raw: string,
+  { t }: Translator,
 ): { ok: true; value: unknown } | { ok: false; error: string } {
   if (type === "boolean") {
-    if (raw !== "true" && raw !== "false") return { ok: false, error: "Choose Yes or No." };
+    if (raw !== "true" && raw !== "false") return { ok: false, error: t("contracts.confirm.chooseYesNo") };
     return { ok: true, value: raw === "true" };
   }
   if (type === "number") {
     // Number("") === 0 in JS -- an empty/blank input must not silently become 0.
-    if (raw.trim().length === 0) return { ok: false, error: "Enter a valid number." };
+    if (raw.trim().length === 0) return { ok: false, error: t("contracts.confirm.validNumber") };
     const parsed = Number(raw);
-    if (Number.isNaN(parsed)) return { ok: false, error: "Enter a valid number." };
+    if (Number.isNaN(parsed)) return { ok: false, error: t("contracts.confirm.validNumber") };
     return { ok: true, value: parsed };
   }
   if (type === "object") {
     try {
       return { ok: true, value: JSON.parse(raw) };
     } catch {
-      return { ok: false, error: "Enter valid JSON matching the original shape." };
+      return { ok: false, error: t("contracts.confirm.validJson") };
     }
   }
   if (raw.trim().length === 0) {
-    return { ok: false, error: "This can't be empty — switch back to “Accept as-is” instead." };
+    return { ok: false, error: t("contracts.confirm.notEmpty") };
   }
   return { ok: true, value: raw };
 }
@@ -88,6 +91,7 @@ function CorrectionInput({
   onChange: (value: string) => void;
   disabled: boolean;
 }) {
+  const { t } = useI18n();
   if (type === "boolean") {
     return (
       <select
@@ -96,8 +100,8 @@ function CorrectionInput({
         disabled={disabled}
         className={INPUT_CLASSES}
       >
-        <option value="true">Yes</option>
-        <option value="false">No</option>
+        <option value="true">{t("contracts.confirm.yes")}</option>
+        <option value="false">{t("contracts.confirm.no")}</option>
       </select>
     );
   }
@@ -159,6 +163,8 @@ export function ConfirmationForm({
   canUpdate,
 }: ConfirmationFormProps) {
   const router = useRouter();
+  const i18n = useI18n();
+  const { t, plural, locale } = i18n;
 
   const entries = useMemo(
     () =>
@@ -201,19 +207,19 @@ export function ConfirmationForm({
       const body = (await response.json().catch(() => null)) as { detail?: string } | null;
       if (response.status === 409) {
         setError({
-          title: "Already resolved",
-          body: body?.detail ?? "This version is no longer awaiting confirmation.",
+          title: t("contracts.confirm.alreadyTitle"),
+          body: body?.detail ?? t("contracts.confirm.alreadyBody"),
         });
       } else if (response.status === 403) {
         setError({
-          title: "You can't confirm this version",
-          body: 'Ask an administrator to grant you the "contracts" update permission.',
+          title: t("contracts.confirm.forbiddenTitle"),
+          body: t("contracts.confirm.forbiddenBody"),
         });
       } else {
-        setError({ title: "Something went wrong.", body: body?.detail ?? "Please try again." });
+        setError({ title: t("errors.somethingWentWrong"), body: body?.detail ?? t("errors.tryAgain") });
       }
     } catch {
-      setError({ title: "Could not reach the server.", body: "Please try again." });
+      setError({ title: t("errors.couldNotReachServer"), body: t("errors.tryAgain") });
     } finally {
       setSubmitting(false);
     }
@@ -227,9 +233,15 @@ export function ConfirmationForm({
     for (const { path } of entries) {
       const state = fieldStates[path];
       if (state.mode !== "correct") continue;
-      const parsed = parseCorrectionValue(expectedTypeForPath(path), state.raw);
+      const parsed = parseCorrectionValue(expectedTypeForPath(path), state.raw, i18n);
       if (!parsed.ok) {
-        setError({ title: "Check your corrections", body: `"${formatFieldPath(path)}": ${parsed.error}` });
+        setError({
+          title: t("contracts.confirm.checkCorrectionsTitle"),
+          body: t("contracts.confirm.checkCorrectionsBody", {
+            field: formatFieldPath(path, i18n),
+            error: parsed.error,
+          }),
+        });
         return;
       }
       corrections[path] = parsed.value;
@@ -249,10 +261,8 @@ export function ConfirmationForm({
   if (entries.length === 0) {
     if (!canUpdate) {
       return (
-        <Alert tone="warning" title="This version needs confirmation">
-          JuriSense could not extract any fields with enough confidence from this document.
-          Ask an admin, procurement, or legal reviewer to confirm it before it can be
-          analyzed.
+        <Alert tone="warning" title={t("contracts.confirm.needsTitle")}>
+          {t("contracts.confirm.noFieldsReadOnly")}
         </Alert>
       );
     }
@@ -260,13 +270,10 @@ export function ConfirmationForm({
       <section className="space-y-3 rounded-lg border border-warning-border bg-warning-surface p-4">
         <div className="flex items-center gap-2">
           <ShieldAlert className="size-4 text-warning" aria-hidden="true" />
-          <h2 className="text-sm font-semibold text-foreground">This version needs confirmation</h2>
+          <h2 className="text-sm font-semibold text-foreground">{t("contracts.confirm.needsTitle")}</h2>
         </div>
         <p className="text-sm text-foreground-muted">
-          JuriSense could not extract any fields with enough confidence from this document —
-          there is nothing field-level to review. Confirm to acknowledge this and move the
-          version to analyzed, or upload a clearer copy of the document as a new version
-          instead.
+          {t("contracts.confirm.noFieldsBody")}
         </p>
         {error && (
           <Alert tone="danger" title={error.title}>
@@ -275,7 +282,7 @@ export function ConfirmationForm({
         )}
         <Button type="button" loading={submitting} onClick={() => submitCorrections({})}>
           <CheckCircle2 className="size-4" aria-hidden="true" />
-          {submitting ? "Confirming…" : "Confirm and continue"}
+          {submitting ? t("contracts.confirm.submitting") : t("contracts.confirm.submit")}
         </Button>
       </section>
     );
@@ -287,20 +294,20 @@ export function ConfirmationForm({
         <div className="flex items-center gap-2">
           <ShieldAlert className="size-4 text-warning" aria-hidden="true" />
           <h2 className="text-sm font-semibold text-foreground">
-            {entries.length} field{entries.length === 1 ? "" : "s"} need confirmation
+            {plural("contracts.confirm.readOnlyTitle", entries.length)}
           </h2>
         </div>
         <p className="text-sm text-foreground-muted">
-          Ask an admin, procurement, or legal reviewer to confirm these before this version
-          can be analyzed.
+          {t("contracts.confirm.readOnlyBody")}
         </p>
         <ul className="space-y-2">
           {entries.map(({ path, leaf }) => (
             <li key={path} className="rounded-md border border-border bg-surface p-3 text-sm">
-              <p className="font-medium text-foreground">{formatFieldPath(path)}</p>
+              <p className="font-medium text-foreground">{formatFieldPath(path, i18n)}</p>
               <p className="mt-0.5 text-foreground-muted">
-                AI extracted: <span className="text-foreground">{describeValue(leaf.value)}</span> ·{" "}
-                {formatConfidence(leaf.confidence)} confidence
+                {t("contracts.confirm.aiExtracted")}{" "}
+                <span className="text-foreground">{describeValue(leaf.value, i18n)}</span> ·{" "}
+                {t("contracts.confirm.confidenceInline", { confidence: formatConfidence(leaf.confidence, locale) })}
               </p>
             </li>
           ))}
@@ -314,12 +321,11 @@ export function ConfirmationForm({
       <div className="flex items-center gap-2">
         <ShieldAlert className="size-4 text-warning" aria-hidden="true" />
         <h2 className="text-sm font-semibold text-foreground">
-          Confirm {entries.length} low-confidence field{entries.length === 1 ? "" : "s"}
+          {plural("contracts.confirm.formTitle", entries.length)}
         </h2>
       </div>
       <p className="text-sm text-foreground-muted">
-        These fields fell below JuriSense&apos;s confidence threshold. Review each one against
-        the source document, then accept the AI&apos;s value or provide a correction.
+        {t("contracts.confirm.formBody")}
       </p>
 
       {error && (
@@ -334,13 +340,16 @@ export function ConfirmationForm({
           return (
             <li key={path} className="space-y-3 rounded-md border border-border bg-surface p-3">
               <div>
-                <p className="text-sm font-semibold text-foreground">{formatFieldPath(path)}</p>
+                <p className="text-sm font-semibold text-foreground">{formatFieldPath(path, i18n)}</p>
                 <p className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-foreground-muted">
                   <span>
-                    AI extracted: <span className="font-medium text-foreground">{describeValue(leaf.value)}</span>
+                    {t("contracts.confirm.aiExtracted")}{" "}
+                    <span className="font-medium text-foreground">{describeValue(leaf.value, i18n)}</span>
                   </span>
-                  <Badge tone="warning">{formatConfidence(leaf.confidence)} confidence</Badge>
-                  <span>page {leaf.provenance.page}</span>
+                  <Badge tone="warning">
+                    {t("contracts.confirm.confidenceInline", { confidence: formatConfidence(leaf.confidence, locale) })}
+                  </Badge>
+                  <span>{t("contracts.confirm.page", { page: leaf.provenance.page })}</span>
                 </p>
               </div>
 
@@ -353,7 +362,7 @@ export function ConfirmationForm({
                     onChange={() => updateField(path, { mode: "accept" })}
                     disabled={submitting}
                   />
-                  Accept the AI value as-is
+                  {t("contracts.confirm.accept")}
                 </label>
                 <label className="flex items-center gap-2 text-sm text-foreground">
                   <input
@@ -363,7 +372,7 @@ export function ConfirmationForm({
                     onChange={() => updateField(path, { mode: "correct" })}
                     disabled={submitting}
                   />
-                  Provide a correction
+                  {t("contracts.confirm.correct")}
                 </label>
                 {state.mode === "correct" && (
                   <div className="pl-6">
@@ -383,7 +392,7 @@ export function ConfirmationForm({
 
       <Button type="submit" loading={submitting}>
         <CheckCircle2 className="size-4" aria-hidden="true" />
-        {submitting ? "Confirming…" : "Confirm and continue"}
+        {submitting ? t("contracts.confirm.submitting") : t("contracts.confirm.submit")}
       </Button>
     </form>
   );

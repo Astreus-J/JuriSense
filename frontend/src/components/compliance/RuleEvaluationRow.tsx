@@ -1,6 +1,9 @@
-import { StatusBadge, statusTone } from "@/components/shared/StatusBadge";
+import { StatusBadge } from "@/components/shared/StatusBadge";
+import { statusTone } from "@/components/shared/status-map";
 import { TONE_RAIL_CLASSES } from "@/components/ui/Badge";
 import { cn } from "@/lib/cn";
+import { isRole } from "@/lib/auth/types";
+import { getI18n } from "@/lib/i18n/server";
 import type { RuleEvaluationRecord } from "@/lib/compliance/types";
 import { EvidenceRefs } from "./EvidenceRefs";
 
@@ -10,7 +13,8 @@ import { EvidenceRefs } from "./EvidenceRefs";
  * full-transparency/audit requirement. REVIEW/BLOCK rows carry a tone rail so they read as
  * the ones needing attention; PASS / NOT_APPLICABLE stay neutral and quiet.
  */
-export function RuleEvaluationRow({ evaluation }: { evaluation: RuleEvaluationRecord }) {
+export async function RuleEvaluationRow({ evaluation }: { evaluation: RuleEvaluationRecord }) {
+  const { t } = await getI18n();
   const tone = statusTone("ruleOutcome", evaluation.outcome);
   const needsAttention = evaluation.outcome === "REVIEW" || evaluation.outcome === "BLOCK";
   return (
@@ -35,7 +39,10 @@ export function RuleEvaluationRow({ evaluation }: { evaluation: RuleEvaluationRe
 
       {evaluation.approverRole && (
         <p className="mt-1 text-xs text-foreground-muted">
-          Requires approval from <span className="font-medium text-foreground">{evaluation.approverRole}</span>
+          {t("compliance.rule.requiresApproval")}{" "}
+          <span className="font-medium text-foreground">
+            {isRole(evaluation.approverRole) ? t(`role.${evaluation.approverRole}`) : evaluation.approverRole}
+          </span>
         </p>
       )}
 

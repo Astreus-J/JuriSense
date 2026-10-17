@@ -1,5 +1,3 @@
-import type { Metadata } from "next";
-
 import { Alert } from "@/components/ui/Alert";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -8,9 +6,10 @@ import { ApiError, listPendingApprovalRequests } from "@/lib/approvals/backend";
 import { getApprovalPermissions } from "@/lib/approvals/permissions";
 import { readAccessToken } from "@/lib/auth/cookies";
 import { requireSession } from "@/lib/auth/session";
+import { getI18n, pageTitle } from "@/lib/i18n/server";
 import { NAV_ITEMS } from "@/lib/navigation/modules";
 
-export const metadata: Metadata = { title: "Approvals — JuriSense Gate" };
+export const generateMetadata = pageTitle("meta.approvals");
 
 /**
  * The Approvals inbox: every pending `ApprovalRequest` routed to the caller's own role,
@@ -20,6 +19,7 @@ export const metadata: Metadata = { title: "Approvals — JuriSense Gate" };
  */
 export default async function ApprovalsPage() {
   const user = await requireSession();
+  const { t, plural } = await getI18n();
   const permissions = getApprovalPermissions(user.role);
 
   const accessToken = await readAccessToken();
@@ -42,28 +42,27 @@ export default async function ApprovalsPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Approvals"
-        description="Approval requests routed to your role, with a link to the compliance review and evidence behind each one."
+        title={t("nav.approvals")}
+        description={t("approvals.description")}
         meta={
           !forbidden && approvalRequests.length > 0 ? (
             <span className="text-sm text-foreground-muted">
               <span className="font-medium tabular-nums text-foreground">{approvalRequests.length}</span>{" "}
-              pending {approvalRequests.length === 1 ? "request" : "requests"}
+              {plural("approvals.pendingCount", approvalRequests.length)}
             </span>
           ) : undefined
         }
       />
 
       {forbidden ? (
-        <Alert tone="danger" title="You don't have access to Approvals.">
-          Ask an administrator to grant you the &quot;approvals&quot; read permission for
-          this organization.
+        <Alert tone="danger" title={t("approvals.forbiddenTitle")}>
+          {t("approvals.forbiddenBody")}
         </Alert>
       ) : approvalRequests.length === 0 ? (
         <EmptyState
           icon={NAV_ITEMS.approvals.icon}
-          title="Your inbox is empty"
-          description="No approval requests are currently routed to your role. New requests appear here as soon as a compliance review triggers a rule that needs your sign-off."
+          title={t("approvals.emptyTitle")}
+          description={t("approvals.emptyBody")}
         />
       ) : (
         <ul className="divide-y divide-border border-y border-border">

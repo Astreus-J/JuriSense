@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
 
 import { cn } from "@/lib/cn";
+import { getI18n } from "@/lib/i18n/server";
 
 export interface Breadcrumb {
   label: string;
@@ -27,7 +28,7 @@ export interface PageHeaderProps {
  * the optional breadcrumb trail, and the page-level actions. Titles use the serif face so
  * the page identity is carried by typography rather than by decoration.
  */
-export function PageHeader({
+export async function PageHeader({
   title,
   description,
   meta,
@@ -35,10 +36,11 @@ export function PageHeader({
   breadcrumbs,
   className,
 }: PageHeaderProps) {
+  const { t } = await getI18n();
   return (
     <header className={cn("space-y-2 border-b border-border pb-4", className)}>
       {breadcrumbs && breadcrumbs.length > 0 && (
-        <nav aria-label="Breadcrumb">
+        <nav aria-label={t("common.breadcrumb")}>
           <ol className="flex flex-wrap items-center gap-1 text-xs text-foreground-muted">
             {breadcrumbs.map((crumb, index) => {
               const isLast = index === breadcrumbs.length - 1;

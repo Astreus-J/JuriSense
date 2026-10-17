@@ -4,6 +4,8 @@ import { StatusBadge } from "@/components/shared/StatusBadge";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/Button";
+import { isRole } from "@/lib/auth/types";
+import { useI18n } from "@/lib/i18n/client";
 import { RuleForm } from "./RuleForm";
 import { buildRuleYamlDraft } from "@/lib/policies/ruleYaml";
 import { describeWhen } from "@/lib/policies/types";
@@ -26,6 +28,7 @@ interface RuleListItemProps {
  * business being a URL param or a server round-trip.
  */
 export function RuleListItem({ policyId, versionId, rule, canEdit }: RuleListItemProps) {
+  const { t } = useI18n();
   const [editing, setEditing] = useState(false);
 
   if (editing) {
@@ -56,19 +59,22 @@ export function RuleListItem({ policyId, versionId, rule, canEdit }: RuleListIte
       </div>
 
       <p className="rounded border border-border bg-surface-muted px-2.5 py-1.5 font-mono text-xs text-foreground-muted">
-        WHEN {describeWhen(rule.when)}
+        {t("policies.rule.when")} {describeWhen(rule.when)}
       </p>
 
       {rule.approverRole && (
         <p className="text-xs text-foreground-muted">
-          Required approver role: <span className="font-medium text-foreground">{rule.approverRole}</span>
+          {t("policies.rule.approverRole")}{" "}
+          <span className="font-medium text-foreground">
+            {isRole(rule.approverRole) ? t(`role.${rule.approverRole}`) : rule.approverRole}
+          </span>
         </p>
       )}
 
       {canEdit && (
         <div className="flex justify-end">
           <Button type="button" size="sm" variant="secondary" onClick={() => setEditing(true)}>
-            Edit rule
+            {t("policies.rule.edit")}
           </Button>
         </div>
       )}

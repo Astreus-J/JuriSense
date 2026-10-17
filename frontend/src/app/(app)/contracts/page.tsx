@@ -1,4 +1,3 @@
-import type { Metadata } from "next";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 
@@ -12,10 +11,11 @@ import { readAccessToken } from "@/lib/auth/cookies";
 import { requireSession } from "@/lib/auth/session";
 import { listContracts } from "@/lib/contracts/backend";
 import { getContractPermissions } from "@/lib/contracts/permissions";
+import { getI18n, pageTitle } from "@/lib/i18n/server";
 import { NAV_ITEMS } from "@/lib/navigation/modules";
 import { listSuppliers } from "@/lib/suppliers/backend";
 
-export const metadata: Metadata = { title: "Contracts — JuriSense Gate" };
+export const generateMetadata = pageTitle("meta.contracts");
 
 /**
  * No status filter here (unlike Suppliers' `StatusFilterTabs`): the brief leaves this to
@@ -26,6 +26,7 @@ export const metadata: Metadata = { title: "Contracts — JuriSense Gate" };
  */
 export default async function ContractsPage() {
   const user = await requireSession();
+  const { t } = await getI18n();
   const permissions = getContractPermissions(user.role);
   const accessToken = (await readAccessToken())!;
 
@@ -60,22 +61,21 @@ export default async function ContractsPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Contracts"
-        description="Every contract your organization has uploaded, with the structured, cited extraction behind each version."
+        title={t("nav.contracts")}
+        description={t("contracts.list.description")}
         actions={
           !forbidden && permissions.canCreate ? (
             <Link href="/contracts/new" className={buttonClasses("primary")}>
               <Plus className="size-4" aria-hidden="true" />
-              Upload contract
+              {t("contracts.list.upload")}
             </Link>
           ) : undefined
         }
       />
 
       {forbidden ? (
-        <Alert tone="danger" title="You don't have access to Contracts.">
-          Ask an administrator to grant you the &quot;contracts&quot; read permission for
-          this organization.
+        <Alert tone="danger" title={t("contracts.list.forbiddenTitle")}>
+          {t("contracts.list.forbiddenBody")}
         </Alert>
       ) : contracts.length === 0 ? (
         <ContractsEmptyState canCreate={permissions.canCreate} />
@@ -86,21 +86,22 @@ export default async function ContractsPage() {
   );
 }
 
-function ContractsEmptyState({ canCreate }: { canCreate: boolean }) {
+async function ContractsEmptyState({ canCreate }: { canCreate: boolean }) {
+  const { t } = await getI18n();
   return (
     <EmptyState
       icon={NAV_ITEMS.contracts.icon}
-      title="No contracts yet"
+      title={t("contracts.list.emptyTitle")}
       description={
         canCreate
-          ? "Upload your first contract to start tracking its structured, cited extraction against your policies."
-          : "No contracts have been uploaded for your organization yet."
+          ? t("contracts.list.emptyBodyCreate")
+          : t("contracts.list.emptyBodyReadOnly")
       }
       action={
         canCreate ? (
           <Link href="/contracts/new" className={buttonClasses("primary")}>
             <Plus className="size-4" aria-hidden="true" />
-            Upload contract
+            {t("contracts.list.upload")}
           </Link>
         ) : undefined
       }

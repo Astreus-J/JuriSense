@@ -7,6 +7,7 @@ import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Textarea } from "@/components/ui/Textarea";
+import { useI18n } from "@/lib/i18n/client";
 
 interface ApprovalActionsProps {
   requestId: string;
@@ -31,6 +32,7 @@ type ActionError = { action: "approve" | "reject"; message: string } | null;
  */
 export function ApprovalActions({ requestId }: ApprovalActionsProps) {
   const router = useRouter();
+  const { t } = useI18n();
   const [justification, setJustification] = useState("");
   const [pending, setPending] = useState<PendingAction>(null);
   const [confirming, setConfirming] = useState<"approve" | "reject" | null>(null);
@@ -49,13 +51,17 @@ export function ApprovalActions({ requestId }: ApprovalActionsProps) {
         const body = (await response.json().catch(() => null)) as { detail?: string } | null;
         setError({
           action,
-          message: body?.detail ?? `Could not ${action} this request. Try again.`,
+          message:
+            body?.detail ??
+            (action === "approve"
+              ? t("approvals.actions.approveFailedDefault")
+              : t("approvals.actions.rejectFailedDefault")),
         });
         return;
       }
       router.refresh();
     } catch {
-      setError({ action, message: "Could not reach the server. Try again." });
+      setError({ action, message: t("errors.unreachableRetry") });
     } finally {
       setPending(null);
       setConfirming(null);
@@ -68,8 +74,8 @@ export function ApprovalActions({ requestId }: ApprovalActionsProps) {
   return (
     <div className="space-y-3">
       <Textarea
-        label="Justification"
-        hint="Optional to approve. Required to reject."
+        label={t("approvals.actions.justification")}
+        hint={t("approvals.actions.justificationHint")}
         value={justification}
         onChange={(event) => setJustification(event.target.value)}
         disabled={isBusy}
@@ -82,9 +88,9 @@ export function ApprovalActions({ requestId }: ApprovalActionsProps) {
           variant="secondary"
           onClick={() => setConfirming("reject")}
           disabled={isBusy || !hasJustification}
-          title={hasJustification ? undefined : "Enter a justification to reject"}
+          title={hasJustification ? undefined : t("approvals.actions.rejectNeedsJustification")}
         >
-          Reject
+          {t("approvals.actions.reject")}
         </Button>
         <Button
           type="button"
@@ -92,7 +98,7 @@ export function ApprovalActions({ requestId }: ApprovalActionsProps) {
           onClick={() => setConfirming("approve")}
           disabled={isBusy}
         >
-          Approve
+          {t("approvals.actions.approve")}
         </Button>
       </div>
 
@@ -100,7 +106,9 @@ export function ApprovalActions({ requestId }: ApprovalActionsProps) {
         <Alert
           tone="danger"
           title={
-            error.action === "reject" ? "Could not reject this request" : "Could not approve this request"
+            error.action === "reject"
+              ? t("approvals.actions.couldNotReject")
+              : t("approvals.actions.couldNotApprove")
           }
         >
           {error.message}
@@ -109,17 +117,14 @@ export function ApprovalActions({ requestId }: ApprovalActionsProps) {
 
       <ConfirmDialog
         open={confirming === "reject"}
-        title="Reject this request?"
+        title={t("approvals.actions.rejectConfirmTitle")}
         tone="danger"
-        confirmLabel="Reject request"
+        confirmLabel={t("approvals.actions.rejectConfirmLabel")}
         loading={pending === "reject"}
         onCancel={() => setConfirming(null)}
         onConfirm={() => resolve("reject")}
       >
-        <p>
-          The request is closed as rejected and your justification is recorded in the audit
-          trail. This cannot be undone.
-        </p>
+        <p>{t("approvals.actions.rejectConfirmBody")}</p>
         <blockquote className="mt-2 border-l-2 border-border-strong pl-3 text-foreground">
           {justification.trim()}
         </blockquote>
@@ -127,16 +132,13 @@ export function ApprovalActions({ requestId }: ApprovalActionsProps) {
 
       <ConfirmDialog
         open={confirming === "approve"}
-        title="Approve this request?"
-        confirmLabel="Approve request"
+        title={t("approvals.actions.approveConfirmTitle")}
+        confirmLabel={t("approvals.actions.approveConfirmLabel")}
         loading={pending === "approve"}
         onCancel={() => setConfirming(null)}
         onConfirm={() => resolve("approve")}
       >
-        <p>
-          Your approval is recorded in the audit trail and the review moves to its next step.
-          This cannot be undone.
-        </p>
+        <p>{t("approvals.actions.approveConfirmBody")}</p>
         {hasJustification && (
           <blockquote className="mt-2 border-l-2 border-border-strong pl-3 text-foreground">
             {justification.trim()}

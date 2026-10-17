@@ -1,7 +1,8 @@
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { DataTable, Td, Th, Tr } from "@/components/ui/DataTable";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { formatRoleLabel } from "@/lib/auth/types";
+import { INTL_LOCALES } from "@/lib/i18n/config";
+import { getI18n } from "@/lib/i18n/server";
 import type { Invitation } from "@/lib/organization/types";
 
 interface InvitationsListProps {
@@ -11,24 +12,25 @@ interface InvitationsListProps {
 /** Admin-only screen section, same gate as `TeamTable`. Explains what an empty state means
  * rather than a bare "No data" (persona: "Empty states should explain ... what the user
  * should do"). */
-export function InvitationsList({ invitations }: InvitationsListProps) {
+export async function InvitationsList({ invitations }: InvitationsListProps) {
+  const { t, locale } = await getI18n();
   if (invitations.length === 0) {
     return (
       <EmptyState
-        title="No invitations sent yet"
-        description="Invite a teammate using the form above. Pending and past invitations are listed here."
+        title={t("organization.invitations.emptyTitle")}
+        description={t("organization.invitations.emptyBody")}
       />
     );
   }
 
   return (
-    <DataTable caption="Invitations">
+    <DataTable caption={t("organization.invitations.caption")}>
       <thead>
         <tr>
-          <Th>Email</Th>
-          <Th>Role</Th>
-          <Th>Status</Th>
-          <Th numeric>Expires</Th>
+          <Th>{t("organization.invitations.email")}</Th>
+          <Th>{t("organization.invitations.role")}</Th>
+          <Th>{t("organization.invitations.status")}</Th>
+          <Th numeric>{t("organization.invitations.expires")}</Th>
         </tr>
       </thead>
       <tbody>
@@ -36,13 +38,13 @@ export function InvitationsList({ invitations }: InvitationsListProps) {
           <Tr key={invitation.id}>
             <Td className="font-medium text-foreground">{invitation.email}</Td>
             <Td muted className="whitespace-nowrap">
-              {formatRoleLabel(invitation.role)}
+              {t(`role.${invitation.role}`)}
             </Td>
             <Td>
               <StatusBadge kind="invitation" value={invitation.status} />
             </Td>
             <Td numeric muted className="whitespace-nowrap">
-              {new Date(invitation.expiresAt).toLocaleDateString(undefined, {
+              {new Date(invitation.expiresAt).toLocaleDateString(INTL_LOCALES[locale], {
                 year: "numeric",
                 month: "short",
                 day: "numeric",

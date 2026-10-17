@@ -7,6 +7,8 @@ import { useRouter } from "next/navigation";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { Field } from "@/components/ui/Field";
+import { useI18n } from "@/lib/i18n/client";
+import type { Translator } from "@/lib/i18n/translate";
 
 interface LoginFormProps {
   /** Where to send the user after a successful login. */
@@ -19,32 +21,34 @@ type LoginErrorState =
   | { kind: "unexpected" }
   | null;
 
-function errorMessage(error: LoginErrorState): { title: string; body?: string } | null {
+function errorMessage(error: LoginErrorState, { t }: Translator): { title: string; body?: string } | null {
   if (!error) return null;
   switch (error.kind) {
     case "invalid_credentials":
-      return { title: "Invalid email or password." };
+      return { title: t("auth.signIn.invalidCredentials") };
     case "locked": {
       // #134: `retryAfterSeconds` of `0` ("you can try again right now") is falsy, so the
       // original `? :` skipped straight to the generic fallback message -- actively
       // misleading in that exact case (told the user to wait when they didn't have to).
       // Checking for `undefined` explicitly, and special-casing `<= 0`, fixes both ends.
-      let body = "Try again in a few minutes.";
+      let body = t("auth.signIn.lockedGeneric");
       if (error.retryAfterSeconds !== undefined) {
         body =
           error.retryAfterSeconds > 0
-            ? `Try again in about ${Math.ceil(error.retryAfterSeconds / 60)} minute(s).`
-            : "You can try again now.";
+            ? t("auth.signIn.lockedMinutes", { count: Math.ceil(error.retryAfterSeconds / 60) })
+            : t("auth.signIn.lockedNow");
       }
-      return { title: "Too many failed attempts.", body };
+      return { title: t("auth.signIn.lockedTitle"), body };
     }
     case "unexpected":
-      return { title: "Something went wrong.", body: "Please try again in a moment." };
+      return { title: t("errors.somethingWentWrong"), body: t("errors.tryAgainShortly") };
   }
 }
 
 export function LoginForm({ next }: LoginFormProps) {
   const router = useRouter();
+  const i18n = useI18n();
+  const { t } = i18n;
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -85,7 +89,7 @@ export function LoginForm({ next }: LoginFormProps) {
     }
   }
 
-  const message = errorMessage(error);
+  const message = errorMessage(error, i18n);
 
   return (
     <form onSubmit={handleSubmit} noValidate className="space-y-5">
@@ -96,7 +100,7 @@ export function LoginForm({ next }: LoginFormProps) {
       )}
 
       <Field
-        label="Work email"
+        label={t("auth.signIn.email")}
         type="email"
         name="email"
         autoComplete="email"
@@ -107,7 +111,7 @@ export function LoginForm({ next }: LoginFormProps) {
       />
 
       <Field
-        label="Password"
+        label={t("auth.signIn.password")}
         type="password"
         name="password"
         autoComplete="current-password"
@@ -118,7 +122,7 @@ export function LoginForm({ next }: LoginFormProps) {
       />
 
       <Button type="submit" loading={submitting} className="w-full">
-        {submitting ? "Signing in…" : "Sign in"}
+        {submitting ? t("auth.signIn.submitting") : t("auth.signIn.submit")}
       </Button>
     </form>
   );

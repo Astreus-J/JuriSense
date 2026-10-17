@@ -4,6 +4,9 @@ import { AlertTriangle, CheckCircle2, SquarePen } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { formatConfidence, formatCurrency, formatDate } from "@/lib/format";
+import { INTL_LOCALES } from "@/lib/i18n/config";
+import { getI18n } from "@/lib/i18n/server";
+import type { Translator } from "@/lib/i18n/translate";
 import type { ContractFields, ExtractedLeaf } from "@/lib/contracts/types";
 
 interface ExtractedDataViewProps {
@@ -15,44 +18,45 @@ interface ExtractedDataViewProps {
   needsConfirmationPaths: string[];
 }
 
-function formatPlainValue(value: unknown): string {
+function formatPlainValue(value: unknown, { t, locale }: Translator): string {
   if (value === null || value === undefined) return "—";
-  if (typeof value === "boolean") return value ? "Yes" : "No";
-  if (typeof value === "number") return new Intl.NumberFormat(undefined).format(value);
+  if (typeof value === "boolean") return value ? t("contracts.confirm.yes") : t("contracts.confirm.no");
+  if (typeof value === "number") return new Intl.NumberFormat(INTL_LOCALES[locale]).format(value);
   return String(value);
 }
 
-function ConfidenceIndicator({
+async function ConfidenceIndicator({
   leaf,
   flagged,
 }: {
   leaf: ExtractedLeaf;
   flagged: boolean;
 }) {
+  const { t, locale } = await getI18n();
   if (flagged) {
     return (
       <Badge tone="warning" icon={<AlertTriangle className="size-3" aria-hidden="true" />}>
-        Needs review · {formatConfidence(leaf.confidence)}
+        {t("contracts.extracted.needsReview", { confidence: formatConfidence(leaf.confidence, locale) })}
       </Badge>
     );
   }
   if (leaf.human_corrected) {
     return (
       <Badge tone="info" icon={<SquarePen className="size-3" aria-hidden="true" />}>
-        Corrected
+        {t("contracts.extracted.corrected")}
       </Badge>
     );
   }
   if (leaf.human_confirmed) {
     return (
       <Badge tone="success" icon={<CheckCircle2 className="size-3" aria-hidden="true" />}>
-        Confirmed
+        {t("contracts.extracted.confirmed")}
       </Badge>
     );
   }
   return (
     <span className="text-xs font-normal text-foreground-muted">
-      {formatConfidence(leaf.confidence)} confidence
+      {t("contracts.extracted.confidence", { confidence: formatConfidence(leaf.confidence, locale) })}
     </span>
   );
 }
@@ -62,21 +66,28 @@ interface FieldRowProps {
   leaf: ExtractedLeaf | null | undefined;
   path: string;
   needsConfirmationPaths: string[];
-  format?: (value: unknown) => string;
+  format?: (value: unknown, i18n: Translator) => string;
 }
 
 /** One AI-extracted fact: label, formatted value, and its confidence — omitted entirely
  * (not rendered as an empty "—" row) when the AI didn't extract this field at all, since a
  * contract legitimately may not mention every possible term (persona: "progressive
  * disclosure over information overload"). */
-function FieldRow({ label, leaf, path, needsConfirmationPaths, format = formatPlainValue }: FieldRowProps) {
+async function FieldRow({
+  label,
+  leaf,
+  path,
+  needsConfirmationPaths,
+  format = formatPlainValue,
+}: FieldRowProps) {
   if (!leaf) return null;
+  const i18n = await getI18n();
   const flagged = needsConfirmationPaths.includes(path);
   return (
     <div>
       <dt className="text-xs text-foreground-muted">{label}</dt>
       <dd className="mt-0.5 flex flex-wrap items-center gap-2 text-sm font-medium text-foreground">
-        <span>{format(leaf.value)}</span>
+        <span>{format(leaf.value, i18n)}</span>
         <ConfidenceIndicator leaf={leaf} flagged={flagged} />
       </dd>
     </div>
@@ -92,7 +103,9 @@ function Card({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-export function ExtractedDataView({ fields, needsConfirmationPaths }: ExtractedDataViewProps) {
+export async function ExtractedDataView({ fields, needsConfirmationPaths }: ExtractedDataViewProps) {
+  const i18n = await getI18n();
+  const { t, locale } = i18n;
   // QA review (2026-10-17): `fields.parties.value`'s type is backend-side `Any`
   // (app/ai_services/domain/schema.py's ExtractedValue.value) -- the AI Gateway's JSON
   // Schema export loses the "array of {role,name,tax_id}" shape the prompt documents,
@@ -130,25 +143,25 @@ export function ExtractedDataView({ fields, needsConfirmationPaths }: ExtractedD
   if (!hasAnyField) {
     return (
       <EmptyState
-        title="No structured fields extracted"
-        description="JuriSense didn't extract any structured fields from this document. This can happen with scanned, low-quality, or unusually formatted files. Try uploading a clearer copy as a new version."
+        title={t("contracts.extracted.emptyTitle")}
+        description={t("contracts.extracted.emptyBody")}
       />
     );
   }
 
   return (
     <div className="space-y-6">
-      <h2 className="text-base font-semibold text-foreground">Extracted terms</h2>
+      <h2 className="text-base font-semibold text-foreground">{t("contracts.extracted.title")}</h2>
       {(fields.contract_type || fields.jurisdiction) && (
         <dl className="grid gap-4 sm:grid-cols-2">
           <FieldRow
-            label="Contract type"
+            label={t("contracts.extracted.contractType")}
             leaf={fields.contract_type}
             path="contract_type"
             needsConfirmationPaths={needsConfirmationPaths}
           />
           <FieldRow
-            label="Jurisdiction"
+            label={t("contracts.extracted.jurisdiction")}
             leaf={fields.jurisdiction}
             path="jurisdiction"
             needsConfirmationPaths={needsConfirmationPaths}
@@ -158,22 +171,23 @@ export function ExtractedDataView({ fields, needsConfirmationPaths }: ExtractedD
 
       <div className="grid gap-x-8 gap-y-6 md:grid-cols-2">
         {(fields.value?.amount || fields.value?.currency) && (
-          <Card title="Contract value">
+          <Card title={t("contracts.extracted.value")}>
             <dl className="grid gap-4 sm:grid-cols-2">
               <FieldRow
-                label="Amount"
+                label={t("contracts.extracted.amount")}
                 leaf={fields.value?.amount}
                 path="value.amount"
                 needsConfirmationPaths={needsConfirmationPaths}
                 format={(value) =>
                   formatCurrency(
                     value as number | null,
+                    locale,
                     fields.value?.currency?.value as string | undefined,
                   )
                 }
               />
               <FieldRow
-                label="Currency"
+                label={t("contracts.extracted.currency")}
                 leaf={fields.value?.currency}
                 path="value.currency"
                 needsConfirmationPaths={needsConfirmationPaths}
@@ -183,24 +197,24 @@ export function ExtractedDataView({ fields, needsConfirmationPaths }: ExtractedD
         )}
 
         {(fields.duration?.start_date || fields.duration?.end_date || fields.duration?.auto_renewal) && (
-          <Card title="Duration">
+          <Card title={t("contracts.extracted.duration")}>
             <dl className="grid gap-4 sm:grid-cols-2">
               <FieldRow
-                label="Start date"
+                label={t("contracts.extracted.startDate")}
                 leaf={fields.duration?.start_date}
                 path="duration.start_date"
                 needsConfirmationPaths={needsConfirmationPaths}
-                format={(value) => formatDate(value as string)}
+                format={(value) => formatDate(value as string, locale)}
               />
               <FieldRow
-                label="End date"
+                label={t("contracts.extracted.endDate")}
                 leaf={fields.duration?.end_date}
                 path="duration.end_date"
                 needsConfirmationPaths={needsConfirmationPaths}
-                format={(value) => formatDate(value as string)}
+                format={(value) => formatDate(value as string, locale)}
               />
               <FieldRow
-                label="Auto-renewal"
+                label={t("contracts.extracted.autoRenewal")}
                 leaf={fields.duration?.auto_renewal}
                 path="duration.auto_renewal"
                 needsConfirmationPaths={needsConfirmationPaths}
@@ -212,22 +226,22 @@ export function ExtractedDataView({ fields, needsConfirmationPaths }: ExtractedD
         {(fields.termination?.notice_period_days ||
           fields.termination?.termination_for_convenience ||
           fields.termination?.termination_for_cause_conditions) && (
-          <Card title="Termination">
+          <Card title={t("contracts.extracted.termination")}>
             <dl className="grid gap-4 sm:grid-cols-2">
               <FieldRow
-                label="Notice period (days)"
+                label={t("contracts.extracted.noticePeriod")}
                 leaf={fields.termination?.notice_period_days}
                 path="termination.notice_period_days"
                 needsConfirmationPaths={needsConfirmationPaths}
               />
               <FieldRow
-                label="Termination for convenience"
+                label={t("contracts.extracted.forConvenience")}
                 leaf={fields.termination?.termination_for_convenience}
                 path="termination.termination_for_convenience"
                 needsConfirmationPaths={needsConfirmationPaths}
               />
               <FieldRow
-                label="Termination for cause"
+                label={t("contracts.extracted.forCause")}
                 leaf={fields.termination?.termination_for_cause_conditions}
                 path="termination.termination_for_cause_conditions"
                 needsConfirmationPaths={needsConfirmationPaths}
@@ -237,16 +251,16 @@ export function ExtractedDataView({ fields, needsConfirmationPaths }: ExtractedD
         )}
 
         {(fields.liability?.type || fields.liability?.cap) && (
-          <Card title="Liability">
+          <Card title={t("contracts.extracted.liability")}>
             <dl className="grid gap-4 sm:grid-cols-2">
               <FieldRow
-                label="Type"
+                label={t("contracts.extracted.liabilityType")}
                 leaf={fields.liability?.type}
                 path="liability.type"
                 needsConfirmationPaths={needsConfirmationPaths}
               />
               <FieldRow
-                label="Cap"
+                label={t("contracts.extracted.liabilityCap")}
                 leaf={fields.liability?.cap}
                 path="liability.cap"
                 needsConfirmationPaths={needsConfirmationPaths}
@@ -256,16 +270,16 @@ export function ExtractedDataView({ fields, needsConfirmationPaths }: ExtractedD
         )}
 
         {(fields.privacy?.processes_personal_data || fields.privacy?.dpa_present) && (
-          <Card title="Privacy / DPA">
+          <Card title={t("contracts.extracted.privacy")}>
             <dl className="grid gap-4 sm:grid-cols-2">
               <FieldRow
-                label="Processes personal data"
+                label={t("contracts.extracted.processesPersonalData")}
                 leaf={fields.privacy?.processes_personal_data}
                 path="privacy.processes_personal_data"
                 needsConfirmationPaths={needsConfirmationPaths}
               />
               <FieldRow
-                label="DPA present"
+                label={t("contracts.extracted.dpaPresent")}
                 leaf={fields.privacy?.dpa_present}
                 path="privacy.dpa_present"
                 needsConfirmationPaths={needsConfirmationPaths}
@@ -276,14 +290,14 @@ export function ExtractedDataView({ fields, needsConfirmationPaths }: ExtractedD
       </div>
 
       {parties.length > 0 && (
-        <Card title="Parties">
+        <Card title={t("contracts.extracted.parties")}>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className="text-xs uppercase tracking-wide text-foreground-muted">
                 <tr>
-                  <th className="py-1.5 pr-4 font-medium">Role</th>
-                  <th className="py-1.5 pr-4 font-medium">Name</th>
-                  <th className="py-1.5 pr-4 font-medium">Tax ID</th>
+                  <th className="py-1.5 pr-4 font-medium">{t("contracts.extracted.partyRole")}</th>
+                  <th className="py-1.5 pr-4 font-medium">{t("contracts.extracted.partyName")}</th>
+                  <th className="py-1.5 pr-4 font-medium">{t("contracts.extracted.partyTaxId")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -300,7 +314,7 @@ export function ExtractedDataView({ fields, needsConfirmationPaths }: ExtractedD
           {fields.parties && (
             <div className="flex items-center gap-2 text-xs">
               <span className="font-medium uppercase tracking-wide text-foreground-muted">
-                Extraction confidence
+                {t("contracts.extracted.extractionConfidence")}
               </span>
               <ConfidenceIndicator
                 leaf={fields.parties}
@@ -312,11 +326,11 @@ export function ExtractedDataView({ fields, needsConfirmationPaths }: ExtractedD
       )}
 
       {obligations.length > 0 && (
-        <Card title="Obligations">
+        <Card title={t("contracts.extracted.obligations")}>
           <ul className="space-y-2">
             {obligations.map((leaf, index) => (
               <li key={index} className="flex flex-wrap items-center gap-2 text-sm">
-                <span className="text-foreground">{formatPlainValue(leaf.value)}</span>
+                <span className="text-foreground">{formatPlainValue(leaf.value, i18n)}</span>
                 <ConfidenceIndicator
                   leaf={leaf}
                   flagged={needsConfirmationPaths.includes(`obligations[${index}]`)}
@@ -328,14 +342,14 @@ export function ExtractedDataView({ fields, needsConfirmationPaths }: ExtractedD
       )}
 
       {deadlines.length > 0 && (
-        <Card title="Deadlines">
+        <Card title={t("contracts.extracted.deadlines")}>
           <ul className="space-y-2">
             {deadlines.map((deadline, index) => (
               <li key={index} className="flex flex-wrap items-center gap-2 text-sm">
                 <span className="text-foreground">{deadline.description}</span>
                 {deadline.date && (
                   <>
-                    <span className="text-foreground-muted">— {formatDate(deadline.date.value)}</span>
+                    <span className="text-foreground-muted">— {formatDate(deadline.date.value, locale)}</span>
                     <ConfidenceIndicator
                       leaf={deadline.date}
                       flagged={needsConfirmationPaths.includes(`deadlines[${index}].date`)}
@@ -349,16 +363,16 @@ export function ExtractedDataView({ fields, needsConfirmationPaths }: ExtractedD
       )}
 
       {hasAdditional && (
-        <Card title="Additional details">
+        <Card title={t("contracts.extracted.additional")}>
           <div className="grid gap-4 sm:grid-cols-3">
             {guarantees.length > 0 && (
               <div>
                 <p className="text-xs font-medium uppercase tracking-wide text-foreground-muted">
-                  Guarantees
+                  {t("contracts.extracted.guarantees")}
                 </p>
                 <ul className="mt-1 space-y-1 text-sm text-foreground">
                   {guarantees.map((leaf, index) => (
-                    <li key={index}>{formatPlainValue(leaf.value)}</li>
+                    <li key={index}>{formatPlainValue(leaf.value, i18n)}</li>
                   ))}
                 </ul>
               </div>
@@ -366,11 +380,11 @@ export function ExtractedDataView({ fields, needsConfirmationPaths }: ExtractedD
             {penalties.length > 0 && (
               <div>
                 <p className="text-xs font-medium uppercase tracking-wide text-foreground-muted">
-                  Penalties
+                  {t("contracts.extracted.penalties")}
                 </p>
                 <ul className="mt-1 space-y-1 text-sm text-foreground">
                   {penalties.map((leaf, index) => (
-                    <li key={index}>{formatPlainValue(leaf.value)}</li>
+                    <li key={index}>{formatPlainValue(leaf.value, i18n)}</li>
                   ))}
                 </ul>
               </div>
@@ -378,11 +392,11 @@ export function ExtractedDataView({ fields, needsConfirmationPaths }: ExtractedD
             {subprocessors.length > 0 && (
               <div>
                 <p className="text-xs font-medium uppercase tracking-wide text-foreground-muted">
-                  Subprocessors
+                  {t("contracts.extracted.subprocessors")}
                 </p>
                 <ul className="mt-1 space-y-1 text-sm text-foreground">
                   {subprocessors.map((leaf, index) => (
-                    <li key={index}>{formatPlainValue(leaf.value)}</li>
+                    <li key={index}>{formatPlainValue(leaf.value, i18n)}</li>
                   ))}
                 </ul>
               </div>

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/Button";
 import { Field } from "@/components/ui/Field";
+import { useI18n } from "@/lib/i18n/client";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -18,6 +19,7 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
  */
 export function DecisionLookupForm() {
   const router = useRouter();
+  const { t } = useI18n();
   const [decisionId, setDecisionId] = useState("");
   const [error, setError] = useState<string | null>(null);
 
@@ -25,7 +27,7 @@ export function DecisionLookupForm() {
     event.preventDefault();
     const trimmed = decisionId.trim();
     if (!UUID_PATTERN.test(trimmed)) {
-      setError("Enter a valid decision id.");
+      setError(t("evidence.lookup.invalid"));
       return;
     }
     setError(null);
@@ -36,14 +38,14 @@ export function DecisionLookupForm() {
     <form onSubmit={handleSubmit} className="flex flex-col gap-3 sm:flex-row sm:items-end">
       <div className="flex-1">
         <Field
-          label="Decision id"
-          placeholder="e.g. 3fa85f64-5717-4562-b3fc-2c963f66afa6"
+          label={t("evidence.lookup.label")}
+          placeholder={t("evidence.lookup.placeholder")}
           value={decisionId}
           onChange={(event) => setDecisionId(event.target.value)}
           error={error ?? undefined}
         />
       </div>
-      <Button type="submit">View Decision Passport</Button>
+      <Button type="submit">{t("evidence.lookup.submit")}</Button>
     </form>
   );
 }

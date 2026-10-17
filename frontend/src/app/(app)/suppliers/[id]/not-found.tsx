@@ -3,6 +3,7 @@ import { SearchX } from "lucide-react";
 
 import { buttonClasses } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { getI18n } from "@/lib/i18n/server";
 
 /**
  * Rendered when `getSupplier()` 404s in `[id]/page.tsx` (via `notFound()`) — either the
@@ -10,16 +11,17 @@ import { EmptyState } from "@/components/ui/EmptyState";
  * same 404 for both, so this page doesn't distinguish them either — doing so would leak
  * cross-tenant existence).
  */
-export default function SupplierNotFound() {
+export default async function SupplierNotFound() {
+  const { t } = await getI18n();
   return (
     <EmptyState
       as="h1"
       icon={SearchX}
-      title="Supplier not found"
-      description={<>This supplier doesn&apos;t exist, or isn&apos;t part of your organization.</>}
+      title={t("suppliers.detail.notFoundTitle")}
+      description={t("suppliers.detail.notFoundBody")}
       action={
         <Link href="/suppliers" className={buttonClasses("secondary")}>
-          Back to suppliers
+          {t("suppliers.detail.backToList")}
         </Link>
       }
     />

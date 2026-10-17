@@ -1,15 +1,19 @@
-import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { AcceptInviteForm } from "@/components/auth/AcceptInviteForm";
 import { AuthShell } from "@/components/auth/AuthShell";
 import { Alert } from "@/components/ui/Alert";
 import { getSession } from "@/lib/auth/session";
+import { getI18n } from "@/lib/i18n/server";
+import { PRODUCT_NAME } from "@/lib/i18n/config";
 
-export const metadata: Metadata = {
-  title: "Accept invitation — JuriSense Gate",
-  description: "Accept your invitation to JuriSense Gate.",
-};
+export async function generateMetadata() {
+  const { t } = await getI18n();
+  return {
+    title: `${t("meta.acceptInvite")} — ${PRODUCT_NAME}`,
+    description: t("meta.acceptInviteDescription"),
+  };
+}
 
 interface AcceptInvitePageProps {
   searchParams: Promise<{ token?: string }>;
@@ -17,15 +21,16 @@ interface AcceptInvitePageProps {
 
 export default async function AcceptInvitePage({ searchParams }: AcceptInvitePageProps) {
   const { token } = await searchParams;
+  const { t } = await getI18n();
 
   const session = await getSession();
   if (session) redirect("/dashboard");
 
   if (!token) {
     return (
-      <AuthShell heading="Invitation link missing">
-        <Alert tone="danger" title="This link is missing its invitation token.">
-          Open the invitation link from your email again, or ask your admin to resend it.
+      <AuthShell heading={t("auth.invite.missingHeading")}>
+        <Alert tone="danger" title={t("auth.invite.missingTitle")}>
+          {t("auth.invite.missingBody")}
         </Alert>
       </AuthShell>
     );
@@ -33,8 +38,8 @@ export default async function AcceptInvitePage({ searchParams }: AcceptInvitePag
 
   return (
     <AuthShell
-      heading="Accept your invitation"
-      subtext="Choose a password to finish setting up your account."
+      heading={t("auth.invite.heading")}
+      subtext={t("auth.invite.subtext")}
     >
       <AcceptInviteForm token={token} />
     </AuthShell>

@@ -27,10 +27,7 @@ export function isRole(value: string): value is Role {
   return (ROLES as readonly string[]).includes(value);
 }
 
-/** All 10 role values are single lowercase words — capitalize for display. */
-export function formatRoleLabel(role: Role): string {
-  return role.charAt(0).toUpperCase() + role.slice(1);
-}
+// Role display names are i18n messages (`role.<role>`): `t(`role.${role}`)`.
 
 /**
  * A single organization membership for the current user.

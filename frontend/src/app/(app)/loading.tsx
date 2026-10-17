@@ -1,14 +1,16 @@
 import { Skeleton } from "@/components/ui/Skeleton";
+import { getI18n } from "@/lib/i18n/server";
 
 /**
  * Shown immediately while `(app)/layout.tsx` awaits `requireSession()`
  * (the `/auth/me` round-trip). Mirrors the shell's actual layout (sidebar width, top bar
  * height, content width) so there is no jarring blank-to-full-UI flash.
  */
-export default function AuthenticatedLoading() {
+export default async function AuthenticatedLoading() {
+  const { t } = await getI18n();
   return (
     <div className="flex h-screen overflow-hidden bg-surface" role="status">
-      <span className="sr-only">Loading…</span>
+      <span className="sr-only">{t("common.loading")}</span>
       <aside className="hidden w-56 shrink-0 flex-col border-r border-border bg-surface-muted md:flex">
         <div className="flex h-14 items-center border-b border-border px-4">
           <Skeleton className="h-5 w-32 bg-border" />

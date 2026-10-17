@@ -1,20 +1,22 @@
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { DataTable, RowLink, Td, Th, Tr } from "@/components/ui/DataTable";
+import { getI18n } from "@/lib/i18n/server";
 import type { Supplier } from "@/lib/suppliers/types";
 
 interface SupplierTableProps {
   suppliers: Supplier[];
 }
 
-export function SupplierTable({ suppliers }: SupplierTableProps) {
+export async function SupplierTable({ suppliers }: SupplierTableProps) {
+  const { t } = await getI18n();
   return (
-    <DataTable caption="Registered suppliers">
+    <DataTable caption={t("suppliers.table.caption")}>
       <thead>
         <tr>
-          <Th>Legal name</Th>
-          <Th>Tax ID</Th>
-          <Th>Jurisdiction</Th>
-          <Th>Status</Th>
+          <Th>{t("suppliers.table.legalName")}</Th>
+          <Th>{t("suppliers.table.taxId")}</Th>
+          <Th>{t("suppliers.table.jurisdiction")}</Th>
+          <Th>{t("suppliers.table.status")}</Th>
         </tr>
       </thead>
       <tbody>

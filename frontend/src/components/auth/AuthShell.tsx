@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { Brand } from "@/components/app-shell/Brand";
+import { LocaleSwitcher } from "@/components/i18n/LocaleSwitcher";
 
 interface AuthShellProps {
   heading: string;
@@ -22,6 +23,9 @@ export function AuthShell({ heading, subtext, children, footer }: AuthShellProps
   return (
     <div className="flex min-h-screen items-center justify-center bg-surface-muted px-4 py-12">
       <div className="w-full max-w-sm space-y-6">
+        <div className="flex justify-end">
+          <LocaleSwitcher />
+        </div>
         <Brand className="justify-center" />
 
         <div className="rounded-lg border border-border bg-surface p-6">

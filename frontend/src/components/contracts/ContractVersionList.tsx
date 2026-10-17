@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { cn } from "@/lib/cn";
 import { formatDateTime } from "@/lib/format";
+import { getI18n } from "@/lib/i18n/server";
 import type { ContractVersion } from "@/lib/contracts/types";
 
 interface ContractVersionListProps {
@@ -21,14 +22,15 @@ interface ContractVersionListProps {
  * Rendered as a flat vertical rail (a timeline-like list with a selection marker) rather
  * than a stack of cards: it is navigation, not content.
  */
-export function ContractVersionList({ contractId, versions, selectedVersionId }: ContractVersionListProps) {
+export async function ContractVersionList({ contractId, versions, selectedVersionId }: ContractVersionListProps) {
+  const { t, locale } = await getI18n();
   const descending = [...versions].sort((a, b) => b.versionNumber - a.versionNumber);
   const currentVersionNumber = Math.max(...versions.map((v) => v.versionNumber));
 
   return (
-    <nav aria-label="Contract versions" className="min-w-0">
+    <nav aria-label={t("contracts.versions.nav")} className="min-w-0">
       <h2 className="pb-2 text-[12px] font-medium uppercase tracking-wider text-foreground-muted">
-        Versions
+        {t("contracts.versions.heading")}
       </h2>
       <ul className="flex gap-2 overflow-x-auto pb-1 lg:flex-col lg:gap-0 lg:overflow-visible lg:border-l lg:border-border lg:pb-0">
         {descending.map((version) => {
@@ -48,16 +50,18 @@ export function ContractVersionList({ contractId, versions, selectedVersionId }:
                 )}
               >
                 <span className="flex items-baseline gap-1.5 text-[14px] font-medium text-foreground">
-                  Version {version.versionNumber}
+                  {t("contracts.versions.version", { number: version.versionNumber })}
                   {isCurrent && (
-                    <span className="text-xs font-normal text-foreground-muted">current</span>
+                    <span className="text-xs font-normal text-foreground-muted">
+                      {t("contracts.versions.current")}
+                    </span>
                   )}
                 </span>
                 <span className="mt-1 block">
                   <StatusBadge kind="contractVersion" value={version.status} />
                 </span>
                 <span className="mt-1 block text-xs tabular-nums text-foreground-muted">
-                  {formatDateTime(version.createdAt)}
+                  {formatDateTime(version.createdAt, locale)}
                 </span>
               </Link>
             </li>

@@ -1,4 +1,3 @@
-import type { Metadata } from "next";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 
@@ -11,13 +10,14 @@ import { SupplierTable } from "@/components/suppliers/SupplierTable";
 import { ApiError } from "@/lib/auth/backend";
 import { readAccessToken } from "@/lib/auth/cookies";
 import { requireSession } from "@/lib/auth/session";
+import { getI18n, pageTitle } from "@/lib/i18n/server";
 import { NAV_ITEMS } from "@/lib/navigation/modules";
 import { listSuppliers } from "@/lib/suppliers/backend";
 import { getSupplierPermissions } from "@/lib/suppliers/permissions";
 import { SUPPLIER_STATUSES } from "@/lib/suppliers/types";
 import type { SupplierStatus } from "@/lib/suppliers/types";
 
-export const metadata: Metadata = { title: "Suppliers — JuriSense Gate" };
+export const generateMetadata = pageTitle("meta.suppliers");
 
 function isSupplierStatus(value: string): value is SupplierStatus {
   return (SUPPLIER_STATUSES as readonly string[]).includes(value);
@@ -31,6 +31,7 @@ interface SuppliersPageProps {
 
 export default async function SuppliersPage({ searchParams }: SuppliersPageProps) {
   const user = await requireSession();
+  const { t } = await getI18n();
   const { status } = await searchParams;
   const activeStatus = status && isSupplierStatus(status) ? status : undefined;
   const permissions = getSupplierPermissions(user.role);
@@ -55,22 +56,21 @@ export default async function SuppliersPage({ searchParams }: SuppliersPageProps
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Suppliers"
-        description="Every supplier your organization has registered, with its verification status against official and public sources."
+        title={t("nav.suppliers")}
+        description={t("suppliers.list.description")}
         actions={
           !forbidden && permissions.canCreate ? (
             <Link href="/suppliers/new" className={buttonClasses("primary")}>
               <Plus className="size-4" aria-hidden="true" />
-              Register supplier
+              {t("suppliers.list.register")}
             </Link>
           ) : undefined
         }
       />
 
       {forbidden ? (
-        <Alert tone="danger" title="You don't have access to Suppliers.">
-          Ask an administrator to grant you the &quot;suppliers&quot; read permission for this
-          organization.
+        <Alert tone="danger" title={t("suppliers.list.forbiddenTitle")}>
+          {t("suppliers.list.forbiddenBody")}
         </Alert>
       ) : (
         <div className="space-y-3">
@@ -87,25 +87,26 @@ export default async function SuppliersPage({ searchParams }: SuppliersPageProps
   );
 }
 
-function SuppliersEmptyState({ filtered, canCreate }: { filtered: boolean; canCreate: boolean }) {
+async function SuppliersEmptyState({ filtered, canCreate }: { filtered: boolean; canCreate: boolean }) {
+  const { t } = await getI18n();
   return (
     <EmptyState
       icon={NAV_ITEMS.suppliers.icon}
-      title={filtered ? "No suppliers match this filter" : "No suppliers yet"}
+      title={filtered ? t("suppliers.list.emptyFilteredTitle") : t("suppliers.list.emptyTitle")}
       description={
         filtered
-          ? "No supplier currently has this status. Pick a different status, or view all suppliers."
-          : "Register your first supplier to start tracking its verification status against official and public sources."
+          ? t("suppliers.list.emptyFilteredBody")
+          : t("suppliers.list.emptyBody")
       }
       action={
         filtered ? (
           <Link href="/suppliers" className={buttonClasses("secondary")}>
-            View all suppliers
+            {t("suppliers.list.viewAll")}
           </Link>
         ) : canCreate ? (
           <Link href="/suppliers/new" className={buttonClasses("primary")}>
             <Plus className="size-4" aria-hidden="true" />
-            Register supplier
+            {t("suppliers.list.register")}
           </Link>
         ) : undefined
       }

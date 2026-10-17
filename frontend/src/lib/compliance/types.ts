@@ -21,12 +21,6 @@ export const COMPLIANCE_REVIEW_STATUSES = ["APPROVE", "REVIEW", "BLOCK"] as cons
 
 export type ComplianceReviewStatus = (typeof COMPLIANCE_REVIEW_STATUSES)[number];
 
-export const COMPLIANCE_REVIEW_STATUS_LABELS: Record<ComplianceReviewStatus, string> = {
-  APPROVE: "Approved",
-  REVIEW: "Review required",
-  BLOCK: "Blocked",
-};
-
 /** A single `RuleEvaluation`'s outcome. `NOT_APPLICABLE` means the rule's presence condition
  * didn't match this contract's context at all (e.g. a finance-threshold rule when the
  * contract has no value field) — distinct from `PASS`, which means the condition was
@@ -35,23 +29,9 @@ export const RULE_OUTCOMES = ["PASS", "REVIEW", "BLOCK", "NOT_APPLICABLE"] as co
 
 export type RuleOutcome = (typeof RULE_OUTCOMES)[number];
 
-export const RULE_OUTCOME_LABELS: Record<RuleOutcome, string> = {
-  PASS: "Pass",
-  REVIEW: "Review required",
-  BLOCK: "Blocked",
-  NOT_APPLICABLE: "Not applicable",
-};
-
 export const SEVERITIES = ["critical", "high", "medium", "low"] as const;
 
 export type Severity = (typeof SEVERITIES)[number];
-
-export const SEVERITY_LABELS: Record<Severity, string> = {
-  critical: "Critical",
-  high: "High",
-  medium: "Medium",
-  low: "Low",
-};
 
 /** One evidence citation backing a `RuleEvaluation`/`Risk` — either a
  * `contract_extracted_field` ref (`context_path`, `contract_version_id`, `document_id`,

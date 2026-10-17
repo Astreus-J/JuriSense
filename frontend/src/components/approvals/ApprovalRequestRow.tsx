@@ -2,8 +2,9 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 
 import { StatusBadge } from "@/components/shared/StatusBadge";
-import { formatRoleLabel, isRole } from "@/lib/auth/types";
+import { isRole } from "@/lib/auth/types";
 import { formatDateTime } from "@/lib/format";
+import { getI18n } from "@/lib/i18n/server";
 import type { ApprovalRequest } from "@/lib/approvals/types";
 import { ApprovalActions } from "./ApprovalActions";
 
@@ -27,9 +28,10 @@ interface ApprovalRequestRowProps {
  * sees the full request (role, step, timing, link to evidence), just without the
  * Approve/Reject controls.
  */
-export function ApprovalRequestRow({ request, canUpdate }: ApprovalRequestRowProps) {
+export async function ApprovalRequestRow({ request, canUpdate }: ApprovalRequestRowProps) {
+  const { t, locale } = await getI18n();
   const roleLabel = isRole(request.approverRole)
-    ? formatRoleLabel(request.approverRole)
+    ? t(`role.${request.approverRole}`)
     : request.approverRole;
 
   return (
@@ -37,25 +39,25 @@ export function ApprovalRequestRow({ request, canUpdate }: ApprovalRequestRowPro
       <div className="space-y-2">
         <div className="flex flex-wrap items-center gap-2">
           <h2 className="text-sm font-semibold text-foreground">
-            Step {request.stepNumber} approval
+            {t("approvals.row.step", { number: request.stepNumber })}
           </h2>
           <StatusBadge kind="approvalRequest" value={request.status} />
         </div>
         <dl className="space-y-0.5 text-sm">
           <div className="flex gap-2">
-            <dt className="w-20 shrink-0 text-foreground-muted">Approver</dt>
+            <dt className="w-20 shrink-0 text-foreground-muted">{t("approvals.row.approver")}</dt>
             <dd>{roleLabel}</dd>
           </div>
           <div className="flex gap-2">
-            <dt className="w-20 shrink-0 text-foreground-muted">Requested</dt>
-            <dd className="tabular-nums">{formatDateTime(request.requestedAt)}</dd>
+            <dt className="w-20 shrink-0 text-foreground-muted">{t("approvals.row.requested")}</dt>
+            <dd className="tabular-nums">{formatDateTime(request.requestedAt, locale)}</dd>
           </div>
         </dl>
         <Link
           href={`/compliance/reviews/${request.complianceReviewId}`}
           className="inline-flex items-center gap-1 rounded text-sm font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
         >
-          View compliance review and evidence
+          {t("approvals.row.viewReview")}
           <ArrowRight className="size-3.5" aria-hidden="true" />
         </Link>
       </div>

@@ -8,7 +8,8 @@ import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { controlClasses } from "@/components/ui/Field";
 import { Field } from "@/components/ui/Field";
-import { formatRoleLabel, ROLES } from "@/lib/auth/types";
+import { ROLES } from "@/lib/auth/types";
+import { useI18n } from "@/lib/i18n/client";
 import type { Role } from "@/lib/auth/types";
 
 type FormErrorState = { title: string; body?: string } | null;
@@ -23,6 +24,7 @@ type FormErrorState = { title: string; body?: string } | null;
  */
 export function InviteUserForm() {
   const router = useRouter();
+  const { t } = useI18n();
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
   const [role, setRole] = useState<Role>("viewer");
@@ -55,26 +57,29 @@ export function InviteUserForm() {
       const body = (await response.json().catch(() => null)) as { detail?: string } | null;
       if (response.status === 409) {
         setError({
-          title: "Already registered",
-          body: body?.detail ?? "A user with this email already exists.",
+          title: t("organization.invite.alreadyTitle"),
+          body: body?.detail ?? t("organization.invite.alreadyBody"),
         });
       } else if (response.status === 402) {
         setError({
-          title: "Seat limit reached",
-          body: body?.detail ?? "Your plan's user limit has been reached.",
+          title: t("organization.invite.seatTitle"),
+          body: body?.detail ?? t("organization.invite.seatBody"),
         });
       } else if (response.status === 403) {
         setError({
-          title: "You can't invite teammates",
-          body: "Ask an organization admin to send the invitation.",
+          title: t("organization.invite.forbiddenTitle"),
+          body: t("organization.invite.forbiddenBody"),
         });
       } else if (response.status === 422) {
-        setError({ title: "Check the form", body: body?.detail ?? "Some fields are invalid." });
+        setError({
+          title: t("organization.invite.checkTitle"),
+          body: body?.detail ?? t("organization.invite.checkBody"),
+        });
       } else {
-        setError({ title: "Something went wrong.", body: "Please try again in a moment." });
+        setError({ title: t("errors.somethingWentWrong"), body: t("errors.tryAgainShortly") });
       }
     } catch {
-      setError({ title: "Could not reach the server.", body: "Please try again." });
+      setError({ title: t("errors.couldNotReachServer"), body: t("errors.tryAgain") });
     } finally {
       setSubmitting(false);
     }
@@ -88,14 +93,14 @@ export function InviteUserForm() {
         </Alert>
       )}
       {sentTo && !error && (
-        <Alert tone="success" title="Invitation sent">
-          {sentTo} will receive an email with a link to set up their account.
+        <Alert tone="success" title={t("organization.invite.sentTitle")}>
+          {t("organization.invite.sentBody", { email: sentTo })}
         </Alert>
       )}
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Field
-          label="Email"
+          label={t("organization.invite.email")}
           name="email"
           type="email"
           autoComplete="email"
@@ -105,10 +110,10 @@ export function InviteUserForm() {
           disabled={submitting}
         />
         <Field
-          label="Full name"
+          label={t("organization.invite.fullName")}
           name="fullName"
           autoComplete="name"
-          hint="Optional — the invitee can set it when they accept."
+          hint={t("organization.invite.fullNameHint")}
           value={fullName}
           onChange={(event) => setFullName(event.target.value)}
           disabled={submitting}
@@ -117,7 +122,7 @@ export function InviteUserForm() {
 
       <div className="space-y-1.5">
         <label htmlFor="invite-role" className="block text-sm font-medium text-foreground">
-          Role
+          {t("organization.invite.role")}
         </label>
         <select
           id="invite-role"
@@ -128,14 +133,14 @@ export function InviteUserForm() {
         >
           {ROLES.map((candidate) => (
             <option key={candidate} value={candidate}>
-              {formatRoleLabel(candidate)}
+              {t(`role.${candidate}`)}
             </option>
           ))}
         </select>
       </div>
 
       <Button type="submit" loading={submitting}>
-        {submitting ? "Sending invite…" : "Send invitation"}
+        {submitting ? t("organization.invite.submitting") : t("organization.invite.submit")}
       </Button>
     </form>
   );

@@ -6,6 +6,7 @@ import { CheckCircle2 } from "lucide-react";
 
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
+import { useI18n } from "@/lib/i18n/client";
 
 interface PublishVersionButtonProps {
   policyId: string;
@@ -23,6 +24,7 @@ interface PublishVersionButtonProps {
  */
 export function PublishVersionButton({ policyId, versionId }: PublishVersionButtonProps) {
   const router = useRouter();
+  const { t } = useI18n();
   const [confirming, setConfirming] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,13 +38,13 @@ export function PublishVersionButton({ policyId, versionId }: PublishVersionButt
       });
       if (!response.ok) {
         const body = (await response.json().catch(() => null)) as { detail?: string } | null;
-        setError(body?.detail ?? "Could not publish this version.");
+        setError(body?.detail ?? t("policies.publish.failedDefault"));
         setSubmitting(false);
         return;
       }
       router.refresh();
     } catch {
-      setError("Could not reach the server. Try again.");
+      setError(t("errors.unreachableRetry"));
       setSubmitting(false);
     }
   }
@@ -52,10 +54,10 @@ export function PublishVersionButton({ policyId, versionId }: PublishVersionButt
       <div className="flex flex-col items-end gap-2">
         <Button onClick={() => setConfirming(true)}>
           <CheckCircle2 className="size-4" aria-hidden="true" />
-          Publish version
+          {t("policies.publish.button")}
         </Button>
         {error && (
-          <Alert tone="danger" title="Could not publish" className="w-full max-w-sm">
+          <Alert tone="danger" title={t("policies.publish.errorTitle")} className="w-full max-w-sm">
             {error}
           </Alert>
         )}
@@ -64,20 +66,18 @@ export function PublishVersionButton({ policyId, versionId }: PublishVersionButt
   }
 
   return (
-    <Alert tone="warning" title="Publish this version?" className="w-full max-w-sm">
+    <Alert tone="warning" title={t("policies.publish.confirmTitle")} className="w-full max-w-sm">
       <div className="space-y-3">
         <p>
-          Every rule in this version will be frozen permanently, and it becomes this
-          policy&apos;s current version used for new compliance reviews. This can&apos;t be
-          undone — further edits always require a new draft version.
+          {t("policies.publish.confirmBody")}
         </p>
         {error && <p className="font-medium text-danger">{error}</p>}
         <div className="flex items-center gap-2">
           <Button variant="primary" onClick={handlePublish} loading={submitting}>
-            Yes, publish
+            {t("policies.publish.confirmYes")}
           </Button>
           <Button variant="ghost" onClick={() => setConfirming(false)} disabled={submitting}>
-            Cancel
+            {t("common.cancel")}
           </Button>
         </div>
       </div>

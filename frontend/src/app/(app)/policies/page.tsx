@@ -1,4 +1,3 @@
-import type { Metadata } from "next";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 
@@ -10,14 +9,16 @@ import { PolicyTable } from "@/components/policies/PolicyTable";
 import { ApiError } from "@/lib/auth/backend";
 import { readAccessToken } from "@/lib/auth/cookies";
 import { requireSession } from "@/lib/auth/session";
+import { getI18n, pageTitle } from "@/lib/i18n/server";
 import { NAV_ITEMS } from "@/lib/navigation/modules";
 import { listPolicies } from "@/lib/policies/backend";
 import { getPolicyPermissions } from "@/lib/policies/permissions";
 
-export const metadata: Metadata = { title: "Policies — JuriSense Gate" };
+export const generateMetadata = pageTitle("meta.policies");
 
 export default async function PoliciesPage() {
   const user = await requireSession();
+  const { t } = await getI18n();
   const permissions = getPolicyPermissions(user.role);
 
   const accessToken = await readAccessToken();
@@ -40,22 +41,21 @@ export default async function PoliciesPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Policies"
-        description="The rules that turn your organization's policy into an executable, versioned decision. Every published version is frozen and reproducible, so past compliance decisions never silently change."
+        title={t("nav.policies")}
+        description={t("policies.list.description")}
         actions={
           !forbidden && permissions.canCreate ? (
             <Link href="/policies/new" className={buttonClasses("primary")}>
               <Plus className="size-4" aria-hidden="true" />
-              Create policy
+              {t("policies.list.create")}
             </Link>
           ) : undefined
         }
       />
 
       {forbidden ? (
-        <Alert tone="danger" title="You don't have access to Policies.">
-          Ask an administrator to grant you the &quot;policies&quot; read permission for
-          this organization.
+        <Alert tone="danger" title={t("policies.list.forbiddenTitle")}>
+          {t("policies.list.forbiddenBody")}
         </Alert>
       ) : policies.length === 0 ? (
         <PoliciesEmptyState canCreate={permissions.canCreate} />
@@ -66,17 +66,18 @@ export default async function PoliciesPage() {
   );
 }
 
-function PoliciesEmptyState({ canCreate }: { canCreate: boolean }) {
+async function PoliciesEmptyState({ canCreate }: { canCreate: boolean }) {
+  const { t } = await getI18n();
   return (
     <EmptyState
       icon={NAV_ITEMS.policies.icon}
-      title="No policies yet"
-      description="Create your first policy to start authoring the rules compliance reviews will evaluate contracts and suppliers against."
+      title={t("policies.list.emptyTitle")}
+      description={t("policies.list.emptyBody")}
       action={
         canCreate ? (
           <Link href="/policies/new" className={buttonClasses("primary")}>
             <Plus className="size-4" aria-hidden="true" />
-            Create policy
+            {t("policies.list.create")}
           </Link>
         ) : undefined
       }

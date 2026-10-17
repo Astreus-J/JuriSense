@@ -18,12 +18,6 @@ export const POLICY_STATUSES = ["draft", "published", "archived"] as const;
 
 export type PolicyStatus = (typeof POLICY_STATUSES)[number];
 
-export const POLICY_STATUS_LABELS: Record<PolicyStatus, string> = {
-  draft: "Draft",
-  published: "Published",
-  archived: "Archived",
-};
-
 export interface Policy {
   id: string;
   organizationId: string;
@@ -43,11 +37,6 @@ export const POLICY_VERSION_STATUSES = ["draft", "published"] as const;
 
 export type PolicyVersionStatus = (typeof POLICY_VERSION_STATUSES)[number];
 
-export const POLICY_VERSION_STATUS_LABELS: Record<PolicyVersionStatus, string> = {
-  draft: "Draft",
-  published: "Published",
-};
-
 export interface PolicyVersion {
   id: string;
   policyId: string;
@@ -66,25 +55,12 @@ export const RULE_RESULT_STATUSES = ["APPROVE", "REVIEW", "BLOCK"] as const;
 
 export type RuleResultStatus = (typeof RULE_RESULT_STATUSES)[number];
 
-export const RULE_RESULT_STATUS_LABELS: Record<RuleResultStatus, string> = {
-  APPROVE: "Approve",
-  REVIEW: "Review",
-  BLOCK: "Block",
-};
-
 /** Drives required-approver tie-breaking among simultaneous REVIEW rules and reviewer-
  * queue prioritization — never the APPROVE/REVIEW/BLOCK aggregation itself
  * (`docs/03-domain/policy-engine.md` "Severity & escalation"). */
 export const SEVERITIES = ["critical", "high", "medium", "low"] as const;
 
 export type Severity = (typeof SEVERITIES)[number];
-
-export const SEVERITY_LABELS: Record<Severity, string> = {
-  critical: "Critical",
-  high: "High",
-  medium: "Medium",
-  low: "Low",
-};
 
 /**
  * One executable condition within a `PolicyVersion`. `when` is the raw, already-validated
