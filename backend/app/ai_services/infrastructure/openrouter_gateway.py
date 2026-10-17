@@ -13,6 +13,7 @@ quota (50 requests/day) will hit both identically -- this fallback protects agai
 single model's own errors/timeouts/malformed output, not against quota exhaustion.
 """
 
+import asyncio
 import json
 import logging
 import uuid
@@ -76,15 +77,33 @@ class OpenRouterAIGateway:
             base_url=self._base_url, api_key=self._api_key, timeout_seconds=self._timeout_seconds
         ) as client:
             try:
-                response = await client.post(
-                    "/chat/completions",
-                    json={
-                        "model": model,
-                        "messages": messages,
-                        "response_format": build_response_format(),
-                        "temperature": 0.0,
-                    },
+                # QA review (2026-10-16): `httpx.Timeout`'s configured read timeout was
+                # empirically confirmed NOT to bound a stalled chunked response body --
+                # reproduced live against the real OpenRouter free-tier endpoint: the
+                # server sent response headers (200 OK) immediately, then the body never
+                # arrived, for 180+ seconds straight, with httpx never raising. This
+                # leaves a Celery prefork worker stuck forever on one task (a real
+                # resource leak, not just "slow"). An explicit outer `asyncio.wait_for`
+                # is a second, independent bound that does not rely on httpx's own
+                # timeout machinery correctly covering this failure mode.
+                response = await asyncio.wait_for(
+                    client.post(
+                        "/chat/completions",
+                        json={
+                            "model": model,
+                            "messages": messages,
+                            "response_format": build_response_format(),
+                            "temperature": 0.0,
+                        },
+                    ),
+                    timeout=self._timeout_seconds + 10,
                 )
+            except TimeoutError as exc:
+                raise ExtractionProviderError(
+                    provider=_PROVIDER_NAME,
+                    model=model,
+                    detail=f"Stalled response (no body after {self._timeout_seconds + 10:.0f}s)",
+                ) from exc
             except httpx.HTTPError as exc:
                 raise ExtractionProviderError(
                     provider=_PROVIDER_NAME, model=model, detail=f"{type(exc).__name__}: {exc}"

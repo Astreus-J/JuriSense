@@ -92,7 +92,14 @@ function Card({ title, children }: { title: string; children: ReactNode }) {
 }
 
 export function ExtractedDataView({ fields, needsConfirmationPaths }: ExtractedDataViewProps) {
-  const parties = fields.parties?.value ?? [];
+  // QA review (2026-10-17): `fields.parties.value`'s type is backend-side `Any`
+  // (app/ai_services/domain/schema.py's ExtractedValue.value) -- the AI Gateway's JSON
+  // Schema export loses the "array of {role,name,tax_id}" shape the prompt documents,
+  // so a provider that doesn't follow the prose instruction exactly (confirmed with a
+  // real extraction) can return a non-array value (e.g. a single summary string) that
+  // passes backend validation but crashes `.map()` below. Never trust the shape without
+  // checking it client-side, same principle as the rest of this view's confidence gate.
+  const parties = Array.isArray(fields.parties?.value) ? fields.parties.value : [];
   const obligations = fields.obligations ?? [];
   const deadlines = fields.deadlines ?? [];
   const guarantees = fields.guarantees ?? [];

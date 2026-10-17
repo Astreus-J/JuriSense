@@ -135,8 +135,38 @@ class Settings(BaseSettings):
     ai_gateway_base_url: str = "https://openrouter.ai/api/v1"
     openrouter_api_key: str | None = None
     ai_extraction_primary_model: str = "nvidia/nemotron-3-super-120b-a12b:free"
-    ai_extraction_fallback_model: str = "qwen/qwen3.8-27b:free"
-    ai_extraction_timeout_seconds: float = 60.0
+    # QA review (2026-10-16): the previous value (`qwen/qwen3.8-27b:free`) was confirmed
+    # dead -- OpenRouter's live `/models` list no longer carries it; every call 404s
+    # ("This model is unavailable for free"), so the documented AI-003 fallback behavior
+    # silently never worked. Verified against the real, current `/models` response that
+    # this slug is live. OpenRouter's free-tier catalog changes over time (model
+    # providers add/retire slugs without notice) -- if this 404s again, re-check
+    # `GET https://openrouter.ai/api/v1/models` for current `:free`-suffixed ids rather
+    # than guessing a new one.
+    ai_extraction_fallback_model: str = "google/gemma-4-26b-a4b-it:free"
+    # 2026-10-16: bumped 60s -> 120s -- Gemini's "thinking"-enabled flash/pro models
+    # (thoughtsTokenCount in a real response, confirmed via a direct API call) take
+    # noticeably longer than OpenRouter's free models did on the same prompt; 60s+10s
+    # buffer was observed timing out a real, eventually-successful-shaped call.
+    ai_extraction_timeout_seconds: float = 120.0
+    # Which AIGatewayPort adapter get_ai_gateway() builds -- "openrouter" (default) or
+    # "gemini" (2026-10-16: added so a real Gemini API key, provided for hackathon demo
+    # recording, could be used instead of OpenRouter's free tier without touching
+    # extraction_service.py -- same config-only-swap shape ai_gateway_base_url's own
+    # docstring above already promises).
+    ai_gateway_provider: str = "openrouter"
+    gemini_api_key: str | None = None
+    gemini_api_base_url: str = "https://generativelanguage.googleapis.com/v1beta"
+    # gemini-2.5-flash/-pro were confirmed listed by GET /v1beta/models but return 404
+    # "no longer available to new users" when actually called with this key (2026-10-16
+    # QA check) -- Google's hosted model catalog moves faster than its own listing
+    # endpoint reflects for new keys. `gemini-pro-latest` as a fallback returned 429 with
+    # "limit: 0" for this key's free tier (pro-tier quota is billing-gated, not just
+    # rate-limited) -- a *pro* model is not a usable fallback on a free-tier key
+    # regardless of which one. Both values below are flash-tier, confirmed callable with
+    # a real request against this key.
+    ai_extraction_gemini_primary_model: str = "gemini-3.8-flash"
+    ai_extraction_gemini_fallback_model: str = "gemini-flash-latest"
     # Contracts routinely exceed a single extraction call's practical input budget for
     # very long master service agreements; full structural chunking
     # (docs/05-ai/document-intelligence.md "Chunking strategy") is out of scope for this

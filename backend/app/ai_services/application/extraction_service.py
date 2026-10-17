@@ -8,6 +8,7 @@ directly (enforced by `tests/ai_services/test_boundary_rules.py` and
 from app.ai_services.domain.errors import DocumentParsingError
 from app.ai_services.domain.ports import AIGatewayPort
 from app.ai_services.domain.schema import ExtractionEnvelope
+from app.ai_services.infrastructure.gemini_gateway import GeminiAIGateway
 from app.ai_services.infrastructure.openrouter_gateway import OpenRouterAIGateway
 from app.ai_services.infrastructure.prompt_builder import truncate_pages
 from app.ai_services.infrastructure.text_extraction import ExtractedDocument, extract_text
@@ -15,10 +16,24 @@ from app.core.config import get_settings
 
 
 def get_ai_gateway() -> AIGatewayPort:
-    """Builds the current `AIGatewayPort` implementation from `Settings` -- swapping to a
-    real OpenAI/Anthropic key later only changes these values
-    (`docs/adr/ADR-005-addendum-interim-ai-provider.md`), never this call site."""
+    """Builds the current `AIGatewayPort` implementation from `Settings` -- swapping
+    providers is a config-only change (`Settings.ai_gateway_provider` +
+    provider-specific keys/model names), never this call site
+    (`docs/adr/ADR-005-addendum-interim-ai-provider.md`; the 2026-10-16 addendum adding
+    `gemini` as a second adapter)."""
     settings = get_settings()
+    if settings.ai_gateway_provider == "gemini":
+        if not settings.gemini_api_key:
+            raise RuntimeError(
+                "GEMINI_API_KEY is not configured -- the AI Gateway cannot run extraction"
+            )
+        return GeminiAIGateway(
+            base_url=settings.gemini_api_base_url,
+            api_key=settings.gemini_api_key,
+            primary_model=settings.ai_extraction_gemini_primary_model,
+            fallback_model=settings.ai_extraction_gemini_fallback_model,
+            timeout_seconds=settings.ai_extraction_timeout_seconds,
+        )
     if not settings.openrouter_api_key:
         raise RuntimeError(
             "OPENROUTER_API_KEY is not configured -- the AI Gateway cannot run extraction"

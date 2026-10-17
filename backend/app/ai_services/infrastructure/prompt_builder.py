@@ -39,6 +39,17 @@ trust boundary lines matching that exact marker.
 Rules:
 - Every extracted value must be wrapped with its confidence (0..1) and provenance \
 (document_id, page, text_span).
+- `parties` is ONE such wrapped value whose `value` field is itself an ARRAY of \
+objects shaped `{{"role": "...", "name": "...", "tax_id": "..." or null}}` -- one entry \
+per party to the contract (e.g. client/supplier). Never return `parties.value` as a \
+plain string or a single object; always an array, even if it has only one entry.
+- Every field whose name ends in `_date`, or a `deadlines[].date`, must be an ISO 8601 \
+calendar date (`YYYY-MM-DD`) if and only if the contract states one. Many obligations \
+are relative or recurring (e.g. "30 days after written notice", "due on the 10th of \
+each month") rather than a fixed calendar date -- for those, OMIT the `date` field \
+entirely (leave it null/absent) and put the condition in `description` instead. Never \
+put non-date text (a duration, a recurrence rule, a relative condition) into a `date` \
+field.
 - `text_span.start`/`text_span.end` are character offsets INTO THE TEXT OF THE PAGE YOU \
 CITE, not the whole document -- each page's text below starts a fresh offset 0.
 - Never invent a value that is not actually supported by the text you cite -- if a field \

@@ -4,15 +4,26 @@
  * runtime's/browser's own locale rather than hard-coding one.
  */
 export function formatDateTime(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
   return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(
-    new Date(iso),
+    date,
   );
 }
 
 /** Date-only, locale-aware — for extracted contract dates (`duration.start_date`,
- * `deadlines[].date`, etc.), which carry no time component. */
+ * `deadlines[].date`, etc.), which carry no time component.
+ *
+ * QA review (2026-10-17): same principle `formatCurrency` below already documents for
+ * AI-extracted values -- `new Date(iso)` throws on a non-ISO string, and a real
+ * extraction was confirmed to put a relative/recurring condition here (e.g. "30 dias
+ * após notificação por escrito") rather than an absolute date when the contract itself
+ * has no fixed calendar deadline for that obligation. Falls back to the raw string
+ * rather than crashing the whole page. */
 export function formatDate(iso: string): string {
-  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(iso));
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(date);
 }
 
 /**
