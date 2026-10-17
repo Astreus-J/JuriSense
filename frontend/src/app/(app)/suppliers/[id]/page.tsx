@@ -1,5 +1,4 @@
 import { StatusBadge } from "@/components/shared/StatusBadge";
-import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { Alert } from "@/components/ui/Alert";
@@ -10,10 +9,11 @@ import { SupplierProfileCard } from "@/components/suppliers/SupplierProfileCard"
 import { ApiError } from "@/lib/auth/backend";
 import { readAccessToken } from "@/lib/auth/cookies";
 import { requireSession } from "@/lib/auth/session";
+import { getI18n, pageTitle } from "@/lib/i18n/server";
 import { getSupplier, getSupplierProfile, listSupplierChecks } from "@/lib/suppliers/backend";
 import { getSupplierPermissions } from "@/lib/suppliers/permissions";
 
-export const metadata: Metadata = { title: "Supplier — JuriSense Gate" };
+export const generateMetadata = pageTitle("meta.supplier");
 
 interface SupplierDetailPageProps {
   // Next 16: `params` is a Promise (see `node_modules/next/dist/docs/01-app/
@@ -23,6 +23,11 @@ interface SupplierDetailPageProps {
 
 export default async function SupplierDetailPage({ params }: SupplierDetailPageProps) {
   const user = await requireSession();
+  const { t } = await getI18n();
+  const breadcrumbs = [
+    { label: t("nav.suppliers"), href: "/suppliers" },
+    { label: t("suppliers.detail.breadcrumb") },
+  ];
   const { id } = await params;
   const accessToken = (await readAccessToken())!;
   const permissions = getSupplierPermissions(user.role);
@@ -38,10 +43,9 @@ export default async function SupplierDetailPage({ params }: SupplierDetailPageP
     if (error instanceof ApiError && error.status === 403) {
       return (
         <div className="space-y-5">
-          <PageHeader title="Supplier" breadcrumbs={BREADCRUMBS} />
-          <Alert tone="danger" title="You don't have access to this supplier.">
-            Ask an administrator to grant you the &quot;suppliers&quot; read permission for
-            this organization.
+          <PageHeader title={t("suppliers.detail.breadcrumb")} breadcrumbs={breadcrumbs} />
+          <Alert tone="danger" title={t("suppliers.detail.noAccessTitle")}>
+            {t("suppliers.detail.noAccessBody")}
           </Alert>
         </div>
       );
@@ -57,13 +61,13 @@ export default async function SupplierDetailPage({ params }: SupplierDetailPageP
   return (
     <div className="space-y-6">
       <PageHeader
-        breadcrumbs={[...BREADCRUMBS.slice(0, 1), { label: supplier.legalName }]}
+        breadcrumbs={[breadcrumbs[0], { label: supplier.legalName }]}
         title={supplier.legalName}
         meta={
           <>
             <StatusBadge kind="supplier" value={supplier.status} />
             <span className="text-sm text-foreground-muted">
-              Tax ID <span className="font-mono text-xs tabular-nums text-foreground">{supplier.taxId}</span>
+              {t("suppliers.detail.taxId")} <span className="font-mono text-xs tabular-nums text-foreground">{supplier.taxId}</span>
               {" · "}
               {supplier.jurisdiction}
             </span>
@@ -85,9 +89,8 @@ export default async function SupplierDetailPage({ params }: SupplierDetailPageP
       />
 
       {profile?.sanctionsHit && (
-        <Alert tone="danger" title="Sanctions hit detected">
-          This supplier matched an entry on a sanctions or watch list during its most recent
-          verification. Do not approve it until Compliance has reviewed the match below.
+        <Alert tone="danger" title={t("suppliers.detail.sanctionsTitle")}>
+          {t("suppliers.detail.sanctionsBody")}
         </Alert>
       )}
 
@@ -97,5 +100,3 @@ export default async function SupplierDetailPage({ params }: SupplierDetailPageP
     </div>
   );
 }
-
-const BREADCRUMBS = [{ label: "Suppliers", href: "/suppliers" }, { label: "Supplier" }];

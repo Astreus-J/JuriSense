@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
+import { useI18n } from "@/lib/i18n/client";
 import { RuleForm } from "./RuleForm";
 
 interface AddRuleControlProps {
@@ -20,6 +21,7 @@ interface AddRuleControlProps {
  * heading.
  */
 export function AddRuleControl({ policyId, versionId }: AddRuleControlProps) {
+  const { t } = useI18n();
   const [showForm, setShowForm] = useState(false);
 
   if (showForm) {
@@ -39,7 +41,7 @@ export function AddRuleControl({ policyId, versionId }: AddRuleControlProps) {
   return (
     <Button type="button" variant="secondary" onClick={() => setShowForm(true)}>
       <Plus className="size-4" aria-hidden="true" />
-      Add rule
+      {t("policies.rule.add")}
     </Button>
   );
 }

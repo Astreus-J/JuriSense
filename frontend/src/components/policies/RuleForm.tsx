@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Textarea";
+import { useI18n } from "@/lib/i18n/client";
 import { RULE_YAML_PLACEHOLDER } from "@/lib/policies/ruleYaml";
 
 type FormErrorState = { title: string; body?: string } | null;
@@ -34,6 +35,7 @@ interface RuleFormProps {
  */
 export function RuleForm({ policyId, versionId, mode, ruleId, initialYaml, onCancel, onSuccess }: RuleFormProps) {
   const router = useRouter();
+  const { t } = useI18n();
   const [yamlText, setYamlText] = useState(initialYaml ?? "");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<FormErrorState>(null);
@@ -64,26 +66,30 @@ export function RuleForm({ policyId, versionId, mode, ruleId, initialYaml, onCan
       const body = (await response.json().catch(() => null)) as { detail?: string } | null;
       if (response.status === 422) {
         setError({
-          title: "This rule's YAML is invalid",
-          body: body?.detail ?? "Check the YAML against the supported grammar and try again.",
+          title: t("policies.rule.invalidTitle"),
+          body: body?.detail ?? t("policies.rule.invalidDefault"),
         });
       } else if (response.status === 409) {
         setError({
-          title: "Could not save this rule",
-          body:
-            body?.detail ??
-            "This policy version can no longer accept rule changes, or its rule id is already used.",
+          title: t("policies.rule.conflictTitle"),
+          body: body?.detail ?? t("policies.rule.conflictDefault"),
         });
       } else if (response.status === 403) {
         setError({
-          title: mode === "create" ? "You can't add rules" : "You can't edit rules",
-          body: `Ask an administrator to grant you the "policies" ${mode === "create" ? "create" : "update"} permission.`,
+          title:
+            mode === "create"
+              ? t("policies.rule.forbiddenCreateTitle")
+              : t("policies.rule.forbiddenEditTitle"),
+          body:
+            mode === "create"
+              ? t("policies.rule.forbiddenCreateBody")
+              : t("policies.rule.forbiddenEditBody"),
         });
       } else {
-        setError({ title: "Something went wrong.", body: body?.detail ?? "Please try again." });
+        setError({ title: t("errors.somethingWentWrong"), body: body?.detail ?? t("errors.tryAgain") });
       }
     } catch {
-      setError({ title: "Could not reach the server.", body: "Please try again." });
+      setError({ title: t("errors.couldNotReachServer"), body: t("errors.tryAgain") });
     } finally {
       setSubmitting(false);
     }
@@ -98,7 +104,7 @@ export function RuleForm({ policyId, versionId, mode, ruleId, initialYaml, onCan
       )}
 
       <Textarea
-        label={mode === "create" ? "New rule (YAML)" : "Rule YAML"}
+        label={mode === "create" ? t("policies.rule.newYaml") : t("policies.rule.yaml")}
         name="yaml"
         required
         rows={12}
@@ -106,16 +112,16 @@ export function RuleForm({ policyId, versionId, mode, ruleId, initialYaml, onCan
         onChange={(event) => setYamlText(event.target.value)}
         disabled={submitting}
         placeholder={RULE_YAML_PLACEHOLDER}
-        hint="Author the rule exactly as policy YAML — see docs/03-domain/policy-engine.md for the full rule, severity, and operator grammar."
+        hint={t("policies.rule.yamlHint")}
         className="font-mono text-xs!"
       />
 
       <div className="flex items-center gap-2">
         <Button type="submit" loading={submitting}>
-          {mode === "create" ? "Add rule" : "Save changes"}
+          {mode === "create" ? t("policies.rule.create") : t("policies.rule.save")}
         </Button>
         <Button type="button" variant="ghost" onClick={onCancel} disabled={submitting}>
-          Cancel
+          {t("common.cancel")}
         </Button>
       </div>
     </form>

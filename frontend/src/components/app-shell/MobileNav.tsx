@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Menu, X } from "lucide-react";
 
+import { useI18n } from "@/lib/i18n/client";
 import { Brand } from "./Brand";
 
 interface MobileNavProps {
@@ -19,6 +20,7 @@ interface MobileNavProps {
  * client-components.md`.
  */
 export function MobileNav({ children }: MobileNavProps) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -69,14 +71,14 @@ export function MobileNav({ children }: MobileNavProps) {
         onClick={() => setOpen(true)}
         aria-haspopup="dialog"
         aria-expanded={open}
-        aria-label="Open navigation"
+        aria-label={t("shell.openNavigation")}
         className="rounded-md p-2 text-foreground-muted hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring md:hidden"
       >
         <Menu className="size-5" aria-hidden="true" />
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-40 md:hidden" role="dialog" aria-modal="true" aria-label="Navigation">
+        <div className="fixed inset-0 z-40 md:hidden" role="dialog" aria-modal="true" aria-label={t("shell.navigation")}>
           <div
             className="absolute inset-0 bg-black/40"
             onClick={() => setOpen(false)}
@@ -98,7 +100,7 @@ export function MobileNav({ children }: MobileNavProps) {
                 ref={closeButtonRef}
                 type="button"
                 onClick={() => setOpen(false)}
-                aria-label="Close navigation"
+                aria-label={t("shell.closeNavigation")}
                 className="rounded-md p-1.5 text-foreground-muted hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
               >
                 <X className="size-5" aria-hidden="true" />

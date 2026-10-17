@@ -1,16 +1,17 @@
-import type { Metadata } from "next";
-
 import { Brand } from "@/components/app-shell/Brand";
+import { LocaleSwitcher } from "@/components/i18n/LocaleSwitcher";
 import { Button } from "@/components/ui/Button";
 import { controlClasses } from "@/components/ui/Field";
 import { VerificationResultCard } from "@/components/verify/VerificationResultCard";
 import { ApiError, verifyPublicReference } from "@/lib/evidence/backend";
 import type { PublicVerificationResult } from "@/lib/evidence/types";
+import { PRODUCT_NAME } from "@/lib/i18n/config";
+import { getI18n } from "@/lib/i18n/server";
 
-export const metadata: Metadata = {
-  title: "Verify a decision — JuriSense Gate",
-  description: "Independently verify a JuriSense Gate decision's anchored evidence hash.",
-};
+export async function generateMetadata() {
+  const { t } = await getI18n();
+  return { title: `${t("meta.verify")} — ${PRODUCT_NAME}`, description: t("meta.verifyDescription") };
+}
 
 interface VerifyPageProps {
   // Next 16: `searchParams` is a Promise.
@@ -28,27 +29,30 @@ interface VerifyPageProps {
  */
 export default async function VerifyPage({ searchParams }: VerifyPageProps) {
   const { ref } = await searchParams;
+  const { t } = await getI18n();
   const trimmedRef = ref?.trim();
   const result = trimmedRef ? await lookUp(trimmedRef) : null;
 
   return (
     <div className="flex min-h-screen justify-center bg-surface-muted px-4 py-12">
       <div className="w-full max-w-md space-y-6">
+        <div className="flex justify-end">
+          <LocaleSwitcher />
+        </div>
         <Brand className="justify-center" />
 
         <div className="rounded-lg border border-border bg-surface p-6">
           <div className="mb-6 space-y-1 text-center">
-            <h1 className="font-serif text-2xl font-semibold tracking-tight text-foreground">Verify a decision</h1>
+            <h1 className="font-serif text-2xl font-semibold tracking-tight text-foreground">{t("verify.title")}</h1>
             <p className="text-sm text-foreground-muted">
-              Paste a Decision id or an evidence hash to independently check whether it was
-              anchored.
+              {t("verify.description")}
             </p>
           </div>
 
           <form method="GET" className="flex flex-col gap-3 sm:flex-row sm:items-end">
             <div className="flex-1 space-y-1">
               <label htmlFor="ref" className="block text-[14px] font-medium text-foreground">
-                Decision id or evidence hash
+                {t("verify.refLabel")}
               </label>
               <input
                 id="ref"
@@ -56,19 +60,18 @@ export default async function VerifyPage({ searchParams }: VerifyPageProps) {
                 type="text"
                 maxLength={255}
                 defaultValue={trimmedRef ?? ""}
-                placeholder="e.g. 3fa85f64-5717-4562-b3fc-2c963f66afa6"
+                placeholder={t("verify.refPlaceholder")}
                 className={`w-full ${controlClasses}`}
               />
             </div>
-            <Button type="submit">Verify</Button>
+            <Button type="submit">{t("verify.submit")}</Button>
           </form>
         </div>
 
         {result && <VerificationResultCard result={result} />}
 
         <p className="text-center text-xs text-foreground-muted">
-          This check does not require a JuriSense account and does not reveal anything about
-          the organization, supplier, or contract behind this decision.
+          {t("verify.footnote")}
         </p>
       </div>
     </div>

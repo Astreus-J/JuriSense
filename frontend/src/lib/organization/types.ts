@@ -12,34 +12,13 @@ import type { Role } from "@/lib/auth/types";
 export const PLANS = ["starter", "business", "growth", "enterprise"] as const;
 export type Plan = (typeof PLANS)[number];
 
-export const PLAN_LABELS: Record<Plan, string> = {
-  starter: "Starter",
-  business: "Business",
-  growth: "Growth",
-  enterprise: "Enterprise",
-};
-
 /** `UserStatus` per `backend/app/identity/domain/constants.py`. */
 export const USER_STATUSES = ["active", "inactive", "blocked", "pending"] as const;
 export type UserStatus = (typeof USER_STATUSES)[number];
 
-export const USER_STATUS_LABELS: Record<UserStatus, string> = {
-  active: "Active",
-  inactive: "Inactive",
-  blocked: "Blocked",
-  pending: "Pending",
-};
-
 /** `InvitationStatus` per `backend/app/identity/domain/constants.py`. */
 export const INVITATION_STATUSES = ["pending", "accepted", "expired", "cancelled"] as const;
 export type InvitationStatus = (typeof INVITATION_STATUSES)[number];
-
-export const INVITATION_STATUS_LABELS: Record<InvitationStatus, string> = {
-  pending: "Pending",
-  accepted: "Accepted",
-  expired: "Expired",
-  cancelled: "Cancelled",
-};
 
 /**
  * The `/settings/organization` screen's plan/usage panel (`OrganizationResponse`). The four

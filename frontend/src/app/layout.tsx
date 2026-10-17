@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Source_Serif_4 } from "next/font/google";
 import "./globals.css";
+import { I18nProvider } from "@/lib/i18n/client";
+import { getMessages } from "@/lib/i18n/catalog";
+import { HTML_LANG } from "@/lib/i18n/config";
+import { getI18n } from "@/lib/i18n/server";
 import { THEME_INIT_SCRIPT } from "@/lib/theme";
 
 const geistSans = Geist({
@@ -21,36 +25,43 @@ const sourceSerif = Source_Serif_4({
   display: "swap",
 });
 
-export const metadata: Metadata = {
-  title: "JuriSense Gate — Vendor & Contract Compliance, With Evidence",
-  description:
-    "JuriSense Gate turns contracts, supplier data, and your company's own policy into auditable, explainable compliance decisions — with AI, an executable policy engine, and blockchain-anchored evidence.",
-};
+// Default title/description for any route that doesn't set its own (the marketing landing page
+// does, and overrides these).
+export async function generateMetadata(): Promise<Metadata> {
+  const { t } = await getI18n();
+  return { title: t("meta.defaultTitle"), description: t("meta.defaultDescription") };
+}
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // The root layout renders the single <html> for the whole app, including the English-only
-  // authenticated app, so `lang` stays "en" here even on the translated marketing routes
-  // (/pt, /es) -- `LandingPage.tsx` overrides it with a nested `lang` on its wrapping <div>,
-  // which modern assistive tech honors for in-body content. Accepted tradeoff, not an
-  // oversight: avoids wrapping the entire app (including /login, /(app)/*) in a locale
-  // segment just for this.
+  // `lang` follows the active app locale (`NEXT_LOCALE` cookie, see `src/lib/i18n`). Reading the
+  // cookie makes every route dynamic, including the marketing landing page; the landing page
+  // keeps its own `lang` on a wrapping <div> (`LandingPage.tsx`), so its in-body language is
+  // still correct for assistive tech whatever the app locale cookie says.
+  //
+  // Only the ACTIVE locale's catalog is handed to the client provider, never every language.
   //
   // `suppressHydrationWarning` is scoped to <html> only: the inline script below sets
   // `data-theme` before first paint (no light/dark flash), which React would otherwise flag.
+  const { locale } = await getI18n();
+
   return (
     <html
-      lang="en"
+      lang={HTML_LANG[locale]}
       suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} ${sourceSerif.variable} h-full antialiased`}
     >
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
-      <body className="min-h-full flex flex-col bg-background text-foreground">{children}</body>
+      <body className="min-h-full flex flex-col bg-background text-foreground">
+        <I18nProvider locale={locale} messages={getMessages(locale)}>
+          {children}
+        </I18nProvider>
+      </body>
     </html>
   );
 }

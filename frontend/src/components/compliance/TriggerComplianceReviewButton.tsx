@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
+import { useI18n } from "@/lib/i18n/client";
 
 interface TriggerComplianceReviewButtonProps {
   contractId: string;
@@ -26,6 +27,7 @@ export function TriggerComplianceReviewButton({
   contractVersionId,
 }: TriggerComplianceReviewButtonProps) {
   const router = useRouter();
+  const { t } = useI18n();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -41,7 +43,7 @@ export function TriggerComplianceReviewButton({
 
       if (!response.ok) {
         const body = (await response.json().catch(() => null)) as { detail?: string } | null;
-        setError(body?.detail ?? "Could not start a compliance review.");
+        setError(body?.detail ?? t("compliance.trigger.failedDefault"));
         setSubmitting(false);
         return;
       }
@@ -49,7 +51,7 @@ export function TriggerComplianceReviewButton({
       const review = (await response.json()) as { id: string };
       router.push(`/compliance/reviews/${review.id}?contractId=${contractId}`);
     } catch {
-      setError("Could not reach the server. Try again.");
+      setError(t("errors.unreachableRetry"));
       setSubmitting(false);
     }
   }
@@ -57,11 +59,11 @@ export function TriggerComplianceReviewButton({
   return (
     <div className="flex flex-col items-end gap-2">
       <Button variant="primary" onClick={handleClick} loading={submitting}>
-        Run compliance review
+        {t("compliance.trigger.run")}
       </Button>
 
       {error && (
-        <Alert tone="danger" title="Could not start review" className="w-full max-w-sm">
+        <Alert tone="danger" title={t("compliance.trigger.errorTitle")} className="w-full max-w-sm">
           {error}
         </Alert>
       )}

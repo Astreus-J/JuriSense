@@ -17,14 +17,6 @@ export const SUPPLIER_STATUSES = [
 
 export type SupplierStatus = (typeof SUPPLIER_STATUSES)[number];
 
-export const SUPPLIER_STATUS_LABELS: Record<SupplierStatus, string> = {
-  prospect: "Prospect",
-  under_review: "Under review",
-  approved: "Approved",
-  blocked: "Blocked",
-  inactive: "Inactive",
-};
-
 /**
  * Mirrors `ALLOWED_STATUS_TRANSITIONS` in `backend/app/suppliers/domain/constants.py`
  * exactly. Security/QA review (2026-09-29) found the status dropdown offered every other
@@ -56,12 +48,6 @@ export const SUPPLIER_CHECK_STATUSES = ["started", "completed", "failed"] as con
 
 export type SupplierCheckStatus = (typeof SUPPLIER_CHECK_STATUSES)[number];
 
-export const SUPPLIER_CHECK_STATUS_LABELS: Record<SupplierCheckStatus, string> = {
-  started: "In progress",
-  completed: "Completed",
-  failed: "Failed",
-};
-
 export interface SupplierCheck {
   id: string;
   supplierId: string;
@@ -76,21 +62,8 @@ export interface SupplierCheck {
 /** Normalized `supplier.registry_status` per docs/03-domain/policy-engine.md. */
 export type RegistryStatus = "active" | "suspended" | "cancelled" | "unknown";
 
-export const REGISTRY_STATUS_LABELS: Record<RegistryStatus, string> = {
-  active: "Active",
-  suspended: "Suspended",
-  cancelled: "Cancelled",
-  unknown: "Unknown",
-};
-
 /** Normalized `supplier.address_flag` — a heuristic signal, never a BLOCK-tier rule on its own. */
 export type AddressFlag = "consistent" | "flagged" | "unknown";
-
-export const ADDRESS_FLAG_LABELS: Record<AddressFlag, string> = {
-  consistent: "Consistent",
-  flagged: "Flagged",
-  unknown: "Unknown",
-};
 
 /**
  * The normalized, current-state SupplierProfile (SUP-003). `sanctionsHit` is

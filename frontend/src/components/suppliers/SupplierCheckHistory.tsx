@@ -2,6 +2,7 @@ import { StatusBadge } from "@/components/shared/StatusBadge";
 import { DataTable, Td, Th, Tr } from "@/components/ui/DataTable";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { formatDateTime } from "@/lib/format";
+import { getI18n } from "@/lib/i18n/server";
 import type { SupplierCheck } from "@/lib/suppliers/types";
 
 interface SupplierCheckHistoryProps {
@@ -9,25 +10,26 @@ interface SupplierCheckHistoryProps {
 }
 
 /** SUP-005: the full, immutable SupplierCheck history, most recent first (the API's own order). */
-export function SupplierCheckHistory({ checks }: SupplierCheckHistoryProps) {
+export async function SupplierCheckHistory({ checks }: SupplierCheckHistoryProps) {
+  const { t, locale } = await getI18n();
   return (
     <section className="space-y-3">
-      <h2 className="text-base font-semibold text-foreground">Verification history</h2>
+      <h2 className="text-base font-semibold text-foreground">{t("suppliers.history.title")}</h2>
 
       {checks.length === 0 ? (
         <EmptyState
-          title="No verification checks yet"
-          description="Each check against official and public sources is recorded here and cannot be edited afterwards."
+          title={t("suppliers.history.emptyTitle")}
+          description={t("suppliers.history.emptyBody")}
         />
       ) : (
-        <DataTable caption="Supplier verification checks, most recent first">
+        <DataTable caption={t("suppliers.history.caption")}>
           <thead>
             <tr>
-              <Th>Status</Th>
-              <Th>Sources consulted</Th>
-              <Th>Started</Th>
-              <Th>Completed</Th>
-              <Th>Failure reason</Th>
+              <Th>{t("suppliers.history.status")}</Th>
+              <Th>{t("suppliers.history.sources")}</Th>
+              <Th>{t("suppliers.history.started")}</Th>
+              <Th>{t("suppliers.history.completed")}</Th>
+              <Th>{t("suppliers.history.failureReason")}</Th>
             </tr>
           </thead>
           <tbody>
@@ -40,10 +42,10 @@ export function SupplierCheckHistory({ checks }: SupplierCheckHistoryProps) {
                   {check.sourcesConsulted.length > 0 ? check.sourcesConsulted.join(", ") : "—"}
                 </Td>
                 <Td muted className="whitespace-nowrap tabular-nums">
-                  {formatDateTime(check.startedAt)}
+                  {formatDateTime(check.startedAt, locale)}
                 </Td>
                 <Td muted className="whitespace-nowrap tabular-nums">
-                  {check.completedAt ? formatDateTime(check.completedAt) : "—"}
+                  {check.completedAt ? formatDateTime(check.completedAt, locale) : "—"}
                 </Td>
                 <Td muted>
                   {check.status === "failed" && check.failureReason ? check.failureReason : "—"}

@@ -36,69 +36,54 @@ export type ModuleKey =
   | "integrations"
   | "settings";
 
+/**
+ * Display labels are NOT stored here: they are i18n messages keyed `nav.<key>`
+ * (`src/lib/i18n/messages/en.ts`), resolved by whoever renders the item.
+ */
 export interface NavItem {
   key: ModuleKey;
-  label: string;
   href: string;
   icon: LucideIcon;
-  /** Shown on the placeholder ("coming soon") page for modules with no real UI yet. */
-  comingSoonDescription?: string;
 }
 
 export const NAV_ITEMS: Record<ModuleKey, NavItem> = {
   dashboard: {
     key: "dashboard",
-    label: "Dashboard",
     href: "/dashboard",
     icon: LayoutDashboard,
   },
   suppliers: {
     key: "suppliers",
-    label: "Suppliers",
     href: "/suppliers",
     icon: Truck,
-    comingSoonDescription:
-      "Register suppliers and review their verification status against official and public sources.",
   },
   contracts: {
     key: "contracts",
-    label: "Contracts",
     href: "/contracts",
     icon: FileCheck2,
-    comingSoonDescription:
-      "Upload contracts and review the structured, cited extraction behind every clause.",
   },
   policies: {
     key: "policies",
-    label: "Policies",
     href: "/policies",
     icon: Gavel,
   },
   approvals: {
     key: "approvals",
-    label: "Approvals",
     href: "/approvals",
     icon: ShieldCheck,
   },
   evidence: {
     key: "evidence",
-    label: "Evidence & Audit",
     href: "/evidence",
     icon: ScrollText,
-    comingSoonDescription:
-      "Every Decision Passport and the append-only audit trail behind it, in one place.",
   },
   integrations: {
     key: "integrations",
-    label: "Integrations",
     href: "/integrations",
     icon: Plug,
-    comingSoonDescription:
-      "Connect external systems and configure outbound webhooks for lifecycle events.",
   },
   settings: {
     key: "settings",
-    label: "Settings",
     href: "/settings/organization",
     icon: Settings,
   },

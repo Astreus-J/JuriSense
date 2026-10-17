@@ -1,11 +1,8 @@
-import type { Metadata } from "next";
-
 import { RoleDashboard } from "@/components/dashboard/RoleDashboard";
 import { requireSession } from "@/lib/auth/session";
+import { pageTitle } from "@/lib/i18n/server";
 
-export const metadata: Metadata = {
-  title: "Dashboard — JuriSense Gate",
-};
+export const generateMetadata = pageTitle("meta.dashboard");
 
 export default async function DashboardPage() {
   // De-duped with the layout's own call via React's `cache()` — see

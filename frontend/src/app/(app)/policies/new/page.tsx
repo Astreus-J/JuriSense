@@ -1,9 +1,9 @@
-import type { Metadata } from "next";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { CreatePolicyForm } from "@/components/policies/CreatePolicyForm";
 import { requireSession } from "@/lib/auth/session";
+import { getI18n, pageTitle } from "@/lib/i18n/server";
 
-export const metadata: Metadata = { title: "Create policy — JuriSense Gate" };
+export const generateMetadata = pageTitle("meta.policyNew");
 
 /**
  * A dedicated route rather than a modal (persona: "Do not over-design" — a one-field form
@@ -19,13 +19,17 @@ export const metadata: Metadata = { title: "Create policy — JuriSense Gate" };
  */
 export default async function NewPolicyPage() {
   await requireSession();
+  const { t } = await getI18n();
 
   return (
     <div className="max-w-lg space-y-5">
       <PageHeader
-        breadcrumbs={[{ label: "Policies", href: "/policies" }, { label: "Create policy" }]}
-        title="Create a policy"
-        description="JuriSense creates its first draft version automatically. You'll add rules to it next, then publish when it's ready to apply to compliance reviews."
+        breadcrumbs={[
+          { label: t("nav.policies"), href: "/policies" },
+          { label: t("policies.new.breadcrumb") },
+        ]}
+        title={t("policies.new.title")}
+        description={t("policies.new.description")}
       />
       <CreatePolicyForm />
     </div>

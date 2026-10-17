@@ -27,15 +27,6 @@ export const CONTRACT_STATUSES = [
 
 export type ContractStatus = (typeof CONTRACT_STATUSES)[number];
 
-export const CONTRACT_STATUS_LABELS: Record<ContractStatus, string> = {
-  draft: "Draft",
-  under_review: "Under review",
-  active: "Active",
-  renewed: "Renewed",
-  terminated: "Terminated",
-  expired: "Expired",
-};
-
 export interface Contract {
   id: string;
   organizationId: string;
@@ -65,13 +56,6 @@ export const CONTRACT_VERSION_STATUSES = [
 ] as const;
 
 export type ContractVersionStatus = (typeof CONTRACT_VERSION_STATUSES)[number];
-
-export const CONTRACT_VERSION_STATUS_LABELS: Record<ContractVersionStatus, string> = {
-  extracted: "Processing",
-  needs_confirmation: "Needs confirmation",
-  analyzed: "Analyzed",
-  extraction_failed: "Extraction failed",
-};
 
 /** The universal leaf wrapper every extracted fact is stored in (`ExtractedValue` in
  * `schema.py`). `human_confirmed`/`human_corrected` are stamped by CON-005's confirmation

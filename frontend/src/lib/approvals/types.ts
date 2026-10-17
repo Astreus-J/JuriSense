@@ -12,12 +12,6 @@ export const APPROVAL_REQUEST_STATUSES = ["pending", "approved", "rejected"] as 
 
 export type ApprovalRequestStatus = (typeof APPROVAL_REQUEST_STATUSES)[number];
 
-export const APPROVAL_REQUEST_STATUS_LABELS: Record<ApprovalRequestStatus, string> = {
-  pending: "Pending",
-  approved: "Approved",
-  rejected: "Rejected",
-};
-
 /**
  * One step of an `ApprovalWorkflow` instantiated for a `ComplianceReview` (docs/03-domain/
  * approvals.md). `approverRole` is whichever of the 10 `Role` values the triggering `Rule`

@@ -9,6 +9,7 @@ import { controlClasses } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 import { Field } from "@/components/ui/Field";
 import { cn } from "@/lib/cn";
+import { useI18n } from "@/lib/i18n/client";
 
 const SELECT_CLASSES = `w-full ${controlClasses}`;
 
@@ -50,6 +51,7 @@ interface UploadContractFormProps {
  */
 export function UploadContractForm({ suppliers, contracts, initialContractId }: UploadContractFormProps) {
   const router = useRouter();
+  const { t } = useI18n();
   const fileInputId = useId();
 
   const [mode, setMode] = useState<UploadMode>(initialContractId ? "version" : "new");
@@ -70,15 +72,21 @@ export function UploadContractForm({ suppliers, contracts, initialContractId }: 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!file) {
-      setError({ title: "Choose a file", body: "A contract document is required." });
+      setError({ title: t("contracts.upload.chooseFileTitle"), body: t("contracts.upload.chooseFileBody") });
       return;
     }
     if (mode === "version" && !contractId) {
-      setError({ title: "Choose a contract", body: "Select which contract this version belongs to." });
+      setError({
+        title: t("contracts.upload.chooseContractTitle"),
+        body: t("contracts.upload.chooseContractBody"),
+      });
       return;
     }
     if (mode === "new" && !supplierId) {
-      setError({ title: "Choose a supplier", body: "Select which supplier this contract is with." });
+      setError({
+        title: t("contracts.upload.chooseSupplierTitle"),
+        body: t("contracts.upload.chooseSupplierBody"),
+      });
       return;
     }
 
@@ -109,23 +117,29 @@ export function UploadContractForm({ suppliers, contracts, initialContractId }: 
       const body = (await response.json().catch(() => null)) as { detail?: string } | null;
       if (response.status === 409) {
         setError({
-          title: "Conflict",
-          body: body?.detail ?? "This upload conflicts with the contract's current state.",
+          title: t("contracts.upload.conflictTitle"),
+          body: body?.detail ?? t("contracts.upload.conflictBody"),
         });
       } else if (response.status === 403) {
         setError({
-          title: "You can't upload contracts",
-          body: 'Ask an administrator to grant you the "contracts" create permission.',
+          title: t("contracts.upload.forbiddenTitle"),
+          body: t("contracts.upload.forbiddenBody"),
         });
       } else if (response.status === 422 || response.status === 400) {
-        setError({ title: "Check the form", body: body?.detail ?? "Some fields are invalid." });
+        setError({
+          title: t("contracts.upload.checkTitle"),
+          body: body?.detail ?? t("contracts.upload.checkBody"),
+        });
       } else if (response.status === 413) {
-        setError({ title: "File too large", body: body?.detail ?? "This file exceeds the 25 MB limit." });
+        setError({
+          title: t("contracts.upload.tooLargeTitle"),
+          body: body?.detail ?? t("contracts.upload.tooLargeBody"),
+        });
       } else {
-        setError({ title: "Something went wrong.", body: "Please try again in a moment." });
+        setError({ title: t("errors.somethingWentWrong"), body: t("errors.tryAgainShortly") });
       }
     } catch {
-      setError({ title: "Could not reach the server.", body: "Please try again." });
+      setError({ title: t("errors.couldNotReachServer"), body: t("errors.tryAgain") });
     } finally {
       setSubmitting(false);
     }
@@ -140,7 +154,7 @@ export function UploadContractForm({ suppliers, contracts, initialContractId }: 
       )}
 
       <fieldset className="space-y-2">
-        <legend className="text-sm font-medium text-foreground">What are you uploading?</legend>
+        <legend className="text-sm font-medium text-foreground">{t("contracts.upload.whatTitle")}</legend>
         <div className="space-y-2">
           <label className="flex cursor-pointer items-start gap-2 rounded-md border border-border p-3 text-sm has-[:checked]:border-primary has-[:checked]:bg-surface-muted">
             <input
@@ -153,9 +167,9 @@ export function UploadContractForm({ suppliers, contracts, initialContractId }: 
               className="mt-0.5"
             />
             <span>
-              <span className="block font-medium text-foreground">A new contract</span>
+              <span className="block font-medium text-foreground">{t("contracts.upload.newTitle")}</span>
               <span className="block text-foreground-muted">
-                The first version of an agreement JuriSense hasn&apos;t seen before.
+                {t("contracts.upload.newBody")}
               </span>
             </span>
           </label>
@@ -171,12 +185,12 @@ export function UploadContractForm({ suppliers, contracts, initialContractId }: 
             />
             <span>
               <span className="block font-medium text-foreground">
-                A new version of an existing contract
+                {t("contracts.upload.versionTitle")}
               </span>
               <span className="block text-foreground-muted">
                 {contracts.length === 0
-                  ? "No existing contracts to add a version to yet."
-                  : "A new negotiation round, amendment, or renewal of a contract already on file."}
+                  ? t("contracts.upload.versionBodyNone")
+                  : t("contracts.upload.versionBody")}
               </span>
             </span>
           </label>
@@ -187,7 +201,7 @@ export function UploadContractForm({ suppliers, contracts, initialContractId }: 
         <div className="space-y-5">
           <div className="space-y-1.5">
             <label htmlFor="upload-supplier" className="block text-sm font-medium text-foreground">
-              Supplier
+              {t("contracts.upload.supplier")}
             </label>
             <select
               id="upload-supplier"
@@ -197,7 +211,7 @@ export function UploadContractForm({ suppliers, contracts, initialContractId }: 
               required
               className={SELECT_CLASSES}
             >
-              <option value="">Select a supplier…</option>
+              <option value="">{t("contracts.upload.selectSupplier")}</option>
               {suppliers.map((supplier) => (
                 <option key={supplier.id} value={supplier.id}>
                   {supplier.legalName}
@@ -206,27 +220,27 @@ export function UploadContractForm({ suppliers, contracts, initialContractId }: 
             </select>
             {suppliers.length === 0 && (
               <p className="text-xs text-foreground-muted">
-                No suppliers registered yet — register one first.
+                {t("contracts.upload.noSuppliers")}
               </p>
             )}
           </div>
 
           <Field
-            label="Title"
+            label={t("contracts.upload.titleLabel")}
             name="title"
             required
-            placeholder="e.g. Master Services Agreement — CloudVendor"
+            placeholder={t("contracts.upload.titlePlaceholder")}
             value={title}
             onChange={(event) => setTitle(event.target.value)}
             disabled={submitting}
           />
 
           <Field
-            label="Contract type"
+            label={t("contracts.upload.contractType")}
             name="contractType"
             required
             maxLength={50}
-            hint="e.g. MSA, NDA, DPA, SOW."
+            hint={t("contracts.upload.contractTypeHint")}
             value={contractType}
             onChange={(event) => setContractType(event.target.value)}
             disabled={submitting}
@@ -235,7 +249,7 @@ export function UploadContractForm({ suppliers, contracts, initialContractId }: 
       ) : (
         <div className="space-y-1.5">
           <label htmlFor="upload-contract" className="block text-sm font-medium text-foreground">
-            Contract
+            {t("contracts.upload.contract")}
           </label>
           <select
             id="upload-contract"
@@ -245,7 +259,7 @@ export function UploadContractForm({ suppliers, contracts, initialContractId }: 
             required
             className={SELECT_CLASSES}
           >
-            <option value="">Select a contract…</option>
+            <option value="">{t("contracts.upload.selectContract")}</option>
             {contracts.map((contract) => (
               <option key={contract.id} value={contract.id}>
                 {contract.title}
@@ -257,7 +271,7 @@ export function UploadContractForm({ suppliers, contracts, initialContractId }: 
 
       <div className="space-y-1.5">
         <label htmlFor={fileInputId} className="block text-sm font-medium text-foreground">
-          Contract document
+          {t("contracts.upload.document")}
         </label>
         <input
           id={fileInputId}
@@ -271,11 +285,11 @@ export function UploadContractForm({ suppliers, contracts, initialContractId }: 
             "file:px-3 file:py-2 file:text-sm file:font-medium file:text-primary-foreground hover:file:bg-primary-hover",
           )}
         />
-        <p className="text-xs text-foreground-muted">PDF, DOCX, or TXT — up to 25 MB.</p>
+        <p className="text-xs text-foreground-muted">{t("contracts.upload.documentHint")}</p>
       </div>
 
       <Button type="submit" loading={submitting} className="w-full">
-        {submitting ? "Uploading…" : "Upload contract"}
+        {submitting ? t("contracts.upload.submitting") : t("contracts.upload.submit")}
       </Button>
     </form>
   );

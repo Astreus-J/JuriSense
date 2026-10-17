@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { Field } from "@/components/ui/Field";
+import { useI18n } from "@/lib/i18n/client";
 
 interface AcceptInviteFormProps {
   token: string;
@@ -16,6 +17,7 @@ type SubmitErrorState = { title: string; body?: string } | null;
 
 export function AcceptInviteForm({ token }: AcceptInviteFormProps) {
   const router = useRouter();
+  const { t } = useI18n();
   const [fullName, setFullName] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -27,7 +29,7 @@ export function AcceptInviteForm({ token }: AcceptInviteFormProps) {
     setError(null);
 
     if (password !== confirmPassword) {
-      setError({ title: "Passwords don't match.", body: "Re-enter both fields to confirm." });
+      setError({ title: t("auth.invite.mismatchTitle"), body: t("auth.invite.mismatchBody") });
       return;
     }
 
@@ -58,16 +60,16 @@ export function AcceptInviteForm({ token }: AcceptInviteFormProps) {
       const body = (await response.json().catch(() => null)) as { detail?: string } | null;
       if (response.status === 400) {
         setError({
-          title: "This invitation link is invalid or has expired.",
-          body: "Ask your admin to send you a new invitation.",
+          title: t("auth.invite.invalidTitle"),
+          body: t("auth.invite.invalidBody"),
         });
       } else if (response.status === 422) {
-        setError({ title: "Choose a stronger password.", body: body?.detail });
+        setError({ title: t("auth.invite.weakPasswordTitle"), body: body?.detail });
       } else {
-        setError({ title: "Something went wrong.", body: "Please try again in a moment." });
+        setError({ title: t("errors.somethingWentWrong"), body: t("errors.tryAgainShortly") });
       }
     } catch {
-      setError({ title: "Something went wrong.", body: "Please try again in a moment." });
+      setError({ title: t("errors.somethingWentWrong"), body: t("errors.tryAgainShortly") });
     } finally {
       setSubmitting(false);
     }
@@ -82,18 +84,18 @@ export function AcceptInviteForm({ token }: AcceptInviteFormProps) {
       )}
 
       <Field
-        label="Full name"
+        label={t("auth.invite.fullName")}
         type="text"
         name="fullName"
         autoComplete="name"
         value={fullName}
         onChange={(event) => setFullName(event.target.value)}
         disabled={submitting}
-        hint="Optional if your admin already set it when inviting you."
+        hint={t("auth.invite.fullNameHint")}
       />
 
       <Field
-        label="Choose a password"
+        label={t("auth.invite.password")}
         type="password"
         name="password"
         autoComplete="new-password"
@@ -104,7 +106,7 @@ export function AcceptInviteForm({ token }: AcceptInviteFormProps) {
       />
 
       <Field
-        label="Confirm password"
+        label={t("auth.invite.confirmPassword")}
         type="password"
         name="confirmPassword"
         autoComplete="new-password"
@@ -115,7 +117,7 @@ export function AcceptInviteForm({ token }: AcceptInviteFormProps) {
       />
 
       <Button type="submit" loading={submitting} className="w-full">
-        {submitting ? "Setting up your account…" : "Accept invitation"}
+        {submitting ? t("auth.invite.submitting") : t("auth.invite.submit")}
       </Button>
     </form>
   );

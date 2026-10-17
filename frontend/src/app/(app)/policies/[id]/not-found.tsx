@@ -3,6 +3,7 @@ import { SearchX } from "lucide-react";
 
 import { buttonClasses } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { getI18n } from "@/lib/i18n/server";
 
 /**
  * Rendered when `getPolicy()` 404s in `[id]/page.tsx` (via `notFound()`) — either the
@@ -11,16 +12,17 @@ import { EmptyState } from "@/components/ui/EmptyState";
  * `suppliers/[id]/not-found.tsx`'s identical reasoning — doing so would leak cross-tenant
  * existence).
  */
-export default function PolicyNotFound() {
+export default async function PolicyNotFound() {
+  const { t } = await getI18n();
   return (
     <EmptyState
       as="h1"
       icon={SearchX}
-      title="Policy not found"
-      description={<>This policy doesn&apos;t exist, or isn&apos;t part of your organization.</>}
+      title={t("policies.detail.notFoundTitle")}
+      description={t("policies.detail.notFoundBody")}
       action={
         <Link href="/policies" className={buttonClasses("secondary")}>
-          Back to policies
+          {t("policies.detail.backToList")}
         </Link>
       }
     />

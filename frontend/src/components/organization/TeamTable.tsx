@@ -1,6 +1,6 @@
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { DataTable, Td, Th, Tr } from "@/components/ui/DataTable";
-import { formatRoleLabel } from "@/lib/auth/types";
+import { getI18n } from "@/lib/i18n/server";
 import type { TeamMember } from "@/lib/organization/types";
 import { TeamMemberActions } from "./TeamMemberActions";
 
@@ -13,16 +13,17 @@ interface TeamTableProps {
 
 /** Admin-only screen section — `OrganizationSettingsPage` only renders this when
  * `getOrganizationPermissions(role).canManageTeam` is true. */
-export function TeamTable({ members, currentUserId }: TeamTableProps) {
+export async function TeamTable({ members, currentUserId }: TeamTableProps) {
+  const { t } = await getI18n();
   return (
-    <DataTable caption="Team members">
+    <DataTable caption={t("organization.team.caption")}>
       <thead>
         <tr>
-          <Th>Name</Th>
-          <Th>Email</Th>
-          <Th>Role</Th>
-          <Th>Status</Th>
-          <Th numeric>Actions</Th>
+          <Th>{t("organization.team.name")}</Th>
+          <Th>{t("organization.team.email")}</Th>
+          <Th>{t("organization.team.role")}</Th>
+          <Th>{t("organization.team.status")}</Th>
+          <Th numeric>{t("organization.team.actions")}</Th>
         </tr>
       </thead>
       <tbody>
@@ -31,7 +32,7 @@ export function TeamTable({ members, currentUserId }: TeamTableProps) {
             <Td className="font-medium text-foreground">{member.fullName}</Td>
             <Td muted>{member.email}</Td>
             <Td muted className="whitespace-nowrap">
-              {formatRoleLabel(member.role)}
+              {t(`role.${member.role}`)}
             </Td>
             <Td>
               <StatusBadge kind="user" value={member.status} />

@@ -1,4 +1,3 @@
-import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { Alert } from "@/components/ui/Alert";
@@ -7,10 +6,12 @@ import { ComplianceReviewResults } from "@/components/compliance/ComplianceRevie
 import { ApiError } from "@/lib/auth/backend";
 import { readAccessToken } from "@/lib/auth/cookies";
 import { requireSession } from "@/lib/auth/session";
+import { getI18n, pageTitle } from "@/lib/i18n/server";
+import type { Translator } from "@/lib/i18n/translate";
 import { getComplianceReview } from "@/lib/compliance/backend";
 import { getCompliancePermissions } from "@/lib/compliance/permissions";
 
-export const metadata: Metadata = { title: "Compliance review — JuriSense Gate" };
+export const generateMetadata = pageTitle("meta.complianceReview");
 
 interface ComplianceReviewPageProps {
   // Next 16: `params`/`searchParams` are Promises.
@@ -29,6 +30,8 @@ export default async function ComplianceReviewPage({
   searchParams,
 }: ComplianceReviewPageProps) {
   const user = await requireSession();
+  const i18n = await getI18n();
+  const { t } = i18n;
   const { id } = await params;
   const { contractId } = await searchParams;
   const accessToken = (await readAccessToken())!;
@@ -37,10 +40,9 @@ export default async function ComplianceReviewPage({
   if (!permissions.canRead) {
     return (
       <div className="space-y-5">
-        <PageHeader title="Compliance review" breadcrumbs={breadcrumbsFor(contractId)} />
-        <Alert tone="danger" title="You don't have access to compliance reviews.">
-          Ask an administrator to grant you the &quot;compliance reviews&quot; read permission
-          for this organization.
+        <PageHeader title={t("compliance.title")} breadcrumbs={breadcrumbsFor(i18n, contractId)} />
+        <Alert tone="danger" title={t("compliance.noAccessTitle")}>
+          {t("compliance.noAccessBody")}
         </Alert>
       </div>
     );
@@ -56,10 +58,9 @@ export default async function ComplianceReviewPage({
     if (error instanceof ApiError && error.status === 403) {
       return (
         <div className="space-y-5">
-          <PageHeader title="Compliance review" breadcrumbs={breadcrumbsFor(contractId)} />
-          <Alert tone="danger" title="You don't have access to this compliance review.">
-            Ask an administrator to grant you the &quot;compliance reviews&quot; read
-            permission for this organization.
+          <PageHeader title={t("compliance.title")} breadcrumbs={breadcrumbsFor(i18n, contractId)} />
+          <Alert tone="danger" title={t("compliance.noAccessThisTitle")}>
+            {t("compliance.noAccessBody")}
           </Alert>
         </div>
       );
@@ -70,21 +71,21 @@ export default async function ComplianceReviewPage({
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Compliance review"
-        description="The decision, the risks behind it, and every rule that was evaluated, each with its evidence."
-        breadcrumbs={breadcrumbsFor(contractId)}
+        title={t("compliance.title")}
+        description={t("compliance.description")}
+        breadcrumbs={breadcrumbsFor(i18n, contractId)}
       />
       <ComplianceReviewResults detail={detail} />
     </div>
   );
 }
 
-function breadcrumbsFor(contractId?: string) {
+function breadcrumbsFor({ t }: Translator, contractId?: string) {
   return contractId
     ? [
-        { label: "Contracts", href: "/contracts" },
-        { label: "Contract", href: `/contracts/${contractId}` },
-        { label: "Compliance review" },
+        { label: t("nav.contracts"), href: "/contracts" },
+        { label: t("compliance.breadcrumbContract"), href: `/contracts/${contractId}` },
+        { label: t("compliance.title") },
       ]
-    : [{ label: "Compliance review" }];
+    : [{ label: t("compliance.title") }];
 }

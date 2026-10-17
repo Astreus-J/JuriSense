@@ -1,5 +1,4 @@
 import { StatusBadge } from "@/components/shared/StatusBadge";
-import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Loader2, Plus } from "lucide-react";
@@ -27,10 +26,12 @@ import {
 } from "@/lib/contracts/backend";
 import { getContractPermissions } from "@/lib/contracts/permissions";
 import { formatConfidence, formatDateTime } from "@/lib/format";
+import { getI18n, pageTitle } from "@/lib/i18n/server";
 import { getSupplier } from "@/lib/suppliers/backend";
+import type { Translator } from "@/lib/i18n/translate";
 import type { ContractFields, ContractVersion } from "@/lib/contracts/types";
 
-export const metadata: Metadata = { title: "Contract — JuriSense Gate" };
+export const generateMetadata = pageTitle("meta.contract");
 
 interface ContractDetailPageProps {
   // Next 16: `params`/`searchParams` are Promises.
@@ -40,6 +41,12 @@ interface ContractDetailPageProps {
 
 export default async function ContractDetailPage({ params, searchParams }: ContractDetailPageProps) {
   const user = await requireSession();
+  const i18n = await getI18n();
+  const { t, locale } = i18n;
+  const breadcrumbs = [
+    { label: t("nav.contracts"), href: "/contracts" },
+    { label: t("contracts.detail.breadcrumb") },
+  ];
   const { id } = await params;
   const { version: versionParam } = await searchParams;
   const accessToken = (await readAccessToken())!;
@@ -56,10 +63,9 @@ export default async function ContractDetailPage({ params, searchParams }: Contr
     if (error instanceof ApiError && error.status === 403) {
       return (
         <div className="space-y-5">
-          <PageHeader title="Contract" breadcrumbs={BREADCRUMBS} />
-          <Alert tone="danger" title="You don't have access to this contract.">
-            Ask an administrator to grant you the &quot;contracts&quot; read permission for
-            this organization.
+          <PageHeader title={t("contracts.detail.breadcrumb")} breadcrumbs={breadcrumbs} />
+          <Alert tone="danger" title={t("contracts.detail.noAccessTitle")}>
+            {t("contracts.detail.noAccessBody")}
           </Alert>
         </div>
       );
@@ -74,9 +80,9 @@ export default async function ContractDetailPage({ params, searchParams }: Contr
     // invariant that should never actually break, not an expected empty state.
     return (
       <div className="space-y-5">
-        <PageHeader title={contract.title} breadcrumbs={BREADCRUMBS} />
-        <Alert tone="warning" title="This contract has no versions yet.">
-          This shouldn&apos;t normally happen — contact support if it persists.
+        <PageHeader title={contract.title} breadcrumbs={breadcrumbs} />
+        <Alert tone="warning" title={t("contracts.detail.noVersionsTitle")}>
+          {t("contracts.detail.noVersionsBody")}
         </Alert>
       </div>
     );
@@ -109,7 +115,7 @@ export default async function ContractDetailPage({ params, searchParams }: Contr
   return (
     <div className="space-y-6">
       <PageHeader
-        breadcrumbs={[BREADCRUMBS[0], { label: contract.title }]}
+        breadcrumbs={[breadcrumbs[0], { label: contract.title }]}
         title={contract.title}
         meta={
           <>
@@ -124,9 +130,9 @@ export default async function ContractDetailPage({ params, searchParams }: Contr
                   {supplierName}
                 </Link>
               ) : (
-                "Unknown supplier"
+                t("contracts.detail.unknownSupplier")
               )}{" "}
-              · Created {formatDateTime(contract.createdAt)}
+              · {t("contracts.detail.created", { date: formatDateTime(contract.createdAt, locale) })}
             </span>
           </>
         }
@@ -137,7 +143,7 @@ export default async function ContractDetailPage({ params, searchParams }: Contr
               className={buttonClasses("secondary")}
             >
               <Plus className="size-4" aria-hidden="true" />
-              Upload new version
+              {t("contracts.detail.uploadVersion")}
             </Link>
           ) : undefined
         }
@@ -149,6 +155,7 @@ export default async function ContractDetailPage({ params, searchParams }: Contr
         <div className="min-w-0 space-y-6">
           <VersionSummary
             version={version}
+            i18n={i18n}
             action={
               compliancePermissions.canCreate && version.status === "analyzed" ? (
                 <TriggerComplianceReviewButton
@@ -166,15 +173,14 @@ export default async function ContractDetailPage({ params, searchParams }: Contr
           {version.status === "extracted" && (
             <EmptyState
               icon={Loader2}
-              title="Extraction in progress"
-              description="JuriSense is reading this document and structuring its key terms. This usually takes a minute or two. Refresh to check for an update."
+              title={t("contracts.detail.extractionInProgressTitle")}
+              description={t("contracts.detail.extractionInProgressBody")}
             />
           )}
 
           {version.status === "extraction_failed" && (
-            <Alert tone="danger" title="Extraction failed">
-              {version.extractionFailureReason ??
-                "AI extraction could not process this document. Try uploading it again."}
+            <Alert tone="danger" title={t("contracts.detail.extractionFailedTitle")}>
+              {version.extractionFailureReason ?? t("contracts.detail.extractionFailedDefault")}
             </Alert>
           )}
 
@@ -200,21 +206,29 @@ export default async function ContractDetailPage({ params, searchParams }: Contr
   );
 }
 
-const BREADCRUMBS = [{ label: "Contracts", href: "/contracts" }, { label: "Contract" }];
-
-function VersionSummary({ version, action }: { version: ContractVersion; action?: React.ReactNode }) {
+function VersionSummary({
+  version,
+  action,
+  i18n: { t, locale },
+}: {
+  version: ContractVersion;
+  action?: React.ReactNode;
+  i18n: Translator;
+}) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-border pb-3">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <h2 className="text-base font-semibold text-foreground">Version {version.versionNumber}</h2>
+        <h2 className="text-base font-semibold text-foreground">
+          {t("contracts.detail.versionHeading", { number: version.versionNumber })}
+        </h2>
         <StatusBadge kind="contractVersion" value={version.status} />
         <span className="text-xs text-foreground-muted">
-          Uploaded {formatDateTime(version.createdAt)}
+          {t("contracts.detail.uploaded", { date: formatDateTime(version.createdAt, locale) })}
         </span>
         {version.extractionConfidence !== null && (
           <span className="text-xs text-foreground-muted">
-            Minimum field confidence{" "}
-            <span className="tabular-nums">{formatConfidence(version.extractionConfidence)}</span>
+            {t("contracts.detail.minConfidence")}{" "}
+            <span className="tabular-nums">{formatConfidence(version.extractionConfidence, locale)}</span>
           </span>
         )}
       </div>

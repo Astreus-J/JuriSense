@@ -1,7 +1,8 @@
 import Link from "next/link";
 
 import { cn } from "@/lib/cn";
-import { SUPPLIER_STATUSES, SUPPLIER_STATUS_LABELS } from "@/lib/suppliers/types";
+import { getI18n } from "@/lib/i18n/server";
+import { SUPPLIER_STATUSES } from "@/lib/suppliers/types";
 import type { SupplierStatus } from "@/lib/suppliers/types";
 
 interface StatusFilterTabsProps {
@@ -15,18 +16,19 @@ interface StatusFilterTabsProps {
  * section* across many routes). This makes the filter bookmarkable/shareable/back-button
  * -safe for free (persona: "URL as state").
  */
-export function StatusFilterTabs({ activeStatus }: StatusFilterTabsProps) {
+export async function StatusFilterTabs({ activeStatus }: StatusFilterTabsProps) {
+  const { t } = await getI18n();
   const tabs: Array<{ key: SupplierStatus | "all"; label: string; href: string }> = [
-    { key: "all", label: "All", href: "/suppliers" },
+    { key: "all", label: t("suppliers.list.filterAll"), href: "/suppliers" },
     ...SUPPLIER_STATUSES.map((status) => ({
       key: status,
-      label: SUPPLIER_STATUS_LABELS[status],
+      label: t(`status.supplier.${status}`),
       href: `/suppliers?status=${status}`,
     })),
   ];
 
   return (
-    <nav aria-label="Filter suppliers by status" className="flex flex-wrap gap-x-1 border-b border-border">
+    <nav aria-label={t("suppliers.list.filterNav")} className="flex flex-wrap gap-x-1 border-b border-border">
       {tabs.map((tab) => {
         const isActive = tab.key === "all" ? !activeStatus : tab.key === activeStatus;
         return (

@@ -1,5 +1,6 @@
 import { Building2 } from "lucide-react";
 
+import { getI18n } from "@/lib/i18n/server";
 import type { Membership } from "@/lib/auth/types";
 
 interface OrgSwitcherProps {
@@ -16,16 +17,17 @@ interface OrgSwitcherProps {
  * `UserResponse` also carries no organization *name*, only `organization_id`, so this falls
  * back to a short, clearly-labeled id rather than displaying a fabricated name.
  */
-export function OrgSwitcher({ memberships, activeOrganizationId }: OrgSwitcherProps) {
+export async function OrgSwitcher({ memberships, activeOrganizationId }: OrgSwitcherProps) {
+  const { t } = await getI18n();
   const active =
     memberships.find((m) => m.organizationId === activeOrganizationId) ?? memberships[0];
-  const label = active.organizationName || `Organization ${active.organizationId.slice(0, 8)}`;
+  const label = active.organizationName || t("shell.organizationFallback", { id: active.organizationId.slice(0, 8) });
 
   return (
     <div className="flex items-center gap-2 rounded-md border border-border bg-surface px-2.5 py-1.5">
       <Building2 className="size-4 shrink-0 text-foreground-muted" aria-hidden="true" />
       <div className="min-w-0 leading-tight">
-        <p className="text-[12px] text-foreground-muted">Organization</p>
+        <p className="text-[12px] text-foreground-muted">{t("shell.organization")}</p>
         <p className="truncate text-[14px] font-medium text-foreground" title={label}>
           {label}
         </p>

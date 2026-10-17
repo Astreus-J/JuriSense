@@ -7,6 +7,7 @@
  * (a Server Component) and the confirmation form (a Client Component).
  */
 
+import type { MessageKey, Translator } from "@/lib/i18n/translate";
 import type { ExtractedLeaf } from "./types";
 
 interface PathSegment {
@@ -55,11 +56,15 @@ function humanizeKey(key: string): string {
 
 /** `"liability.type"` -> `"Liability → Type"`, `"deadlines[2].date"` -> `"Deadlines #3 →
  * Date"`. Used to label a field in the confirmation flow without the reviewer needing to
- * read raw backend path syntax. */
-export function formatFieldPath(path: string): string {
+ * read raw backend path syntax. Each segment is looked up in `contracts.segments.*`; an
+ * unknown segment (a field the backend adds before the catalogs learn about it) falls back
+ * to the humanized raw key. */
+export function formatFieldPath(path: string, { t }: Translator): string {
   return parsePath(path)
     .map(({ key, index }) => {
-      const label = humanizeKey(key);
+      const messageKey = `contracts.segments.${key}`;
+      const translated = t(messageKey as MessageKey);
+      const label = translated === messageKey ? humanizeKey(key) : translated;
       return index !== undefined ? `${label} #${index + 1}` : label;
     })
     .join(" → ");

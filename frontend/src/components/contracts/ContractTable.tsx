@@ -1,6 +1,7 @@
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { DataTable, RowLink, Td, Th, Tr } from "@/components/ui/DataTable";
 import { formatDateTime } from "@/lib/format";
+import { getI18n } from "@/lib/i18n/server";
 import type { Contract } from "@/lib/contracts/types";
 
 interface ContractTableProps {
@@ -10,16 +11,17 @@ interface ContractTableProps {
   supplierNames: Map<string, string>;
 }
 
-export function ContractTable({ contracts, supplierNames }: ContractTableProps) {
+export async function ContractTable({ contracts, supplierNames }: ContractTableProps) {
+  const { t, locale } = await getI18n();
   return (
-    <DataTable caption="Uploaded contracts, most recently updated first">
+    <DataTable caption={t("contracts.table.caption")}>
       <thead>
         <tr>
-          <Th>Title</Th>
-          <Th>Supplier</Th>
-          <Th>Type</Th>
-          <Th>Status</Th>
-          <Th numeric>Updated</Th>
+          <Th>{t("contracts.table.title")}</Th>
+          <Th>{t("contracts.table.supplier")}</Th>
+          <Th>{t("contracts.table.type")}</Th>
+          <Th>{t("contracts.table.status")}</Th>
+          <Th numeric>{t("contracts.table.updated")}</Th>
         </tr>
       </thead>
       <tbody>
@@ -38,7 +40,7 @@ export function ContractTable({ contracts, supplierNames }: ContractTableProps) 
               <StatusBadge kind="contract" value={contract.status} />
             </Td>
             <Td numeric muted className="whitespace-nowrap">
-              {formatDateTime(contract.updatedAt)}
+              {formatDateTime(contract.updatedAt, locale)}
             </Td>
           </Tr>
         ))}

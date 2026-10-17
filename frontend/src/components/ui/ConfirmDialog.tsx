@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef } from "react";
 import type { ReactNode } from "react";
 
+import { useI18n } from "@/lib/i18n/client";
 import { Button } from "./Button";
 
 export interface ConfirmDialogProps {
@@ -30,12 +31,13 @@ export function ConfirmDialog({
   title,
   children,
   confirmLabel,
-  cancelLabel = "Cancel",
+  cancelLabel,
   tone = "primary",
   loading = false,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  const { t } = useI18n();
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
 
@@ -65,7 +67,7 @@ export function ConfirmDialog({
       </div>
       <div className="flex justify-end gap-2 border-t border-border bg-surface-muted px-5 py-3">
         <Button type="button" variant="secondary" onClick={onCancel} disabled={loading}>
-          {cancelLabel}
+          {cancelLabel ?? t("common.cancel")}
         </Button>
         <Button
           type="button"

@@ -7,7 +7,8 @@ import { useRouter } from "next/navigation";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { controlClasses } from "@/components/ui/Field";
-import { ALLOWED_STATUS_TRANSITIONS, SUPPLIER_STATUS_LABELS } from "@/lib/suppliers/types";
+import { useI18n } from "@/lib/i18n/client";
+import { ALLOWED_STATUS_TRANSITIONS } from "@/lib/suppliers/types";
 import type { Supplier, SupplierCheck, SupplierStatus } from "@/lib/suppliers/types";
 
 interface SupplierDetailActionsProps {
@@ -40,6 +41,7 @@ const RECHECK_POLL_MAX_ATTEMPTS = 20; // ~60s
  */
 export function SupplierDetailActions({ supplier, canUpdate }: SupplierDetailActionsProps) {
   const router = useRouter();
+  const { t } = useI18n();
   const [rechecking, setRechecking] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [nextStatus, setNextStatus] = useState<SupplierStatus | "">("");
@@ -69,7 +71,7 @@ export function SupplierDetailActions({ supplier, canUpdate }: SupplierDetailAct
               setRecheckStatus("failed");
               setError({
                 action: "recheck_failed",
-                message: check.failureReason ?? "The verification check failed.",
+                message: check.failureReason ?? t("suppliers.actions.checkFailedDefault"),
               });
             } else {
               setRecheckStatus("completed");
@@ -108,7 +110,7 @@ export function SupplierDetailActions({ supplier, canUpdate }: SupplierDetailAct
         const body = (await response.json().catch(() => null)) as { detail?: string } | null;
         setError({
           action: "recheck",
-          message: body?.detail ?? "Could not start a new verification check.",
+          message: body?.detail ?? t("suppliers.actions.startFailedDefault"),
         });
         return;
       }
@@ -120,7 +122,7 @@ export function SupplierDetailActions({ supplier, canUpdate }: SupplierDetailAct
         setRecheckStatus("pending");
       }
     } catch {
-      setError({ action: "recheck", message: "Could not reach the server. Try again." });
+      setError({ action: "recheck", message: t("errors.unreachableRetry") });
     } finally {
       setRechecking(false);
     }
@@ -141,14 +143,14 @@ export function SupplierDetailActions({ supplier, canUpdate }: SupplierDetailAct
         const body = (await response.json().catch(() => null)) as { detail?: string } | null;
         setError({
           action: "status",
-          message: body?.detail ?? "Could not update the supplier's status.",
+          message: body?.detail ?? t("suppliers.actions.statusFailedDefault"),
         });
         return;
       }
       setNextStatus("");
       router.refresh();
     } catch {
-      setError({ action: "status", message: "Could not reach the server. Try again." });
+      setError({ action: "status", message: t("errors.unreachableRetry") });
     } finally {
       setUpdatingStatus(false);
     }
@@ -160,7 +162,7 @@ export function SupplierDetailActions({ supplier, canUpdate }: SupplierDetailAct
         {allowedTargets.length > 0 && (
           <form onSubmit={handleStatusChange} className="flex items-center gap-2">
             <label className="sr-only" htmlFor="supplier-next-status">
-              Change supplier status
+              {t("suppliers.actions.changeStatusLabel")}
             </label>
             <select
               id="supplier-next-status"
@@ -169,10 +171,10 @@ export function SupplierDetailActions({ supplier, canUpdate }: SupplierDetailAct
               disabled={updatingStatus}
               className={controlClasses}
             >
-              <option value="">Change status…</option>
+              <option value="">{t("suppliers.actions.changeStatus")}</option>
               {allowedTargets.map((candidate) => (
                 <option key={candidate} value={candidate}>
-                  {SUPPLIER_STATUS_LABELS[candidate]}
+                  {t(`status.supplier.${candidate}`)}
                 </option>
               ))}
             </select>
@@ -182,24 +184,24 @@ export function SupplierDetailActions({ supplier, canUpdate }: SupplierDetailAct
               loading={updatingStatus}
               disabled={!nextStatus}
             >
-              Update
+              {t("suppliers.actions.update")}
             </Button>
           </form>
         )}
 
         <Button variant="secondary" onClick={handleRecheck} loading={rechecking}>
-          Run verification check
+          {t("suppliers.actions.runCheck")}
         </Button>
       </div>
 
       {(recheckStatus === "started" || recheckStatus === "pending") && !error && (
         <p className="text-xs font-medium text-success">
-          New verification check started{recheckStatus === "pending" ? " — in progress…" : "."}
+          {recheckStatus === "pending" ? t("suppliers.actions.startedInProgress") : t("suppliers.actions.started")}
         </p>
       )}
 
       {recheckStatus === "completed" && !error && (
-        <p className="text-xs font-medium text-success">Verification check completed.</p>
+        <p className="text-xs font-medium text-success">{t("suppliers.actions.completed")}</p>
       )}
 
       {error && (
@@ -207,10 +209,10 @@ export function SupplierDetailActions({ supplier, canUpdate }: SupplierDetailAct
           tone="danger"
           title={
             error.action === "status"
-              ? "Status change rejected"
+              ? t("suppliers.actions.statusRejected")
               : error.action === "recheck_failed"
-                ? "Verification check failed"
-                : "Could not start check"
+                ? t("suppliers.actions.checkFailed")
+                : t("suppliers.actions.couldNotStart")
           }
           className="w-full max-w-sm"
         >

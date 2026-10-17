@@ -1,5 +1,4 @@
 import { StatusBadge } from "@/components/shared/StatusBadge";
-import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { Alert } from "@/components/ui/Alert";
@@ -10,10 +9,11 @@ import { ApiError } from "@/lib/auth/backend";
 import { readAccessToken } from "@/lib/auth/cookies";
 import { requireSession } from "@/lib/auth/session";
 import { formatDateTime } from "@/lib/format";
+import { getI18n, pageTitle } from "@/lib/i18n/server";
 import { getPolicy, listPolicyVersions } from "@/lib/policies/backend";
 import { getPolicyPermissions } from "@/lib/policies/permissions";
 
-export const metadata: Metadata = { title: "Policy — JuriSense Gate" };
+export const generateMetadata = pageTitle("meta.policy");
 
 interface PolicyDetailPageProps {
   // Next 16: `params` is a Promise (see `node_modules/next/dist/docs/01-app/
@@ -23,6 +23,11 @@ interface PolicyDetailPageProps {
 
 export default async function PolicyDetailPage({ params }: PolicyDetailPageProps) {
   const user = await requireSession();
+  const { t, locale } = await getI18n();
+  const breadcrumbs = [
+    { label: t("nav.policies"), href: "/policies" },
+    { label: t("policies.detail.breadcrumb") },
+  ];
   const { id } = await params;
   const accessToken = (await readAccessToken())!;
   const permissions = getPolicyPermissions(user.role);
@@ -38,10 +43,9 @@ export default async function PolicyDetailPage({ params }: PolicyDetailPageProps
     if (error instanceof ApiError && error.status === 403) {
       return (
         <div className="space-y-5">
-          <PageHeader title="Policy" breadcrumbs={BREADCRUMBS} />
-          <Alert tone="danger" title="You don't have access to this policy.">
-            Ask an administrator to grant you the &quot;policies&quot; read permission for
-            this organization.
+          <PageHeader title={t("policies.detail.breadcrumb")} breadcrumbs={breadcrumbs} />
+          <Alert tone="danger" title={t("policies.detail.noAccessTitle")}>
+            {t("policies.detail.noAccessBody")}
           </Alert>
         </div>
       );
@@ -54,13 +58,13 @@ export default async function PolicyDetailPage({ params }: PolicyDetailPageProps
   return (
     <div className="space-y-6">
       <PageHeader
-        breadcrumbs={[BREADCRUMBS[0], { label: policy.name }]}
+        breadcrumbs={[breadcrumbs[0], { label: policy.name }]}
         title={policy.name}
         meta={
           <>
             <StatusBadge kind="policy" value={policy.status} />
             <span className="text-sm tabular-nums text-foreground-muted">
-              Created {formatDateTime(policy.createdAt)}
+              {t("policies.detail.created", { date: formatDateTime(policy.createdAt, locale) })}
             </span>
           </>
         }
@@ -68,13 +72,13 @@ export default async function PolicyDetailPage({ params }: PolicyDetailPageProps
       />
 
       <section className="space-y-3">
-        <h2 className="text-base font-semibold text-foreground">Versions</h2>
+        <h2 className="text-base font-semibold text-foreground">{t("policies.detail.versions")}</h2>
         {versions.length === 0 ? (
           // A Policy is only ever created together with its first draft version
           // (`policy_service.create_policy`) — this is a defensive branch for an
           // invariant that should never actually break, not an expected empty state.
-          <Alert tone="warning" title="This policy has no versions yet.">
-            This shouldn&apos;t normally happen — contact support if it persists.
+          <Alert tone="warning" title={t("policies.detail.noVersionsTitle")}>
+            {t("policies.detail.noVersionsBody")}
           </Alert>
         ) : (
           <PolicyVersionList policyId={policy.id} versions={versions} />
@@ -83,5 +87,3 @@ export default async function PolicyDetailPage({ params }: PolicyDetailPageProps
     </div>
   );
 }
-
-const BREADCRUMBS = [{ label: "Policies", href: "/policies" }, { label: "Policy" }];

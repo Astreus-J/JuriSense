@@ -1,5 +1,4 @@
 import { StatusBadge } from "@/components/shared/StatusBadge";
-import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { Alert } from "@/components/ui/Alert";
@@ -12,10 +11,11 @@ import { ApiError } from "@/lib/auth/backend";
 import { readAccessToken } from "@/lib/auth/cookies";
 import { requireSession } from "@/lib/auth/session";
 import { formatDateTime } from "@/lib/format";
+import { getI18n, pageTitle } from "@/lib/i18n/server";
 import { getPolicy, getPolicyVersion, listRules } from "@/lib/policies/backend";
 import { getPolicyPermissions } from "@/lib/policies/permissions";
 
-export const metadata: Metadata = { title: "Policy version — JuriSense Gate" };
+export const generateMetadata = pageTitle("meta.policyVersion");
 
 interface PolicyVersionDetailPageProps {
   // Next 16: `params` is a Promise.
@@ -24,6 +24,7 @@ interface PolicyVersionDetailPageProps {
 
 export default async function PolicyVersionDetailPage({ params }: PolicyVersionDetailPageProps) {
   const user = await requireSession();
+  const { t, locale } = await getI18n();
   const { id, versionId } = await params;
   const accessToken = (await readAccessToken())!;
   const permissions = getPolicyPermissions(user.role);
@@ -44,10 +45,16 @@ export default async function PolicyVersionDetailPage({ params }: PolicyVersionD
     if (error instanceof ApiError && error.status === 403) {
       return (
         <div className="space-y-5">
-          <PageHeader title="Policy version" breadcrumbs={[{ label: "Policies", href: "/policies" }, { label: "Policy", href: `/policies/${id}` }, { label: "Version" }]} />
-          <Alert tone="danger" title="You don't have access to this policy version.">
-            Ask an administrator to grant you the &quot;policies&quot; read permission for
-            this organization.
+          <PageHeader
+            title={t("policies.version.title")}
+            breadcrumbs={[
+              { label: t("nav.policies"), href: "/policies" },
+              { label: t("policies.detail.breadcrumb"), href: `/policies/${id}` },
+              { label: t("policies.version.breadcrumb") },
+            ]}
+          />
+          <Alert tone="danger" title={t("policies.version.noAccessTitle")}>
+            {t("policies.version.noAccessBody")}
           </Alert>
         </div>
       );
@@ -64,19 +71,19 @@ export default async function PolicyVersionDetailPage({ params }: PolicyVersionD
     <div className="space-y-6">
       <PageHeader
         breadcrumbs={[
-          { label: "Policies", href: "/policies" },
+          { label: t("nav.policies"), href: "/policies" },
           { label: policy.name, href: `/policies/${id}` },
-          { label: `Version ${version.versionNumber}` },
+          { label: t("policies.version.breadcrumbVersion", { number: version.versionNumber }) },
         ]}
-        title={`${policy.name}, version ${version.versionNumber}`}
+        title={t("policies.version.pageTitle", { policy: policy.name, number: version.versionNumber })}
         meta={
           <>
             <StatusBadge kind="policyVersion" value={version.status} />
-            {version.isCurrent && <span className="text-xs text-foreground-muted">current</span>}
+            {version.isCurrent && <span className="text-xs text-foreground-muted">{t("policies.version.current")}</span>}
             <span className="text-sm tabular-nums text-foreground-muted">
               {version.publishedAt
-                ? `Published ${formatDateTime(version.publishedAt)}`
-                : `Created ${formatDateTime(version.createdAt)}`}
+                ? t("policies.version.published", { date: formatDateTime(version.publishedAt, locale) })
+                : t("policies.version.created", { date: formatDateTime(version.createdAt, locale) })}
             </span>
           </>
         }
@@ -88,16 +95,15 @@ export default async function PolicyVersionDetailPage({ params }: PolicyVersionD
       />
 
       {!isDraft && (
-        <Alert tone="info" title="This version is published and frozen">
-          Every rule below is locked in permanently (BR-POL-001) — to change anything,
-          create a new draft version from the policy page.
+        <Alert tone="info" title={t("policies.version.frozenTitle")}>
+          {t("policies.version.frozenBody")}
         </Alert>
       )}
 
       <section className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <h2 className="text-base font-semibold text-foreground">
-            Rules <span className="font-normal tabular-nums text-foreground-muted">({rules.length})</span>
+            {t("policies.version.rules")} <span className="font-normal tabular-nums text-foreground-muted">({rules.length})</span>
           </h2>
           {canAddRules && <AddRuleControl policyId={id} versionId={versionId} />}
         </div>
@@ -122,14 +128,15 @@ export default async function PolicyVersionDetailPage({ params }: PolicyVersionD
   );
 }
 
-function RulesEmptyState({ canAdd }: { canAdd: boolean }) {
+async function RulesEmptyState({ canAdd }: { canAdd: boolean }) {
+  const { t } = await getI18n();
   return (
     <EmptyState
-      title="No rules yet"
+      title={t("policies.version.emptyTitle")}
       description={
         canAdd
-          ? "Add at least one rule before publishing. A version with no rules will never block or review anything."
-          : "This version has no rules. Ask a policy author to add one before it's published."
+          ? t("policies.version.emptyBodyCanAdd")
+          : t("policies.version.emptyBodyReadOnly")
       }
     />
   );

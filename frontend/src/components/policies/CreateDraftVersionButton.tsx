@@ -6,6 +6,7 @@ import { Plus } from "lucide-react";
 
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
+import { useI18n } from "@/lib/i18n/client";
 
 interface CreateDraftVersionButtonProps {
   policyId: string;
@@ -21,6 +22,7 @@ interface CreateDraftVersionButtonProps {
  */
 export function CreateDraftVersionButton({ policyId }: CreateDraftVersionButtonProps) {
   const router = useRouter();
+  const { t } = useI18n();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -31,7 +33,7 @@ export function CreateDraftVersionButton({ policyId }: CreateDraftVersionButtonP
       const response = await fetch(`/api/policies/${policyId}/versions`, { method: "POST" });
       if (!response.ok) {
         const body = (await response.json().catch(() => null)) as { detail?: string } | null;
-        setError(body?.detail ?? "Could not create a new draft version.");
+        setError(body?.detail ?? t("policies.newDraft.failedDefault"));
         setSubmitting(false);
         return;
       }
@@ -39,7 +41,7 @@ export function CreateDraftVersionButton({ policyId }: CreateDraftVersionButtonP
       router.push(`/policies/${policyId}/versions/${version.id}`);
       router.refresh();
     } catch {
-      setError("Could not reach the server. Try again.");
+      setError(t("errors.unreachableRetry"));
       setSubmitting(false);
     }
   }
@@ -48,10 +50,10 @@ export function CreateDraftVersionButton({ policyId }: CreateDraftVersionButtonP
     <div className="flex flex-col items-end gap-2">
       <Button variant="secondary" onClick={handleClick} loading={submitting}>
         <Plus className="size-4" aria-hidden="true" />
-        New draft version
+        {t("policies.newDraft.button")}
       </Button>
       {error && (
-        <Alert tone="danger" title="Could not create draft version" className="w-full max-w-sm">
+        <Alert tone="danger" title={t("policies.newDraft.errorTitle")} className="w-full max-w-sm">
           {error}
         </Alert>
       )}

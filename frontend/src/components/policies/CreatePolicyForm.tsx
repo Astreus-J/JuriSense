@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { Field } from "@/components/ui/Field";
+import { useI18n } from "@/lib/i18n/client";
 
 type FormErrorState = { title: string; body?: string } | null;
 
@@ -19,6 +20,7 @@ type FormErrorState = { title: string; body?: string } | null;
  */
 export function CreatePolicyForm() {
   const router = useRouter();
+  const { t } = useI18n();
   const [name, setName] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<FormErrorState>(null);
@@ -45,16 +47,16 @@ export function CreatePolicyForm() {
       const body = (await response.json().catch(() => null)) as { detail?: string } | null;
       if (response.status === 403) {
         setError({
-          title: "You can't create policies",
-          body: 'Ask an administrator to grant you the "policies" create permission.',
+          title: t("policies.form.forbiddenTitle"),
+          body: t("policies.form.forbiddenBody"),
         });
       } else if (response.status === 400) {
-        setError({ title: "Check the form", body: body?.detail ?? "Some fields are invalid." });
+        setError({ title: t("policies.form.checkTitle"), body: body?.detail ?? t("policies.form.checkBody") });
       } else {
-        setError({ title: "Something went wrong.", body: "Please try again in a moment." });
+        setError({ title: t("errors.somethingWentWrong"), body: t("errors.tryAgainShortly") });
       }
     } catch {
-      setError({ title: "Could not reach the server.", body: "Please try again." });
+      setError({ title: t("errors.couldNotReachServer"), body: t("errors.tryAgain") });
     } finally {
       setSubmitting(false);
     }
@@ -69,18 +71,18 @@ export function CreatePolicyForm() {
       )}
 
       <Field
-        label="Policy name"
+        label={t("policies.form.name")}
         name="name"
         autoComplete="off"
         required
-        hint="A short, recognizable name, e.g. “Vendor Compliance” or “Data Privacy”. You'll add rules once it's created."
+        hint={t("policies.form.nameHint")}
         value={name}
         onChange={(event) => setName(event.target.value)}
         disabled={submitting}
       />
 
       <Button type="submit" loading={submitting}>
-        {submitting ? "Creating…" : "Create policy"}
+        {submitting ? t("policies.form.submitting") : t("policies.form.submit")}
       </Button>
     </form>
   );

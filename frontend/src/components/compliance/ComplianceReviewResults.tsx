@@ -1,6 +1,7 @@
 import { DecisionMark } from "@/components/shared/StatusBadge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { formatDateTime } from "@/lib/format";
+import { getI18n } from "@/lib/i18n/server";
 import type { ComplianceReviewDetail } from "@/lib/compliance/types";
 import { RiskCard } from "./RiskCard";
 import { RuleEvaluationRow } from "./RuleEvaluationRow";
@@ -19,8 +20,9 @@ import { RuleEvaluationRow } from "./RuleEvaluationRow";
  * 3. The full rule evaluation list — every rule the engine ran, for audit/transparency,
  *    with REVIEW/BLOCK rows expanded by default and PASS/NOT_APPLICABLE rows collapsed.
  */
-export function ComplianceReviewResults({ detail }: { detail: ComplianceReviewDetail }) {
+export async function ComplianceReviewResults({ detail }: { detail: ComplianceReviewDetail }) {
   const { review, ruleEvaluations, risks } = detail;
+  const { t, plural, locale } = await getI18n();
 
   const actionableEvaluations = ruleEvaluations.filter(
     (evaluation) => evaluation.outcome === "REVIEW" || evaluation.outcome === "BLOCK",
@@ -32,41 +34,46 @@ export function ComplianceReviewResults({ detail }: { detail: ComplianceReviewDe
   return (
     <div className="space-y-8">
       <section
-        aria-label="Decision"
+        aria-label={t("compliance.results.decision")}
         className="flex flex-wrap items-center justify-between gap-x-8 gap-y-3 border-b border-border pb-5"
       >
-        <DecisionMark value={review.status} caption="Decision" />
+        <DecisionMark value={review.status} caption={t("compliance.results.decision")} />
         <dl className="grid grid-cols-2 gap-x-8 gap-y-1 text-sm sm:grid-cols-3">
           <div>
-            <dt className="text-xs text-foreground-muted">Started</dt>
-            <dd className="tabular-nums">{formatDateTime(review.startedAt)}</dd>
+            <dt className="text-xs text-foreground-muted">{t("compliance.results.started")}</dt>
+            <dd className="tabular-nums">{formatDateTime(review.startedAt, locale)}</dd>
           </div>
           <div>
-            <dt className="text-xs text-foreground-muted">Completed</dt>
+            <dt className="text-xs text-foreground-muted">{t("compliance.results.completed")}</dt>
             <dd className="tabular-nums">
-              {review.completedAt ? formatDateTime(review.completedAt) : "Not yet completed"}
+              {review.completedAt
+                ? formatDateTime(review.completedAt, locale)
+                : t("compliance.results.notCompleted")}
             </dd>
           </div>
           <div>
-            <dt className="text-xs text-foreground-muted">Policy coverage</dt>
+            <dt className="text-xs text-foreground-muted">{t("compliance.results.policyCoverage")}</dt>
             <dd className="tabular-nums">
-              {review.policyVersionIds.length} published version
-              {review.policyVersionIds.length === 1 ? "" : "s"}
+              {plural("compliance.results.publishedVersions", review.policyVersionIds.length)}
             </dd>
           </div>
         </dl>
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-base font-semibold text-foreground">Risks</h2>
+        <h2 className="text-base font-semibold text-foreground">{t("compliance.results.risks")}</h2>
 
         {risks.length === 0 ? (
           <EmptyState
-            title={review.status === "APPROVE" ? "No risks found" : "No risks recorded"}
+            title={
+              review.status === "APPROVE"
+                ? t("compliance.results.noRisksFound")
+                : t("compliance.results.noRisksRecorded")
+            }
             description={
               review.status === "APPROVE"
-                ? "All rules passed or were not applicable."
-                : "No risks were recorded for this review."
+                ? t("compliance.results.allPassed")
+                : t("compliance.results.noRisksBody")
             }
           />
         ) : (
@@ -80,16 +87,16 @@ export function ComplianceReviewResults({ detail }: { detail: ComplianceReviewDe
 
       <section className="space-y-3">
         <h2 className="text-base font-semibold text-foreground">
-          Evaluated rules <span className="font-normal tabular-nums text-foreground-muted">({ruleEvaluations.length})</span>
+          {t("compliance.results.evaluatedRules")} <span className="font-normal tabular-nums text-foreground-muted">({ruleEvaluations.length})</span>
         </h2>
 
         {ruleEvaluations.length === 0 ? (
           <EmptyState
-            title="No rules were evaluated"
+            title={t("compliance.results.noRulesTitle")}
             description={
               review.policyVersionIds.length === 0
-                ? "No policy was published in this organization yet when this review ran."
-                : "The published policy version(s) in place when this review ran had no rules defined."
+                ? t("compliance.results.noRulesNoPolicy")
+                : t("compliance.results.noRulesEmpty")
             }
           />
         ) : (
@@ -110,10 +117,10 @@ export function ComplianceReviewResults({ detail }: { detail: ComplianceReviewDe
                    * rows above are already visible, so opening this only adds the
                    * PASS/NOT_APPLICABLE ones. */}
                   <span className="group-open:hidden">
-                    Show {quietEvaluations.length} more (passed / not applicable)
+                    {t("compliance.results.showMore", { count: quietEvaluations.length })}
                   </span>
                   <span className="hidden group-open:inline">
-                    Hide passed / not applicable rules
+                    {t("compliance.results.hideQuiet")}
                   </span>
                 </summary>
                 <ul className="mt-4 space-y-4">

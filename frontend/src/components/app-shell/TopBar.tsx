@@ -1,3 +1,4 @@
+import { LocaleSwitcher } from "@/components/i18n/LocaleSwitcher";
 import type { NavItem } from "@/lib/navigation/modules";
 import type { Membership, Role } from "@/lib/auth/types";
 import { MobileNav } from "./MobileNav";
@@ -31,7 +32,10 @@ export function TopBar({
         />
       </MobileNav>
       <div className="flex-1" />
-      <UserMenu fullName={fullName} email={email} role={role} />
+      <div className="flex items-center gap-3">
+        <LocaleSwitcher />
+        <UserMenu fullName={fullName} email={email} role={role} />
+      </div>
     </header>
   );
 }

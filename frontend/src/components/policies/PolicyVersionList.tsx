@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { cn } from "@/lib/cn";
 import { formatDateTime } from "@/lib/format";
+import { getI18n } from "@/lib/i18n/server";
 import type { PolicyVersion } from "@/lib/policies/types";
 
 interface PolicyVersionListProps {
@@ -17,7 +18,8 @@ interface PolicyVersionListProps {
  * `ContractVersionList`'s identical rationale (a reviewer almost always wants the latest
  * draft or the current published version, not version 1).
  */
-export function PolicyVersionList({ policyId, versions, selectedVersionId }: PolicyVersionListProps) {
+export async function PolicyVersionList({ policyId, versions, selectedVersionId }: PolicyVersionListProps) {
+  const { t, locale } = await getI18n();
   const descending = [...versions].sort((a, b) => b.versionNumber - a.versionNumber);
 
   return (
@@ -37,17 +39,19 @@ export function PolicyVersionList({ policyId, versions, selectedVersionId }: Pol
             >
               <span className="flex items-center gap-3">
                 <span className="text-sm font-medium text-foreground">
-                  Version {version.versionNumber}
+                  {t("policies.versionList.version", { number: version.versionNumber })}
                 </span>
                 <StatusBadge kind="policyVersion" value={version.status} />
                 {version.isCurrent && (
-                  <span className="text-xs text-foreground-muted">current</span>
+                  <span className="text-xs text-foreground-muted">
+                    {t("policies.versionList.current")}
+                  </span>
                 )}
               </span>
               <span className="text-xs tabular-nums text-foreground-muted">
                 {version.publishedAt
-                  ? `Published ${formatDateTime(version.publishedAt)}`
-                  : `Created ${formatDateTime(version.createdAt)}`}
+                  ? t("policies.versionList.published", { date: formatDateTime(version.publishedAt, locale) })
+                  : t("policies.versionList.created", { date: formatDateTime(version.createdAt, locale) })}
               </span>
             </Link>
           </li>

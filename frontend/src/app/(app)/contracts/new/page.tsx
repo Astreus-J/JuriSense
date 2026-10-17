@@ -1,5 +1,3 @@
-import type { Metadata } from "next";
-
 import { Alert } from "@/components/ui/Alert";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { UploadContractForm } from "@/components/contracts/UploadContractForm";
@@ -7,9 +5,10 @@ import { ApiError } from "@/lib/auth/backend";
 import { readAccessToken } from "@/lib/auth/cookies";
 import { requireSession } from "@/lib/auth/session";
 import { listContracts } from "@/lib/contracts/backend";
+import { getI18n, pageTitle } from "@/lib/i18n/server";
 import { listSuppliers } from "@/lib/suppliers/backend";
 
-export const metadata: Metadata = { title: "Upload contract — JuriSense Gate" };
+export const generateMetadata = pageTitle("meta.contractNew");
 
 interface NewContractPageProps {
   // Next 16: `searchParams` is a Promise.
@@ -31,6 +30,7 @@ interface NewContractPageProps {
  */
 export default async function NewContractPage({ searchParams }: NewContractPageProps) {
   await requireSession();
+  const { t } = await getI18n();
   const { contractId } = await searchParams;
   const accessToken = (await readAccessToken())!;
 
@@ -58,15 +58,17 @@ export default async function NewContractPage({ searchParams }: NewContractPageP
     }
   }
 
-  const breadcrumbs = [{ label: "Contracts", href: "/contracts" }, { label: "Upload contract" }];
+  const breadcrumbs = [
+    { label: t("nav.contracts"), href: "/contracts" },
+    { label: t("contracts.new.breadcrumb") },
+  ];
 
   if (forbidden) {
     return (
       <div className="max-w-lg space-y-5">
-        <PageHeader title="Upload a contract" breadcrumbs={breadcrumbs} />
-        <Alert tone="danger" title="You don't have access to upload a contract.">
-          Ask an administrator to grant you the &quot;contracts&quot; and &quot;suppliers&quot;
-          read permissions for this organization.
+        <PageHeader title={t("contracts.new.title")} breadcrumbs={breadcrumbs} />
+        <Alert tone="danger" title={t("contracts.new.noAccessTitle")}>
+          {t("contracts.new.noAccessBody")}
         </Alert>
       </div>
     );
@@ -76,8 +78,8 @@ export default async function NewContractPage({ searchParams }: NewContractPageP
     <div className="max-w-lg space-y-5">
       <PageHeader
         breadcrumbs={breadcrumbs}
-        title="Upload a contract"
-        description="JuriSense automatically extracts and structures the contract's key terms as soon as it's uploaded: parties, value, duration, liability and more, each traceable back to its page and clause."
+        title={t("contracts.new.title")}
+        description={t("contracts.new.description")}
       />
 
       <UploadContractForm

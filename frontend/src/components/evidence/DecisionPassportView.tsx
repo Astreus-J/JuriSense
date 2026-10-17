@@ -1,4 +1,5 @@
-import { DecisionMark, StatusBadge, statusTone } from "@/components/shared/StatusBadge";
+import { DecisionMark, StatusBadge } from "@/components/shared/StatusBadge";
+import { statusTone } from "@/components/shared/status-map";
 import Link from "next/link";
 import { ShieldCheck } from "lucide-react";
 
@@ -6,7 +7,11 @@ import { Alert } from "@/components/ui/Alert";
 import { Badge, TONE_RAIL_CLASSES } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { cn } from "@/lib/cn";
+import { isRole } from "@/lib/auth/types";
 import { formatDateTime } from "@/lib/format";
+import { INTL_LOCALES } from "@/lib/i18n/config";
+import { getI18n } from "@/lib/i18n/server";
+import type { Translator } from "@/lib/i18n/translate";
 import type { DecisionPassport } from "@/lib/evidence/types";
 
 /**
@@ -16,20 +21,26 @@ import type { DecisionPassport } from "@/lib/evidence/types";
  * A Server Component: this view has no interactive state of its own, matching
  * `ComplianceReviewResults.tsx`'s "no client JS needed" precedent.
  */
-export function DecisionPassportView({ passport }: { passport: DecisionPassport }) {
+export async function DecisionPassportView({ passport }: { passport: DecisionPassport }) {
+  const i18n = await getI18n();
   return (
     <div className="space-y-8">
-      <DecisionSummary passport={passport} />
-      {passport.overridden && <OverrideNotice passport={passport} />}
-      <PoliciesAndRulesSection passport={passport} />
+      <DecisionSummary passport={passport} i18n={i18n} />
+      {passport.overridden && <OverrideNotice passport={passport} i18n={i18n} />}
+      <PoliciesAndRulesSection passport={passport} i18n={i18n} />
       <div className="grid gap-x-10 gap-y-8 lg:grid-cols-2">
-        <SubjectSection passport={passport} />
-        <VerificationSection passport={passport} />
+        <SubjectSection passport={passport} i18n={i18n} />
+        <VerificationSection passport={passport} i18n={i18n} />
       </div>
-      <ReviewersSection passport={passport} />
-      <ExternalSourcesSection passport={passport} />
+      <ReviewersSection passport={passport} i18n={i18n} />
+      <ExternalSourcesSection passport={passport} i18n={i18n} />
     </div>
   );
+}
+
+interface SectionProps {
+  passport: DecisionPassport;
+  i18n: Translator;
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -51,26 +62,26 @@ function Fact({ label, children }: { label: string; children: React.ReactNode })
 }
 
 /** The decision is the page's answer, so it leads: outcome first, then when / until when / which record. */
-function DecisionSummary({ passport }: { passport: DecisionPassport }) {
+function DecisionSummary({ passport, i18n: { t, locale } }: SectionProps) {
   return (
     <section
-      aria-label="Decision"
+      aria-label={t("decisions.view.decision")}
       className="flex flex-wrap items-center justify-between gap-x-8 gap-y-4 border-b border-border pb-5"
     >
       <div className="flex flex-wrap items-center gap-4">
-        <DecisionMark value={passport.status} caption="Decision" />
+        <DecisionMark value={passport.status} caption={t("decisions.view.decision")} />
         <Badge tone={passport.lifecycle === "ACTIVE" ? "info" : "neutral"}>
-          {passport.lifecycle === "ACTIVE" ? "Effective decision" : "Superseded"}
+          {passport.lifecycle === "ACTIVE" ? t("decisions.view.effective") : t("decisions.view.superseded")}
         </Badge>
       </div>
       <dl className="grid grid-cols-2 gap-x-8 gap-y-2 sm:grid-cols-3">
-        <Fact label="Decided">
-          <span className="tabular-nums">{formatDateTime(passport.createdAt)}</span>
+        <Fact label={t("decisions.view.decided")}>
+          <span className="tabular-nums">{formatDateTime(passport.createdAt, locale)}</span>
         </Fact>
-        <Fact label="Valid until">
-          <span className="tabular-nums">{formatDateTime(passport.validUntil)}</span>
+        <Fact label={t("decisions.view.validUntil")}>
+          <span className="tabular-nums">{formatDateTime(passport.validUntil, locale)}</span>
         </Fact>
-        <Fact label="Decision id">
+        <Fact label={t("decisions.view.decisionId")}>
           <span className="break-all font-mono text-xs">{passport.decisionId}</span>
         </Fact>
       </dl>
@@ -78,19 +89,19 @@ function DecisionSummary({ passport }: { passport: DecisionPassport }) {
   );
 }
 
-function OverrideNotice({ passport }: { passport: DecisionPassport }) {
+function OverrideNotice({ passport, i18n: { t } }: SectionProps) {
   return (
-    <Alert tone="warning" title="This decision was manually overridden">
-      {passport.overrideJustification ?? "No justification was recorded."}
+    <Alert tone="warning" title={t("decisions.view.overrideTitle")}>
+      {passport.overrideJustification ?? t("decisions.view.overrideNone")}
     </Alert>
   );
 }
 
-function SubjectSection({ passport }: { passport: DecisionPassport }) {
+function SubjectSection({ passport, i18n: { t, locale } }: SectionProps) {
   return (
-    <Section title="Supplier and contract">
+    <Section title={t("decisions.view.subjectTitle")}>
       <dl className="space-y-3 border-t border-border pt-3">
-        <Fact label="Supplier">
+        <Fact label={t("decisions.view.supplier")}>
           <Link
             href={`/suppliers/${passport.supplierId}`}
             className="font-medium hover:underline"
@@ -101,7 +112,7 @@ function SubjectSection({ passport }: { passport: DecisionPassport }) {
             {passport.supplierTaxId}
           </span>
         </Fact>
-        <Fact label="Contract">
+        <Fact label={t("decisions.view.contract")}>
           <Link
             href={`/contracts/${passport.contractId}`}
             className="font-medium hover:underline"
@@ -109,28 +120,36 @@ function SubjectSection({ passport }: { passport: DecisionPassport }) {
             {passport.contractTitle}
           </Link>
           <span className="ml-2 text-xs text-foreground-muted">
-            Version {passport.contractVersionNumber}
+            {t("decisions.view.version", { number: passport.contractVersionNumber })}
           </span>
         </Fact>
-        <Fact label="Document hashes">
+        <Fact label={t("decisions.view.documentHashes")}>
           <ul className="space-y-0.5">
             {passport.documents.map((document) => (
               <li key={document.documentId} className="break-all font-mono text-xs text-foreground-muted">
                 {document.contentHash}{" "}
                 <span className="font-sans">
-                  ({document.mimeType}, {new Intl.NumberFormat().format(document.sizeBytes)} bytes)
+                  {t("decisions.view.documentMeta", {
+                    mime: document.mimeType,
+                    size: new Intl.NumberFormat(INTL_LOCALES[locale]).format(document.sizeBytes),
+                  })}
                 </span>
               </li>
             ))}
           </ul>
         </Fact>
         {passport.aiExecution && (
-          <Fact label="AI extraction">
+          <Fact label={t("decisions.view.aiExtraction")}>
             <span className="text-foreground-muted">
-              {passport.aiExecution.provider} / {passport.aiExecution.modelName} (prompt{" "}
-              {passport.aiExecution.promptVersion})
+              {t("decisions.view.aiExecution", {
+                provider: passport.aiExecution.provider ?? "—",
+                model: passport.aiExecution.modelName ?? "—",
+                version: passport.aiExecution.promptVersion ?? "—",
+              })}
               {passport.aiExecution.extractedAt &&
-                `, extracted ${formatDateTime(passport.aiExecution.extractedAt)}`}
+                t("decisions.view.aiExtractedAt", {
+                  date: formatDateTime(passport.aiExecution.extractedAt, locale),
+                })}
             </span>
           </Fact>
         )}
@@ -139,17 +158,17 @@ function SubjectSection({ passport }: { passport: DecisionPassport }) {
   );
 }
 
-function PoliciesAndRulesSection({ passport }: { passport: DecisionPassport }) {
+function PoliciesAndRulesSection({ passport, i18n: { t } }: SectionProps) {
   return (
-    <Section title={`Rules evaluated (${passport.ruleEvaluations.length})`}>
+    <Section title={t("decisions.view.rulesEvaluated", { count: passport.ruleEvaluations.length })}>
       <div className="flex flex-wrap items-center gap-2 text-xs text-foreground-muted">
-        <span>Policies evaluated:</span>
+        <span>{t("decisions.view.policiesEvaluated")}</span>
         {passport.policyVersions.length === 0 ? (
-          <span>no published policy was pooled for this decision.</span>
+          <span>{t("decisions.view.noPolicyPooled")}</span>
         ) : (
           passport.policyVersions.map((version) => (
             <Badge key={version.policyVersionId} tone="neutral">
-              Policy version {version.versionNumber}
+              {t("decisions.view.policyVersion", { number: version.versionNumber })}
             </Badge>
           ))
         )}
@@ -157,8 +176,8 @@ function PoliciesAndRulesSection({ passport }: { passport: DecisionPassport }) {
 
       {passport.ruleEvaluations.length === 0 ? (
         <EmptyState
-          title="No rules evaluated"
-          description="No rules were evaluated for this decision."
+          title={t("decisions.view.noRulesTitle")}
+          description={t("decisions.view.noRulesBody")}
         />
       ) : (
         <ul className="space-y-4">
@@ -187,8 +206,10 @@ function PoliciesAndRulesSection({ passport }: { passport: DecisionPassport }) {
                 <p className="mt-1 text-sm text-foreground-muted">{rule.rationale}</p>
                 {rule.approverRole && (
                   <p className="mt-1 text-xs text-foreground-muted">
-                    Required approval from{" "}
-                    <span className="font-medium text-foreground">{rule.approverRole}</span>
+                    {t("decisions.view.requiredApproval")}{" "}
+                    <span className="font-medium text-foreground">
+                      {isRole(rule.approverRole) ? t(`role.${rule.approverRole}`) : rule.approverRole}
+                    </span>
                   </p>
                 )}
               </li>
@@ -200,12 +221,12 @@ function PoliciesAndRulesSection({ passport }: { passport: DecisionPassport }) {
   );
 }
 
-function ExternalSourcesSection({ passport }: { passport: DecisionPassport }) {
+function ExternalSourcesSection({ passport, i18n: { t } }: SectionProps) {
   return (
-    <Section title="External sources consulted">
+    <Section title={t("decisions.view.externalSources")}>
       {passport.externalSourcesConsulted.length === 0 ? (
         <p className="text-sm text-foreground-muted">
-          No external source was consulted for this decision.
+          {t("decisions.view.noExternalSources")}
         </p>
       ) : (
         <ul className="flex flex-wrap gap-2">
@@ -224,12 +245,12 @@ function isApprovalStatus(value: string): value is "pending" | "approved" | "rej
   return value === "pending" || value === "approved" || value === "rejected";
 }
 
-function ReviewersSection({ passport }: { passport: DecisionPassport }) {
+function ReviewersSection({ passport, i18n: { t, locale } }: SectionProps) {
   return (
-    <Section title={`Human reviewers (${passport.reviewers.length})`}>
+    <Section title={t("decisions.view.reviewers", { count: passport.reviewers.length })}>
       {passport.reviewers.length === 0 ? (
         <p className="text-sm text-foreground-muted">
-          No human approval step was required; the decision was reached automatically.
+          {t("decisions.view.noReviewers")}
         </p>
       ) : (
         <ul className="divide-y divide-border border-y border-border">
@@ -238,8 +259,12 @@ function ReviewersSection({ passport }: { passport: DecisionPassport }) {
               key={reviewer.approvalRequestId}
               className="flex flex-wrap items-center gap-x-4 gap-y-1 py-2 text-sm"
             >
-              <span className="font-medium text-foreground">Step {reviewer.stepNumber}</span>
-              <span className="text-foreground-muted">{reviewer.approverRole}</span>
+              <span className="font-medium text-foreground">
+                {t("decisions.view.step", { number: reviewer.stepNumber })}
+              </span>
+              <span className="text-foreground-muted">
+                {isRole(reviewer.approverRole) ? t(`role.${reviewer.approverRole}`) : reviewer.approverRole}
+              </span>
               {isApprovalStatus(reviewer.status) ? (
                 <StatusBadge kind="approvalRequest" value={reviewer.status} />
               ) : (
@@ -247,7 +272,7 @@ function ReviewersSection({ passport }: { passport: DecisionPassport }) {
               )}
               {reviewer.resolvedAt && (
                 <span className="text-xs tabular-nums text-foreground-muted">
-                  Resolved {formatDateTime(reviewer.resolvedAt)}
+                  {t("decisions.view.resolved", { date: formatDateTime(reviewer.resolvedAt, locale) })}
                 </span>
               )}
             </li>
@@ -258,14 +283,14 @@ function ReviewersSection({ passport }: { passport: DecisionPassport }) {
   );
 }
 
-function VerificationSection({ passport }: { passport: DecisionPassport }) {
+function VerificationSection({ passport, i18n: { t, plural } }: SectionProps) {
   return (
-    <Section title="Evidence package">
+    <Section title={t("decisions.view.evidencePackage")}>
       <div className="space-y-2 border-t border-border pt-3">
         <p className="flex items-center gap-2 text-sm text-foreground">
           <ShieldCheck className="size-4 text-foreground-muted" aria-hidden="true" />
-          <span className="tabular-nums">{passport.evidenceCount}</span> evidence item
-          {passport.evidenceCount === 1 ? "" : "s"}, committed to this Merkle root
+          <span className="tabular-nums">{passport.evidenceCount}</span>{" "}
+          {plural("decisions.view.evidenceItems", passport.evidenceCount)}
         </p>
         <p className="break-all rounded border border-border bg-surface-muted px-2.5 py-2 font-mono text-xs text-foreground-muted">
           {passport.merkleRoot}

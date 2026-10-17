@@ -1,4 +1,5 @@
-import { StatusBadge, statusTone } from "@/components/shared/StatusBadge";
+import { StatusBadge } from "@/components/shared/StatusBadge";
+import { statusTone } from "@/components/shared/status-map";
 import { TONE_RAIL_CLASSES } from "@/components/ui/Badge";
 import { cn } from "@/lib/cn";
 import { EvidenceRefs } from "./EvidenceRefs";
