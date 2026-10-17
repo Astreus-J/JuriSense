@@ -21,6 +21,10 @@ export interface FieldProps extends InputHTMLAttributes<HTMLInputElement> {
   label: string;
   error?: string;
   hint?: ReactNode;
+  /** Decorative icon shown inside the left edge of the input (must be aria-hidden). */
+  leading?: ReactNode;
+  /** Interactive control shown inside the right edge of the input (e.g. a show/hide button). */
+  trailing?: ReactNode;
 }
 
 /**
@@ -29,7 +33,7 @@ export interface FieldProps extends InputHTMLAttributes<HTMLInputElement> {
  * sighted users see it (persona: "Never communicate status by color alone").
  */
 export const Field = forwardRef<HTMLInputElement, FieldProps>(function Field(
-  { label, error, hint, id, className, ...props },
+  { label, error, hint, leading, trailing, id, className, ...props },
   ref,
 ) {
   const generatedId = useId();
@@ -42,18 +46,28 @@ export const Field = forwardRef<HTMLInputElement, FieldProps>(function Field(
       <label htmlFor={inputId} className="block text-[14px] font-medium text-foreground">
         {label}
       </label>
-      <input
-        ref={ref}
-        id={inputId}
-        aria-invalid={Boolean(error) || undefined}
-        aria-describedby={cn(errorId, hintId) || undefined}
-        className={cn(
-          "w-full",
-          error ? controlInvalidClasses : controlClasses,
-          className,
+      <div className={leading || trailing ? "relative" : undefined}>
+        <input
+          ref={ref}
+          id={inputId}
+          aria-invalid={Boolean(error) || undefined}
+          aria-describedby={cn(errorId, hintId) || undefined}
+          className={cn(
+            "w-full",
+            error ? controlInvalidClasses : controlClasses,
+            leading ? "pl-9" : false,
+            trailing ? "pr-10" : false,
+            className,
+          )}
+          {...props}
+        />
+        {leading && (
+          <span className="pointer-events-none absolute inset-y-0 left-0 flex w-9 items-center justify-center text-foreground-muted [&_svg]:size-4">
+            {leading}
+          </span>
         )}
-        {...props}
-      />
+        {trailing && <span className="absolute inset-y-0 right-0 flex items-center pr-1">{trailing}</span>}
+      </div>
       {hint && !error && (
         <p id={hintId} className="text-xs text-foreground-muted">
           {hint}

@@ -30,6 +30,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
     <AuthShell
       heading={t("auth.signIn.heading")}
       subtext={t("auth.signIn.subtext")}
+      showLocaleSwitcher={false}
     >
       <div className="space-y-5">
         {expired === "1" && (

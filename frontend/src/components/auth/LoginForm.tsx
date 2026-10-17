@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { Eye, EyeOff, Lock, Mail } from "lucide-react";
 
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
@@ -51,6 +52,7 @@ export function LoginForm({ next }: LoginFormProps) {
   const { t } = i18n;
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<LoginErrorState>(null);
 
@@ -103,6 +105,7 @@ export function LoginForm({ next }: LoginFormProps) {
         label={t("auth.signIn.email")}
         type="email"
         name="email"
+        leading={<Mail aria-hidden="true" />}
         autoComplete="email"
         required
         value={email}
@@ -112,8 +115,21 @@ export function LoginForm({ next }: LoginFormProps) {
 
       <Field
         label={t("auth.signIn.password")}
-        type="password"
+        type={showPassword ? "text" : "password"}
         name="password"
+        leading={<Lock aria-hidden="true" />}
+        trailing={
+          <button
+            type="button"
+            onClick={() => setShowPassword((visible) => !visible)}
+            aria-label={t("auth.signIn.showPassword")}
+            aria-pressed={showPassword}
+            disabled={submitting}
+            className="flex size-8 items-center justify-center rounded-md text-foreground-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring disabled:opacity-60"
+          >
+            {showPassword ? <EyeOff className="size-4" aria-hidden="true" /> : <Eye className="size-4" aria-hidden="true" />}
+          </button>
+        }
         autoComplete="current-password"
         required
         value={password}
@@ -121,9 +137,11 @@ export function LoginForm({ next }: LoginFormProps) {
         disabled={submitting}
       />
 
-      <Button type="submit" loading={submitting} className="w-full">
-        {submitting ? t("auth.signIn.submitting") : t("auth.signIn.submit")}
-      </Button>
+      <div className="flex justify-center">
+        <Button type="submit" loading={submitting} className="px-8!">
+          {submitting ? t("auth.signIn.submitting") : t("auth.signIn.submit")}
+        </Button>
+      </div>
     </form>
   );
 }
