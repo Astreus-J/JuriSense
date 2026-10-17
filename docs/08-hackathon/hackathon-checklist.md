@@ -34,6 +34,18 @@
 > 12 slides em `docs/08-hackathon/pitch-deck/` mais uma cópia idêntica como Claude Artifact — mas
 > foi descartado por decisão do usuário em 16/10/2026 (não será usado); ambos os dois removidos. O
 > item volta a "a fazer".
+>
+> **Atualização 16/10/2026**: o usuário enviou prints da página real
+> `dorahacks.io/hackathon/legal-hack-2026`, resolvendo boa parte do item 4.9 de uma vez — ver
+> `hackathon-requirements.md` §1 para os fatos completos. **Achado crítico**: os bounties ao vivo
+> desta edição são **Chainlink** ("Best workflow with CRE") e **RYO-CHAN** ("Autonomous Agents") —
+> **não** ICP/Constellation/Story Protocol como a pesquisa original (bloqueada por 405/403) tinha
+> assumido. Isso inverte a premissa central da `ADR-007`. **Decisão do usuário (16/10/2026): manter
+> Constellation DED como provider**, sem perseguir o bounty do Chainlink — ver o addendum de
+> 16/10/2026 na `ADR-007` para o racional completo. Também nesta atualização: 4.4 (repo público),
+> 4.7 (dados do time) e 4.8 (config da página BUIDL) foram marcados como prontos por instrução
+> direta do usuário (serão/foram resolvidos direto na plataforma, não no repositório), e o write-up
+> técnico (4.6) foi escrito — `docs/06-blockchain/submission-writeup.md`.
 
 Legenda: ✅ feito · 🟡 parcial / precisa de verificação · ⬜ a fazer
 
@@ -42,17 +54,19 @@ Legenda: ✅ feito · 🟡 parcial / precisa de verificação · ⬜ a fazer
 | Área | ✅ | 🟡 | ⬜ | Total |
 |---|---|---|---|---|
 | 1. Pipeline do Hackathon Cut (engenharia) | 12 | 0 | 0 | 12 |
-| 2. Tecnologia de patrocinador e blockchain | 4 | 1 | 1 | 6 |
-| 3. Prontidão do demo | 0 | 1 | 5 | 6 |
-| 4. Materiais de submissão | 1 | 4 | 6 | 11 |
-| **Total** | **17** | **6** | **12** | **35** |
+| 2. Tecnologia de patrocinador e blockchain | 5 | 1 | 0 | 6 |
+| 3. Prontidão do demo | 3 | 1 | 2 | 6 |
+| 4. Materiais de submissão | 6 | 3 | 2 | 11 |
+| **Total** | **26** | **5** | **4** | **35** |
 
-**Leitura**: o *produto* está essencialmente completo (área 1), e a trilha de blockchain também
-está praticamente fechada (área 2 — só falta publicar o transparency log remoto, 2.6, e reconfirmar
-o "Verify" ao vivo contra um anchor Constellation real, 2.4). O que falta agora é quase todo
-*empacotamento do demo* (área 3) e os materiais de submissão restantes, incluindo o pitch deck de
-novo (4.2 — o que foi montado em 15/10 foi descartado). Nada do que resta é engenharia difícil, mas
-tudo tem data-limite.
+**Leitura**: o *produto* está essencialmente completo (área 1), a trilha de blockchain praticamente
+fechada (área 2 — só falta reconfirmar o "Verify" ao vivo, 2.4), e materiais de submissão (área 4)
+muito avançados (repo, write-up, dados do time, BUIDL e limpeza resolvidos ou tomados como prontos —
+só falta o README raiz, a segunda checagem do DoraHacks, e o pitch deck, que precisa ser refeito). A
+prontidão do demo (área 3) também avançou bastante: seed e contratos de exemplo prontos e
+verificados contra a stack real, decisão tomada de manter OpenRouter gratuito. **O que resta agora é
+essencialmente o ensaio ponta a ponta (3.3) e o vídeo** (roteiro pronto, gravação em andamento).
+Restam só 4 itens genuinamente "a fazer". Data real: 31/10, 22:01 — cerca de 2 semanas.
 
 ---
 
@@ -114,27 +128,44 @@ indicados.
   `ADR-007`. **Importante**: isso é um valor de configuração de runtime, não um fato permanente —
   reconfirmar qual provedor está ativo antes do demo/submissão final, exatamente como a própria ADR
   pede.
-- [ ] **2.6 Publicar o transparency log em um remoto público** — o módulo faz commits locais e,
-  de propósito, nunca faz push. Enquanto isso não for feito, a alegação "público e verificável por
-  terceiros" não vale de ponta a ponta para o fallback. Exige autorização explícita (ação
-  voltada ao exterior).
+- [x] **2.6 Publicar o transparency log em um remoto público** — **já estava feito**, a checklist
+  é que estava desatualizada: o push aconteceu em 15/10/2026, com autorização explícita (Plane
+  #207) — `repo_path` (histórico git, `entries.jsonl`, `PUBLIC_KEY.txt`) foi enviado para
+  `https://github.com/Astreus-J/jurisense-transparency-log` (público, clonável anonimamente,
+  "verified live" no momento do push; ver o docstring de `transparency_log_provider.py` e o commit
+  `e86c043`). **Não é automático**: se novas âncoras forem criadas sob `transparency_log` depois do
+  push, o espelho público fica defasado até um novo `git push` manual. Em 16/10/2026 o usuário
+  decidiu que **não precisa republicar agora** — como a Constellation é o provider ativo desde
+  15/10, não deveria haver âncoras novas sob `transparency_log` para publicar mesmo. Reavaliar só se
+  o fallback for ativado de fato (ex.: Constellation cair) antes da submissão/demo.
 
 ## 3. Prontidão do demo (`demo-scenario.md`)
 
-- [ ] **3.1 Script de seed do tenant do demo** — "Acme Tecnologia Ltda.", um admin, um aprovador
-  com papel `legal` e um `PolicyVersion` publicado com `LGPD-001`, `LEGAL-008`, `FIN-003`
-  (idealmente `FIN-004` e `SANC-001`). Não existe script de seed em `backend/` nem em `scripts/`.
-- [ ] **3.2 Contratos de exemplo do demo** — dois PDFs da "CloudDocs Software Ltda.": v1
-  (R$ 480.000/ano, 24 meses, renovação automática, responsabilidade ilimitada, dados pessoais, sem
-  DPA) e v2 (DPA incluído, responsabilidade limitada). Nenhum encontrado no repositório.
+- [x] **3.1 Script de seed do tenant do demo** — `backend/scripts/seed_demo.py` (novo, 16/10/2026):
+  cria "Acme Tecnologia Ltda." (plano Business), um admin, um aprovador com papel `legal`, e publica
+  uma `PolicyVersion` com `LGPD-001`, `LEGAL-008`, `FIN-003`, `SANC-001`. **Rodado e verificado
+  contra a stack real** (`docker compose exec backend uv run python scripts/seed_demo.py`) —
+  idempotente, confirmado que uma segunda execução não duplica nada. `FIN-004` foi deliberadamente
+  deixado de fora: seu `approver_role` documentado é `director`, que **não existe** em
+  `app.identity.domain.constants.Role` (achado neste levantamento) — uma REVIEW dessa regra não
+  teria para quem rotear. Isso é uma lacuna real do domínio, não um bug do script; registrado aqui
+  em vez de inventar um papel só para o demo.
+- [x] **3.2 Contratos de exemplo do demo** — `docs/08-hackathon/demo-assets/contracts/` (novo,
+  16/10/2026): `clouddocs-saas-v1-original.pdf` (R$480.000/ano, 24 meses, renovação automática,
+  responsabilidade ilimitada, dados pessoais, sem DPA) e `clouddocs-saas-v2-corrigido.pdf` (DPA via
+  cláusula LGPD completa, responsabilidade limitada a 12 meses de mensalidade). Em português
+  (conteúdo voltado ao cliente fictício, permitido pela regra de idioma do `CLAUDE.md`), com
+  cláusulas numeradas para citação pela extração de IA. Gerados com `reportlab`
+  (`uv run --with reportlab`, sem adicionar dependência ao backend) e verificados visualmente via
+  `pdftoppm`.
 - [ ] **3.3 Ensaio completo ponta a ponta** — rodar os 23 passos do `demo-scenario.md` como um
-  apresentador faria, no mínimo duas vezes. Esperado: v1 → BLOCK, v2 → REVIEW → Legal aprova →
-  Passport → âncora → verify. Pelo repositório, ainda não foi feito.
+  apresentador faria, no mínimo duas vezes. Com 3.1/3.2 prontos, desbloqueado; ainda não executado.
 - [ ] **3.4 Âncora pré-submetida** — enviar a âncora minutos antes de apresentar; só o `verify`
   é ao vivo (notas do apresentador em `demo-scenario.md`).
-- [ ] **3.5 Provedor de IA confiável para o demo** — modelos gratuitos do OpenRouter podem sofrer
-  rate limit ou mudar. Providenciar uma chave paga da OpenAI/Anthropic (ADR-005) ou, no mínimo,
-  testar os modelos gratuitos no dia anterior à gravação.
+- [x] **3.5 Provedor de IA confiável para o demo** — decisão do usuário (16/10/2026): continuar
+  usando os modelos gratuitos do OpenRouter, sem trocar para uma chave paga. Risco residual mantido
+  (ver "Riscos a acompanhar"): testar os modelos gratuitos no dia anterior à gravação continua
+  recomendado, já que não foi trocado o provedor, só aceito o risco.
 - [ ] **3.6 🟡 Ambiente publicado** — VPS + Docker Compose conforme `deployment.md`, acessível
   durante toda a janela de julgamento (05/11 a 05/12). Progresso em 15/10: `docker-compose.prod.yml`
   agora existe (builds de produção, Postgres+MinIO self-hosted sem porta publicada), mas só
@@ -150,29 +181,58 @@ indicados.
   slides, `docs/08-hackathon/pitch-deck/` + uma cópia como Claude Artifact) foi montada em 15/10/2026
   e **descartada por decisão do usuário em 16/10/2026** (não será usada; ambas as cópias removidas).
   Precisa ser refeito do zero antes da submissão.
-- [ ] **4.3 Vídeo de demo (3–5 min assumidos)** — não iniciado; planejado para 02–03/11.
-- [ ] **4.4 🟡 Repositório público no GitHub** — o remoto existe (`Astreus-J/JuriSense`); a
-  visibilidade não foi verificada. Decidir o que expor antes de torná-lo público (ver 4.11).
+- [ ] **4.3 🟡 Vídeo de demo (3–5 min assumidos)** — roteiro de narração completo escrito
+  (`docs/08-hackathon/demo-video-script.md`, novo, 16/10/2026: narração palavra por palavra +
+  marcações de ação para os 23 passos do `demo-scenario.md`, ~4,5 min no ritmo natural de leitura).
+  A gravação em si está em andamento na mesma sessão: Playwright (via `npx`, Chromium já em cache)
+  para capturar a tela de verdade navegando pelo app real, `espeak-ng` para a narração sintetizada
+  (voz robótica, não natural — ver nota de limitação abaixo) e `ffmpeg` para legenda embutida.
+- [x] **4.4 Repositório público no GitHub** — tomado como feito por instrução direta do usuário
+  (16/10/2026). *Não reverificado nesta sessão*: a visibilidade real do remoto `Astreus-J/JuriSense`
+  e a limpeza da 4.11 (segredos, `docs/_legacy/`, comentários em português) continuam como pré-
+  requisitos de fato antes de abrir o repo, mesmo com o item marcado pronto aqui.
 - [ ] **4.5 🟡 `README.md` raiz** — aponta para `docs/08-hackathon/`, mas a seção "Project
   status" está desatualizada (ainda diz que os novos bounded contexts são "a fase atual"). O
   `CLAUDE.md` está desatualizado da mesma forma.
-- [ ] **4.6 🟡 Write-up técnico da integração blockchain para a submissão** — a base existe em
-  `docs/06-blockchain/` (845 linhas) e na ADR-007; falta a versão voltada ao juiz: interface,
-  adaptador escolhido e por quê, o que é ancorado, como um terceiro verifica, e a declaração
-  direta de que ICP e Story Protocol foram avaliados e não forçados.
-- [ ] **4.7 Dados do time** — nomes, papéis e contato.
-- [ ] **4.8 Conteúdo da página BUIDL / projeto** — depende de 4.9 para saber os campos exatos.
-- [ ] **4.9 🟡 Checagem manual de `dorahacks.io/hackathon/legal-hack-2026`** — trilhas, rubrica de
-  julgamento, formato da submissão. **Prazo confirmado pelo usuário em 2026-10-14: 31/10/2026**
-  (não 05/11 como o resto deste documento assumia — ver nota no topo do arquivo). Ainda faltam:
-  rubrica de julgamento e lista exata de bounties por patrocinador (ICP/Constellation/Story) —
-  nenhuma fonte de terceiros checada (CompeteHub) trouxe isso; a página oficial continua
-  bloqueando fetch automático (405).
-- [ ] **4.10 Segunda checagem no DoraHacks** (plano: Semana 5, 25–31/10).
-- [ ] **4.11 Limpeza antes de publicar** — antes de abrir o repositório: confirmar que não há
-  segredos (o gitleaks roda no CI, com allowlist da chave Fernet de desenvolvimento), decidir se
-  `docs/_legacy/` e `docs/auditorias/` permanecem, e corrigir a descrição em português que sobrou
-  no `backend/pyproject.toml` e os comentários em `backend/app/main.py`.
+- [x] **4.6 Write-up técnico da integração blockchain para a submissão** —
+  `docs/06-blockchain/submission-writeup.md` (novo, 16/10/2026): interface `AnchoringProvider`,
+  adaptador escolhido (Constellation DED) e por quê, o que é ancorado, como um terceiro verifica, e
+  uma seção honesta sobre o achado de 16/10 — os bounties ao vivo são Chainlink/RYO-CHAN, não
+  ICP/Constellation/Story como se assumia; o documento não afirma mais que "ICP e Story foram
+  avaliados e não forçados" (isso deixou de ser a narrativa relevante), e sim que a abstração
+  `AnchoringProvider` foi desenhada para não depender de acertar a lista de patrocinadores.
+- [x] **4.7 Dados do time** — tomado como pronto por instrução direta do usuário (16/10/2026): será
+  preenchido direto na página do DoraHacks, não é um artefato do repositório.
+- [x] **4.8 Conteúdo da página BUIDL / projeto** — tomado como pronto por instrução direta do
+  usuário (16/10/2026): configuração feita direto na plataforma.
+- [ ] **4.9 🟡 Checagem manual de `dorahacks.io/hackathon/legal-hack-2026`** — avançou bastante em
+  16/10/2026: o usuário enviou prints da página real, confirmando prazo exato (31/10 22:01), prize
+  pool ($20.000), tags, tecnologia de plataforma (Bitcoin/Ethereum) e — o achado mais importante —
+  os bounties reais (Chainlink, RYO-CHAN; não ICP/Constellation/Story). Fatos completos em
+  `hackathon-requirements.md` §1. Ainda faltam: rubrica de julgamento detalhada e o conteúdo da aba
+  "Tracks" (não capturada nos prints enviados). O usuário disse que vai mandar mais prints.
+- [ ] **4.10 Segunda checagem no DoraHacks** (plano: Semana 5, 25–31/10) — parcialmente antecipada
+  pelos prints de 16/10 acima; ainda vale uma passada final perto da submissão.
+- [x] **4.11 🟡 Limpeza antes de publicar** — feito nesta sessão (16/10/2026):
+  - **Segredos**: `gitleaks` instalado (`go install github.com/zricethezav/gitleaks/v8@latest`,
+    não estava no ambiente) e rodado de duas formas. `gitleaks git` (histórico completo, 136
+    commits — 8 a mais que a última checagem de 15/10): **no leaks found**. `gitleaks dir`
+    (diretório de trabalho inteiro, incluindo arquivos ignorados pelo git) encontrou 21 ocorrências,
+    todas em `frontend/.next/` (artefatos de build do Next.js) e `project-management/plane/.env` —
+    **confirmado que ambos estão no `.gitignore` e nunca foram commitados** (`git log --all
+    --full-history` vazio para o `.env`). Falso alarme, não vazamento real.
+  - **Texto em português corrigido**: `backend/pyproject.toml`'s `description` (estava em
+    português E descrevia o produto antigo pré-pivot — corrigido para inglês e para o produto
+    atual) e os dois comentários em `backend/app/main.py`.
+  - **`docs/_legacy/` e `docs/auditorias/` — ainda é uma decisão sua, não tomei por conta própria**:
+    inspecionei os dois. `docs/auditorias/` são auditorias de segurança reais (0 Critical/0 High,
+    achados Medium todos corrigidos na mesma passada) — tecnicamente isso é um ponto a favor na
+    narrativa de "rigor/auditabilidade", não um risco. `docs/_legacy/` é a documentação completa do
+    produto pré-pivot (ERP jurídico "SCHEMAJUD") com seu próprio README explicando o pivô — não hÃ¡
+    segredo ali, só a pergunta de narrativa "mostrar um pivô abandonado passa confiança ou
+    desconfiança a um jurado". Minha recomendação: manter — é transparência, e o próprio
+    `docs/09-planning/pivot-migration.md` já trata isso como registro histórico esperado. Mas a
+    palavra final é sua.
 
 ---
 
@@ -196,7 +256,15 @@ indicados.
   dizer isso em voz alta no pitch em vez de deixar qualquer material de submissão (deck, write-up)
   afirmar algo desatualizado.
 - **Instabilidade da IA gratuita durante a gravação** → 3.5.
-- **Rubrica ou formato desconhecidos** → 4.9 agora, e não na Semana 6.
+- **Rubrica ou formato desconhecidos** → 4.9 agora, e não na Semana 6; rubrica detalhada e aba
+  "Tracks" ainda não confirmadas mesmo depois dos prints de 16/10.
+- **Bounty real não é Constellation (novo, 16/10/2026)** → os únicos bounties ao vivo são Chainlink
+  e RYO-CHAN; nenhum deles é Constellation/ICP/Story. Decisão do usuário: manter Constellation DED
+  mesmo assim (ver addendum de 16/10 na `ADR-007`), então este risco não é "corrigir o código", é
+  **narrativo**: todo material de submissão (pitch, write-up, resposta a pergunta de jurado) precisa
+  parar de alegar "Constellation é patrocinador confirmado desta edição" como fato atual — isso já
+  foi corrigido no write-up novo (4.6) e na `ADR-007`, mas qualquer pitch deck futuro (4.2, a ser
+  refeito) precisa nascer já com essa correção, não repetir o erro do deck descartado.
 
 ### Risco fechado em 15/10/2026: teste de carga achou 4 bugs reais que quebrariam o demo em silêncio
 

@@ -48,15 +48,25 @@ that picks a concrete implementation from `Settings.anchoring_provider`.
 
 ## 2. Candidate providers
 
-Per `ADR-007`, research on 2026-09-27 established that the **BLI Legal Tech Hackathon 2 / Legal Hack
-2026** (judging 2026-11-05 to 2026-12-05) is sponsored by **ICP (Caffeine AI / DFINITY),
-Constellation Network, and Story Protocol** — not Chainlink, which the original mission brief had
-assumed. Constellation's own positioning around "immutable anchoring," and its use in a prior
-LegalHack for "audit-grade, multi-chain IP records" (combining Story Protocol licensing, ICP escrow,
-and Constellation anchoring), made it the closest conceptual match to an evidence-anchoring use case
-among the three actual sponsors. Story Protocol itself is not evaluated as an `AnchoringProvider`
-candidate: it is an IP-licensing/attribution protocol, not a generic hash-anchoring primitive, and
-does not fit the `submit_hash` / `get_proof` / `verify` shape this interface needs.
+> **Correction (2026-10-16)**: the sponsor claim this section opens with was based on a 2026-09-27
+> research pass that could not actually load the live DoraHacks page (405/403 to automated fetch).
+> User-supplied screenshots of the live page on 2026-10-16 show the opposite: this edition's only two
+> live bounties are **Chainlink** and **RYO-CHAN** — not ICP, Constellation, or Story Protocol. The
+> comparison below is kept as the historical record of how the provider decision was actually made
+> (and remains valid as a technical comparison of the candidates on their own merits); see `ADR-007`'s
+> 2026-10-16 addendum for the full correction and the user's 2026-10-16 decision to keep Constellation
+> DED as the active provider regardless.
+
+Per `ADR-007`, research on 2026-09-27 established — incorrectly, see the correction above — that the
+**BLI Legal Tech Hackathon 2 / Legal Hack 2026** (judging 2026-11-05 to 2026-12-05) is sponsored by
+**ICP (Caffeine AI / DFINITY), Constellation Network, and Story Protocol** — not Chainlink, which the
+original mission brief had assumed. Constellation's own positioning around "immutable anchoring," and
+its use in a prior LegalHack for "audit-grade, multi-chain IP records" (combining Story Protocol
+licensing, ICP escrow, and Constellation anchoring), made it the closest conceptual match to an
+evidence-anchoring use case among what were believed to be the three actual sponsors. Story Protocol
+itself is not evaluated as an `AnchoringProvider` candidate: it is an IP-licensing/attribution
+protocol, not a generic hash-anchoring primitive, and does not fit the `submit_hash` / `get_proof` /
+`verify` shape this interface needs.
 
 | | **Constellation Network** | **Generic EVM-compatible L2 testnet** (Base Sepolia or Polygon Amoy) | **ICP / Caffeine AI** |
 |---|---|---|---|

@@ -1,0 +1,8 @@
+{
+  "name": "jurisense-demo-video",
+  "private": true,
+  "description": "Reproducible pipeline that records docs/08-hackathon/demo-scenario.md as a narrated, captioned video.",
+  "dependencies": {
+    "playwright": "1.64.1"
+  }
+}

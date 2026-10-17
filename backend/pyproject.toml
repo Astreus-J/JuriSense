@@ -1,7 +1,7 @@
 [project]
 name = "jurisense-backend"
 version = "0.1.0"
-description = "API do JuriSense — plataforma de automação e inteligência jurídica"
+description = "JuriSense Gate API — AI-powered vendor, contract, and compliance operations platform"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [

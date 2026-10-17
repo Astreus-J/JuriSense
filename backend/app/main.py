@@ -12,9 +12,9 @@ from app.core.middleware import MaxBodySizeMiddleware
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
-    # Startup: o engine é criado sob demanda a partir de DATABASE_URL
+    # Startup: the engine is created on demand from DATABASE_URL
     yield
-    # Shutdown: encerra as conexões do pool
+    # Shutdown: close the pool's connections
     await get_engine().dispose()
 
 

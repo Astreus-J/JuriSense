@@ -101,3 +101,50 @@ This is a runtime configuration value (`ANCHORING_PROVIDER`), not a permanent ar
 anyone citing "which provider is active" in a live demo or pitch should reconfirm it at that moment
 rather than relying on this document alone, exactly as `docs/09-planning/risks.md` risk 4's
 labeling requirement already implies.
+
+## Addendum (2026-10-16) — Sponsor/bounty correction: Chainlink and RYO-CHAN, not ICP/Constellation/Story
+
+This ADR's Context and `anchoring-providers.md` §2 state, as established fact from 2026-09-27
+research, that this hackathon edition is sponsored by ICP (Caffeine AI/DFINITY), Constellation
+Network, and Story Protocol, and explicitly *not* Chainlink. **That research pass could not actually
+load the live DoraHacks page** (`dorahacks.io/hackathon/legal-hack-2026` returned HTTP 405/403 to
+automated fetch) and was built from indirect/historical signals instead — see
+`docs/08-hackathon/hackathon-requirements.md`'s original §2 TBDs, which flagged this gap honestly
+rather than hiding it.
+
+On 2026-10-16 the user supplied screenshots of the actual live page. The Bounties tab lists exactly
+two bounties for this specific edition: **Chainlink** ("Best workflow with CRE — 2x $1,000") and
+**RYO-CHAN** ("Autonomous Agents", a crypto-market-intelligence-agent bounty with no legal/compliance
+relevance). **Neither Constellation Network, ICP, nor Story Protocol appears as a bounty sponsor on
+the live page.** This reverses the 2026-09-27 finding and means this ADR's "why Constellation, not
+Chainlink" sponsor-fit reasoning was built on an incorrect premise. Full corrected facts:
+`docs/08-hackathon/hackathon-requirements.md` §1.
+
+**Decision (user, 2026-10-16): keep Constellation Network DED as the active `AnchoringProvider`
+implementation.** The team is not pivoting to a Chainlink CRE integration for this submission. This
+is a deliberate choice, not an oversight — practical reasons that make it the sound call even with
+the sponsor premise corrected:
+
+- Constellation DED is already built, tested, and **live-verified end to end** (real `POST
+  /fingerprints` → 200, confirmed `FINALIZED_COMMITMENT` on a follow-up `GET`, 2026-10-15 addendum
+  above). Chainlink CRE would be a new integration started from zero.
+- The submission deadline is 2026-10-31 — about two weeks out as of this addendum. Starting a new
+  SDK integration (Chainlink's CRE workflow tooling, Go/TypeScript, a DON-based execution model
+  neither this ADR nor the codebase has touched) this close to the deadline is a materially higher
+  risk than finishing the packaging work already in flight (`docs/08-hackathon/hackathon-checklist.md`
+  §3–4).
+- The `AnchoringProvider` abstraction (§1 above) was built sponsor-agnostic by design specifically so
+  the concrete provider choice would not gate the rest of the product — that design goal holds
+  regardless of which sponsor turns out to be live-listed. Constellation DED remains a genuinely
+  sound, independently-verifiable implementation of it on its own technical merits, not only as a
+  bounty-fit play.
+
+**What this does change**: any submission material (pitch, write-up, BUIDL page copy) must stop
+asserting "Constellation is a confirmed sponsor of this edition" or "we picked Constellation over
+Chainlink because Chainlink wasn't a sponsor" as a current fact — that framing is now known false for
+this specific edition. The honest framing is: the `AnchoringProvider` abstraction avoids hard-locking
+to any one sponsor's roadmap; Constellation DED is the adapter actually built and live-verified;
+whether that happens to match a live bounty track is a separate, now-open question the team is
+choosing not to chase. **What this does not change**: the architecture, the live-verified
+Constellation integration, or the transparency-log fallback — all remain exactly as documented in the
+2026-10-15 addendum above.
