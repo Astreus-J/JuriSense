@@ -22,7 +22,7 @@ export function TopBar({
   role,
 }: TopBarProps) {
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-surface px-3 md:px-6">
+    <header className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-canvas px-3 md:px-6">
       <MobileNav>
         <SidebarContent
           navItems={navItems}
