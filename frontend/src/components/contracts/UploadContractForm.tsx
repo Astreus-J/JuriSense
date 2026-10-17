@@ -5,13 +5,12 @@ import type { ChangeEvent, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 
 import { Alert } from "@/components/ui/Alert";
+import { controlClasses } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 import { Field } from "@/components/ui/Field";
 import { cn } from "@/lib/cn";
 
-const SELECT_CLASSES =
-  "w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground shadow-sm " +
-  "focus:outline-none focus:ring-2 focus:ring-focus-ring focus:border-transparent disabled:cursor-not-allowed disabled:opacity-60";
+const SELECT_CLASSES = `w-full ${controlClasses}`;
 
 type UploadMode = "new" | "version";
 type FormErrorState = { title: string; body?: string } | null;

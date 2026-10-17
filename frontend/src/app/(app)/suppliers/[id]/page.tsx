@@ -1,13 +1,12 @@
+import { StatusBadge } from "@/components/shared/StatusBadge";
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
 
 import { Alert } from "@/components/ui/Alert";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { SupplierCheckHistory } from "@/components/suppliers/SupplierCheckHistory";
 import { SupplierDetailActions } from "@/components/suppliers/SupplierDetailActions";
 import { SupplierProfileCard } from "@/components/suppliers/SupplierProfileCard";
-import { SupplierStatusBadge } from "@/components/suppliers/SupplierStatusBadge";
 import { ApiError } from "@/lib/auth/backend";
 import { readAccessToken } from "@/lib/auth/cookies";
 import { requireSession } from "@/lib/auth/session";
@@ -38,8 +37,8 @@ export default async function SupplierDetailPage({ params }: SupplierDetailPageP
     if (error instanceof ApiError && (error.status === 404 || error.status === 400)) notFound();
     if (error instanceof ApiError && error.status === 403) {
       return (
-        <div className="space-y-6">
-          <BackLink />
+        <div className="space-y-5">
+          <PageHeader title="Supplier" breadcrumbs={BREADCRUMBS} />
           <Alert tone="danger" title="You don't have access to this supplier.">
             Ask an administrator to grant you the &quot;suppliers&quot; read permission for
             this organization.
@@ -56,8 +55,34 @@ export default async function SupplierDetailPage({ params }: SupplierDetailPageP
   ]);
 
   return (
-    <div className="space-y-8">
-      <BackLink />
+    <div className="space-y-6">
+      <PageHeader
+        breadcrumbs={[...BREADCRUMBS.slice(0, 1), { label: supplier.legalName }]}
+        title={supplier.legalName}
+        meta={
+          <>
+            <StatusBadge kind="supplier" value={supplier.status} />
+            <span className="text-sm text-foreground-muted">
+              Tax ID <span className="font-mono text-xs tabular-nums text-foreground">{supplier.taxId}</span>
+              {" · "}
+              {supplier.jurisdiction}
+            </span>
+          </>
+        }
+        // #142 code review (2026-10-14): `key={supplier.id}` forces React to unmount
+        // and remount this component on navigation between two different suppliers --
+        // without it, the client component instance (and its in-flight recheck-polling
+        // state/interval) survives across the navigation and keeps polling the PREVIOUS
+        // supplier's checks, misattributing that result to whichever supplier is now
+        // displayed.
+        actions={
+          <SupplierDetailActions
+            key={supplier.id}
+            supplier={supplier}
+            canUpdate={permissions.canUpdate}
+          />
+        }
+      />
 
       {profile?.sanctionsHit && (
         <Alert tone="danger" title="Sanctions hit detected">
@@ -66,32 +91,6 @@ export default async function SupplierDetailPage({ params }: SupplierDetailPageP
         </Alert>
       )}
 
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-              {supplier.legalName}
-            </h1>
-            <SupplierStatusBadge status={supplier.status} />
-          </div>
-          <p className="mt-1 text-sm text-foreground-muted">
-            Tax ID {supplier.taxId} · {supplier.jurisdiction}
-          </p>
-        </div>
-
-        {/* #142 code review (2026-10-14): `key={supplier.id}` forces React to unmount
-            and remount this component on navigation between two different suppliers --
-            without it, the client component instance (and its in-flight recheck-polling
-            state/interval) survives across the navigation and keeps polling the PREVIOUS
-            supplier's checks, misattributing that result to whichever supplier is now
-            displayed. */}
-        <SupplierDetailActions
-          key={supplier.id}
-          supplier={supplier}
-          canUpdate={permissions.canUpdate}
-        />
-      </div>
-
       <SupplierProfileCard profile={profile} />
 
       <SupplierCheckHistory checks={checks} />
@@ -99,14 +98,4 @@ export default async function SupplierDetailPage({ params }: SupplierDetailPageP
   );
 }
 
-function BackLink() {
-  return (
-    <Link
-      href="/suppliers"
-      className="inline-flex items-center gap-1 text-sm font-medium text-foreground-muted hover:text-foreground"
-    >
-      <ArrowLeft className="size-4" aria-hidden="true" />
-      Back to suppliers
-    </Link>
-  );
-}
+const BREADCRUMBS = [{ label: "Suppliers", href: "/suppliers" }, { label: "Supplier" }];

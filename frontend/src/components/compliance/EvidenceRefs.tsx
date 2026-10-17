@@ -10,10 +10,10 @@ import type { EvidenceRef } from "@/lib/compliance/types";
 export function EvidenceRefs({ evidenceRefs }: { evidenceRefs: EvidenceRef[] }) {
   if (evidenceRefs.length === 0) return null;
   return (
-    <ul className="mt-2 space-y-1">
+    <ul className="mt-1.5 space-y-0.5">
       {evidenceRefs.map((ref, index) => (
         <li key={index} className="text-xs text-foreground-muted">
-          Source: {describeEvidenceRef(ref)}
+          <span className="font-medium">Source</span> · {describeEvidenceRef(ref)}
         </li>
       ))}
     </ul>

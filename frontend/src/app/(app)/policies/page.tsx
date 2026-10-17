@@ -3,6 +3,8 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 
 import { Alert } from "@/components/ui/Alert";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { buttonClasses } from "@/components/ui/Button";
 import { PolicyTable } from "@/components/policies/PolicyTable";
 import { ApiError } from "@/lib/auth/backend";
@@ -36,23 +38,19 @@ export default async function PoliciesPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Policies</h1>
-          <p className="mt-1 max-w-2xl text-sm text-foreground-muted">
-            The rules that turn your organization&apos;s policy into an executable,
-            versioned decision — every published version is frozen and reproducible, so
-            past compliance decisions never silently change.
-          </p>
-        </div>
-        {!forbidden && permissions.canCreate && (
-          <Link href="/policies/new" className={buttonClasses("primary")}>
-            <Plus className="size-4" aria-hidden="true" />
-            Create policy
-          </Link>
-        )}
-      </div>
+    <div className="space-y-5">
+      <PageHeader
+        title="Policies"
+        description="The rules that turn your organization's policy into an executable, versioned decision. Every published version is frozen and reproducible, so past compliance decisions never silently change."
+        actions={
+          !forbidden && permissions.canCreate ? (
+            <Link href="/policies/new" className={buttonClasses("primary")}>
+              <Plus className="size-4" aria-hidden="true" />
+              Create policy
+            </Link>
+          ) : undefined
+        }
+      />
 
       {forbidden ? (
         <Alert tone="danger" title="You don't have access to Policies.">
@@ -69,23 +67,19 @@ export default async function PoliciesPage() {
 }
 
 function PoliciesEmptyState({ canCreate }: { canCreate: boolean }) {
-  const Icon = NAV_ITEMS.policies.icon;
   return (
-    <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border bg-surface px-6 py-16 text-center">
-      <div className="flex size-12 items-center justify-center rounded-full bg-surface-muted">
-        <Icon className="size-6 text-foreground-muted" aria-hidden="true" />
-      </div>
-      <h2 className="text-lg font-semibold text-foreground">No policies yet</h2>
-      <p className="max-w-sm text-sm text-foreground-muted">
-        Create your first policy to start authoring the rules compliance reviews will
-        evaluate contracts and suppliers against.
-      </p>
-      {canCreate && (
-        <Link href="/policies/new" className={buttonClasses("primary", "mt-1")}>
-          <Plus className="size-4" aria-hidden="true" />
-          Create policy
-        </Link>
-      )}
-    </div>
+    <EmptyState
+      icon={NAV_ITEMS.policies.icon}
+      title="No policies yet"
+      description="Create your first policy to start authoring the rules compliance reviews will evaluate contracts and suppliers against."
+      action={
+        canCreate ? (
+          <Link href="/policies/new" className={buttonClasses("primary")}>
+            <Plus className="size-4" aria-hidden="true" />
+            Create policy
+          </Link>
+        ) : undefined
+      }
+    />
   );
 }

@@ -79,7 +79,7 @@ export function CreatePolicyForm() {
         disabled={submitting}
       />
 
-      <Button type="submit" loading={submitting} className="w-full">
+      <Button type="submit" loading={submitting}>
         {submitting ? "Creating…" : "Create policy"}
       </Button>
     </form>

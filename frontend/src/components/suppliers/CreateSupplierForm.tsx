@@ -105,7 +105,7 @@ export function CreateSupplierForm() {
         disabled={submitting}
       />
 
-      <Button type="submit" loading={submitting} className="w-full">
+      <Button type="submit" loading={submitting}>
         {submitting ? "Registering…" : "Register supplier"}
       </Button>
     </form>

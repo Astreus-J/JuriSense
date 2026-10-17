@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { AlertTriangle, CheckCircle2, SquarePen } from "lucide-react";
 
 import { Badge } from "@/components/ui/Badge";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { formatConfidence, formatCurrency, formatDate } from "@/lib/format";
 import type { ContractFields, ExtractedLeaf } from "@/lib/contracts/types";
 
@@ -73,8 +74,8 @@ function FieldRow({ label, leaf, path, needsConfirmationPaths, format = formatPl
   const flagged = needsConfirmationPaths.includes(path);
   return (
     <div>
-      <dt className="text-xs font-medium uppercase tracking-wide text-foreground-muted">{label}</dt>
-      <dd className="mt-1 flex flex-wrap items-center gap-2 text-sm font-medium text-foreground">
+      <dt className="text-xs text-foreground-muted">{label}</dt>
+      <dd className="mt-0.5 flex flex-wrap items-center gap-2 text-sm font-medium text-foreground">
         <span>{format(leaf.value)}</span>
         <ConfidenceIndicator leaf={leaf} flagged={flagged} />
       </dd>
@@ -84,7 +85,7 @@ function FieldRow({ label, leaf, path, needsConfirmationPaths, format = formatPl
 
 function Card({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="space-y-3 rounded-xl border border-border bg-surface p-6">
+    <section className="space-y-3 border-t border-border pt-3">
       <h3 className="text-sm font-semibold text-foreground">{title}</h3>
       {children}
     </section>
@@ -128,18 +129,18 @@ export function ExtractedDataView({ fields, needsConfirmationPaths }: ExtractedD
 
   if (!hasAnyField) {
     return (
-      <p className="rounded-xl border border-dashed border-border bg-surface px-6 py-10 text-center text-sm text-foreground-muted">
-        JuriSense didn&apos;t extract any structured fields from this document. This can
-        happen with scanned, low-quality, or unusually formatted files — try uploading a
-        clearer copy as a new version.
-      </p>
+      <EmptyState
+        title="No structured fields extracted"
+        description="JuriSense didn't extract any structured fields from this document. This can happen with scanned, low-quality, or unusually formatted files. Try uploading a clearer copy as a new version."
+      />
     );
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
+      <h2 className="text-base font-semibold text-foreground">Extracted terms</h2>
       {(fields.contract_type || fields.jurisdiction) && (
-        <dl className="grid gap-4 rounded-xl border border-border bg-surface p-6 sm:grid-cols-2">
+        <dl className="grid gap-4 sm:grid-cols-2">
           <FieldRow
             label="Contract type"
             leaf={fields.contract_type}
@@ -155,7 +156,7 @@ export function ExtractedDataView({ fields, needsConfirmationPaths }: ExtractedD
         </dl>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-x-8 gap-y-6 md:grid-cols-2">
         {(fields.value?.amount || fields.value?.currency) && (
           <Card title="Contract value">
             <dl className="grid gap-4 sm:grid-cols-2">

@@ -2,6 +2,7 @@ import { forwardRef, useId } from "react";
 import type { ReactNode, TextareaHTMLAttributes } from "react";
 
 import { cn } from "@/lib/cn";
+import { controlClasses, controlInvalidClasses } from "./Field";
 
 export interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
   label: string;
@@ -26,8 +27,8 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
   const hintId = hint ? `${textareaId}-hint` : undefined;
 
   return (
-    <div className="space-y-1.5">
-      <label htmlFor={textareaId} className="block text-sm font-medium text-foreground">
+    <div className="space-y-1">
+      <label htmlFor={textareaId} className="block text-[14px] font-medium text-foreground">
         {label}
       </label>
       <textarea
@@ -37,10 +38,8 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
         aria-invalid={Boolean(error) || undefined}
         aria-describedby={cn(errorId, hintId) || undefined}
         className={cn(
-          "w-full rounded-md border bg-surface px-3 py-2 text-sm text-foreground shadow-sm",
-          "placeholder:text-foreground-muted",
-          "focus:outline-none focus:ring-2 focus:ring-focus-ring focus:border-transparent",
-          error ? "border-danger" : "border-border",
+          "w-full",
+          error ? controlInvalidClasses : controlClasses,
           className,
         )}
         {...props}

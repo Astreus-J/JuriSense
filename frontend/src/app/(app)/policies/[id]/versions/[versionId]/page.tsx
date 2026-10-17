@@ -1,11 +1,11 @@
+import { StatusBadge } from "@/components/shared/StatusBadge";
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
 
 import { Alert } from "@/components/ui/Alert";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { AddRuleControl } from "@/components/policies/AddRuleControl";
-import { PolicyVersionStatusBadge } from "@/components/policies/PolicyVersionStatusBadge";
 import { PublishVersionButton } from "@/components/policies/PublishVersionButton";
 import { RuleListItem } from "@/components/policies/RuleListItem";
 import { ApiError } from "@/lib/auth/backend";
@@ -43,8 +43,8 @@ export default async function PolicyVersionDetailPage({ params }: PolicyVersionD
     if (error instanceof ApiError && (error.status === 404 || error.status === 400)) notFound();
     if (error instanceof ApiError && error.status === 403) {
       return (
-        <div className="space-y-6">
-          <BackLink policyId={id} />
+        <div className="space-y-5">
+          <PageHeader title="Policy version" breadcrumbs={[{ label: "Policies", href: "/policies" }, { label: "Policy", href: `/policies/${id}` }, { label: "Version" }]} />
           <Alert tone="danger" title="You don't have access to this policy version.">
             Ask an administrator to grant you the &quot;policies&quot; read permission for
             this organization.
@@ -61,31 +61,31 @@ export default async function PolicyVersionDetailPage({ params }: PolicyVersionD
   const canAddRules = isDraft && permissions.canCreate;
 
   return (
-    <div className="space-y-8">
-      <BackLink policyId={id} />
-
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-              {policy.name} — Version {version.versionNumber}
-            </h1>
-            <PolicyVersionStatusBadge status={version.status} />
-            {version.isCurrent && (
-              <span className="text-xs font-medium text-foreground-muted">(current)</span>
-            )}
-          </div>
-          <p className="mt-1 text-sm text-foreground-muted">
-            {version.publishedAt
-              ? `Published ${formatDateTime(version.publishedAt)}`
-              : `Created ${formatDateTime(version.createdAt)}`}
-          </p>
-        </div>
-
-        {isDraft && permissions.canUpdate && (
-          <PublishVersionButton policyId={id} versionId={versionId} />
-        )}
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        breadcrumbs={[
+          { label: "Policies", href: "/policies" },
+          { label: policy.name, href: `/policies/${id}` },
+          { label: `Version ${version.versionNumber}` },
+        ]}
+        title={`${policy.name}, version ${version.versionNumber}`}
+        meta={
+          <>
+            <StatusBadge kind="policyVersion" value={version.status} />
+            {version.isCurrent && <span className="text-xs text-foreground-muted">current</span>}
+            <span className="text-sm tabular-nums text-foreground-muted">
+              {version.publishedAt
+                ? `Published ${formatDateTime(version.publishedAt)}`
+                : `Created ${formatDateTime(version.createdAt)}`}
+            </span>
+          </>
+        }
+        actions={
+          isDraft && permissions.canUpdate ? (
+            <PublishVersionButton policyId={id} versionId={versionId} />
+          ) : undefined
+        }
+      />
 
       {!isDraft && (
         <Alert tone="info" title="This version is published and frozen">
@@ -94,10 +94,10 @@ export default async function PolicyVersionDetailPage({ params }: PolicyVersionD
         </Alert>
       )}
 
-      <div className="space-y-3">
+      <section className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-muted">
-            Rules
+          <h2 className="text-base font-semibold text-foreground">
+            Rules <span className="font-normal tabular-nums text-foreground-muted">({rules.length})</span>
           </h2>
           {canAddRules && <AddRuleControl policyId={id} versionId={versionId} />}
         </div>
@@ -105,7 +105,7 @@ export default async function PolicyVersionDetailPage({ params }: PolicyVersionD
         {rules.length === 0 ? (
           <RulesEmptyState canAdd={canAddRules} />
         ) : (
-          <ul className="space-y-3">
+          <ul className="space-y-4">
             {rules.map((rule) => (
               <RuleListItem
                 key={rule.id}
@@ -117,32 +117,20 @@ export default async function PolicyVersionDetailPage({ params }: PolicyVersionD
             ))}
           </ul>
         )}
-      </div>
+      </section>
     </div>
   );
 }
 
 function RulesEmptyState({ canAdd }: { canAdd: boolean }) {
   return (
-    <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border bg-surface px-6 py-12 text-center">
-      <h3 className="text-sm font-semibold text-foreground">No rules yet</h3>
-      <p className="max-w-sm text-sm text-foreground-muted">
-        {canAdd
-          ? "Add at least one rule before publishing — a version with no rules will never block or review anything."
-          : "This version has no rules. Ask a policy author to add one before it's published."}
-      </p>
-    </div>
-  );
-}
-
-function BackLink({ policyId }: { policyId: string }) {
-  return (
-    <Link
-      href={`/policies/${policyId}`}
-      className="inline-flex items-center gap-1 text-sm font-medium text-foreground-muted hover:text-foreground"
-    >
-      <ArrowLeft className="size-4" aria-hidden="true" />
-      Back to policy
-    </Link>
+    <EmptyState
+      title="No rules yet"
+      description={
+        canAdd
+          ? "Add at least one rule before publishing. A version with no rules will never block or review anything."
+          : "This version has no rules. Ask a policy author to add one before it's published."
+      }
+    />
   );
 }

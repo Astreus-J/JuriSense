@@ -3,6 +3,8 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 
 import { Alert } from "@/components/ui/Alert";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { buttonClasses } from "@/components/ui/Button";
 import { StatusFilterTabs } from "@/components/suppliers/StatusFilterTabs";
 import { SupplierTable } from "@/components/suppliers/SupplierTable";
@@ -51,22 +53,19 @@ export default async function SuppliersPage({ searchParams }: SuppliersPageProps
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Suppliers</h1>
-          <p className="mt-1 max-w-2xl text-sm text-foreground-muted">
-            Every supplier your organization has registered, with its verification status
-            against official and public sources.
-          </p>
-        </div>
-        {!forbidden && permissions.canCreate && (
-          <Link href="/suppliers/new" className={buttonClasses("primary")}>
-            <Plus className="size-4" aria-hidden="true" />
-            Register supplier
-          </Link>
-        )}
-      </div>
+    <div className="space-y-5">
+      <PageHeader
+        title="Suppliers"
+        description="Every supplier your organization has registered, with its verification status against official and public sources."
+        actions={
+          !forbidden && permissions.canCreate ? (
+            <Link href="/suppliers/new" className={buttonClasses("primary")}>
+              <Plus className="size-4" aria-hidden="true" />
+              Register supplier
+            </Link>
+          ) : undefined
+        }
+      />
 
       {forbidden ? (
         <Alert tone="danger" title="You don't have access to Suppliers.">
@@ -74,7 +73,7 @@ export default async function SuppliersPage({ searchParams }: SuppliersPageProps
           organization.
         </Alert>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-3">
           <StatusFilterTabs activeStatus={activeStatus} />
 
           {suppliers.length === 0 ? (
@@ -89,26 +88,27 @@ export default async function SuppliersPage({ searchParams }: SuppliersPageProps
 }
 
 function SuppliersEmptyState({ filtered, canCreate }: { filtered: boolean; canCreate: boolean }) {
-  const Icon = NAV_ITEMS.suppliers.icon;
   return (
-    <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border bg-surface px-6 py-16 text-center">
-      <div className="flex size-12 items-center justify-center rounded-full bg-surface-muted">
-        <Icon className="size-6 text-foreground-muted" aria-hidden="true" />
-      </div>
-      <h2 className="text-lg font-semibold text-foreground">
-        {filtered ? "No suppliers match this filter" : "No suppliers yet"}
-      </h2>
-      <p className="max-w-sm text-sm text-foreground-muted">
-        {filtered
-          ? "Try a different status, or view all suppliers."
-          : "Register your first supplier to start tracking its verification status against official and public sources."}
-      </p>
-      {canCreate && !filtered && (
-        <Link href="/suppliers/new" className={buttonClasses("primary", "mt-1")}>
-          <Plus className="size-4" aria-hidden="true" />
-          Register supplier
-        </Link>
-      )}
-    </div>
+    <EmptyState
+      icon={NAV_ITEMS.suppliers.icon}
+      title={filtered ? "No suppliers match this filter" : "No suppliers yet"}
+      description={
+        filtered
+          ? "No supplier currently has this status. Pick a different status, or view all suppliers."
+          : "Register your first supplier to start tracking its verification status against official and public sources."
+      }
+      action={
+        filtered ? (
+          <Link href="/suppliers" className={buttonClasses("secondary")}>
+            View all suppliers
+          </Link>
+        ) : canCreate ? (
+          <Link href="/suppliers/new" className={buttonClasses("primary")}>
+            <Plus className="size-4" aria-hidden="true" />
+            Register supplier
+          </Link>
+        ) : undefined
+      }
+    />
   );
 }

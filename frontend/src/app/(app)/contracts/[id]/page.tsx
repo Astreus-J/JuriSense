@@ -1,16 +1,17 @@
+import { StatusBadge } from "@/components/shared/StatusBadge";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Loader2, Plus } from "lucide-react";
+import { Loader2, Plus } from "lucide-react";
 
 import { Alert } from "@/components/ui/Alert";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { buttonClasses } from "@/components/ui/Button";
 import { ClauseList } from "@/components/contracts/ClauseList";
 import { ComplianceReviewHistory } from "@/components/compliance/ComplianceReviewHistory";
 import { ConfirmationForm } from "@/components/contracts/ConfirmationForm";
-import { ContractStatusBadge } from "@/components/contracts/ContractStatusBadge";
 import { ContractVersionList } from "@/components/contracts/ContractVersionList";
-import { ContractVersionStatusBadge } from "@/components/contracts/ContractVersionStatusBadge";
 import { ExtractedDataView } from "@/components/contracts/ExtractedDataView";
 import { TriggerComplianceReviewButton } from "@/components/compliance/TriggerComplianceReviewButton";
 import { ApiError } from "@/lib/auth/backend";
@@ -54,8 +55,8 @@ export default async function ContractDetailPage({ params, searchParams }: Contr
     if (error instanceof ApiError && (error.status === 404 || error.status === 400)) notFound();
     if (error instanceof ApiError && error.status === 403) {
       return (
-        <div className="space-y-6">
-          <BackLink />
+        <div className="space-y-5">
+          <PageHeader title="Contract" breadcrumbs={BREADCRUMBS} />
           <Alert tone="danger" title="You don't have access to this contract.">
             Ask an administrator to grant you the &quot;contracts&quot; read permission for
             this organization.
@@ -72,8 +73,8 @@ export default async function ContractDetailPage({ params, searchParams }: Contr
     // (`contract_service.upload_contract_version`) — this is a defensive branch for an
     // invariant that should never actually break, not an expected empty state.
     return (
-      <div className="space-y-6">
-        <BackLink />
+      <div className="space-y-5">
+        <PageHeader title={contract.title} breadcrumbs={BREADCRUMBS} />
         <Alert tone="warning" title="This contract has no versions yet.">
           This shouldn&apos;t normally happen — contact support if it persists.
         </Alert>
@@ -107,66 +108,67 @@ export default async function ContractDetailPage({ params, searchParams }: Contr
 
   return (
     <div className="space-y-6">
-      <BackLink />
+      <PageHeader
+        breadcrumbs={[BREADCRUMBS[0], { label: contract.title }]}
+        title={contract.title}
+        meta={
+          <>
+            <StatusBadge kind="contract" value={contract.status} />
+            <span className="text-sm text-foreground-muted">
+              {contract.contractType} ·{" "}
+              {supplierName ? (
+                <Link
+                  href={`/suppliers/${contract.supplierId}`}
+                  className="text-foreground hover:underline"
+                >
+                  {supplierName}
+                </Link>
+              ) : (
+                "Unknown supplier"
+              )}{" "}
+              · Created {formatDateTime(contract.createdAt)}
+            </span>
+          </>
+        }
+        actions={
+          permissions.canCreate ? (
+            <Link
+              href={`/contracts/new?contractId=${contract.id}`}
+              className={buttonClasses("secondary")}
+            >
+              <Plus className="size-4" aria-hidden="true" />
+              Upload new version
+            </Link>
+          ) : undefined
+        }
+      />
 
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground">{contract.title}</h1>
-            <ContractStatusBadge status={contract.status} />
-          </div>
-          <p className="mt-1 text-sm text-foreground-muted">
-            {contract.contractType} ·{" "}
-            {supplierName ? (
-              <Link href={`/suppliers/${contract.supplierId}`} className="hover:underline">
-                {supplierName}
-              </Link>
-            ) : (
-              "Unknown supplier"
-            )}{" "}
-            · Created {formatDateTime(contract.createdAt)}
-          </p>
-        </div>
-
-        {permissions.canCreate && (
-          <Link
-            href={`/contracts/new?contractId=${contract.id}`}
-            className={buttonClasses("secondary")}
-          >
-            <Plus className="size-4" aria-hidden="true" />
-            Upload new version
-          </Link>
-        )}
-      </div>
-
-      <div className="grid gap-6 lg:grid-cols-[240px_1fr]">
+      <div className="grid gap-8 lg:grid-cols-[200px_minmax(0,1fr)]">
         <ContractVersionList contractId={contract.id} versions={versions} selectedVersionId={version.id} />
 
-        <div className="space-y-6">
-          <VersionSummary version={version} />
-
-          {compliancePermissions.canCreate && version.status === "analyzed" && (
-            <div className="flex justify-end">
-              <TriggerComplianceReviewButton
-                contractId={contract.id}
-                contractVersionId={version.id}
-              />
-            </div>
-          )}
+        <div className="min-w-0 space-y-6">
+          <VersionSummary
+            version={version}
+            action={
+              compliancePermissions.canCreate && version.status === "analyzed" ? (
+                <TriggerComplianceReviewButton
+                  contractId={contract.id}
+                  contractVersionId={version.id}
+                />
+              ) : undefined
+            }
+          />
 
           {complianceReviews.length > 0 && (
             <ComplianceReviewHistory contractId={contract.id} reviews={complianceReviews} />
           )}
 
           {version.status === "extracted" && (
-            <section className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border bg-surface px-6 py-16 text-center">
-              <Loader2 className="size-6 motion-safe:animate-spin text-foreground-muted" aria-hidden="true" />
-              <p className="text-sm font-medium text-foreground">Extraction in progress</p>
-              <p className="mx-auto max-w-sm text-sm text-foreground-muted">
-                JuriSense is reading this document and structuring its key terms. This
-                usually takes a minute or two — refresh to check for an update.
-              </p>
-            </section>
+            <EmptyState
+              icon={Loader2}
+              title="Extraction in progress"
+              description="JuriSense is reading this document and structuring its key terms. This usually takes a minute or two. Refresh to check for an update."
+            />
           )}
 
           {version.status === "extraction_failed" && (
@@ -198,29 +200,25 @@ export default async function ContractDetailPage({ params, searchParams }: Contr
   );
 }
 
-function VersionSummary({ version }: { version: ContractVersion }) {
-  return (
-    <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-surface p-4">
-      <span className="text-sm font-semibold text-foreground">Version {version.versionNumber}</span>
-      <ContractVersionStatusBadge status={version.status} />
-      {version.extractionConfidence !== null && (
-        <span className="text-xs text-foreground-muted">
-          Minimum field confidence: {formatConfidence(version.extractionConfidence)}
-        </span>
-      )}
-      <span className="text-xs text-foreground-muted">Uploaded {formatDateTime(version.createdAt)}</span>
-    </div>
-  );
-}
+const BREADCRUMBS = [{ label: "Contracts", href: "/contracts" }, { label: "Contract" }];
 
-function BackLink() {
+function VersionSummary({ version, action }: { version: ContractVersion; action?: React.ReactNode }) {
   return (
-    <Link
-      href="/contracts"
-      className="inline-flex items-center gap-1 text-sm font-medium text-foreground-muted hover:text-foreground"
-    >
-      <ArrowLeft className="size-4" aria-hidden="true" />
-      Back to contracts
-    </Link>
+    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-border pb-3">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <h2 className="text-base font-semibold text-foreground">Version {version.versionNumber}</h2>
+        <StatusBadge kind="contractVersion" value={version.status} />
+        <span className="text-xs text-foreground-muted">
+          Uploaded {formatDateTime(version.createdAt)}
+        </span>
+        {version.extractionConfidence !== null && (
+          <span className="text-xs text-foreground-muted">
+            Minimum field confidence{" "}
+            <span className="tabular-nums">{formatConfidence(version.extractionConfidence)}</span>
+          </span>
+        )}
+      </div>
+      {action}
+    </div>
   );
 }

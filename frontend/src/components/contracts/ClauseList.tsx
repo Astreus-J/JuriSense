@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui/Badge";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { formatConfidence } from "@/lib/format";
 import type { Clause } from "@/lib/contracts/types";
 
@@ -13,27 +14,30 @@ function formatClauseType(clauseType: string): string {
 export function ClauseList({ clauses }: { clauses: Clause[] }) {
   return (
     <section className="space-y-3">
-      <h2 className="text-sm font-semibold text-foreground">Clauses</h2>
+      <h2 className="text-base font-semibold text-foreground">Clauses</h2>
 
       {clauses.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-border bg-surface px-6 py-10 text-center text-sm text-foreground-muted">
-          No clauses were identified in this version.
-        </p>
+        <EmptyState
+          title="No clauses identified"
+          description="No clauses were identified in this version."
+        />
       ) : (
-        <ul className="space-y-2">
+        <ul className="divide-y divide-border border-y border-border">
           {clauses.map((clause) => (
-            <li key={clause.id} className="rounded-xl border border-border bg-surface p-4">
+            <li key={clause.id} className="py-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge tone="neutral">{formatClauseType(clause.clauseType)}</Badge>
-                  <span className="text-xs text-foreground-muted">Page {clause.page}</span>
+                  <span className="text-xs tabular-nums text-foreground-muted">Page {clause.page}</span>
                 </div>
-                <span className="text-xs font-medium text-foreground-muted">
+                <span className="text-xs tabular-nums text-foreground-muted">
                   {formatConfidence(clause.confidence)} confidence
                 </span>
               </div>
               {clause.textExcerpt && (
-                <p className="mt-2 text-sm text-foreground-muted">&ldquo;{clause.textExcerpt}&rdquo;</p>
+                <p className="mt-1.5 border-l-2 border-border-strong pl-3 text-sm text-foreground-muted">
+                  {clause.textExcerpt}
+                </p>
               )}
             </li>
           ))}

@@ -1,6 +1,6 @@
+import { StatusBadge } from "@/components/shared/StatusBadge";
 import Link from "next/link";
 
-import { PolicyVersionStatusBadge } from "./PolicyVersionStatusBadge";
 import { cn } from "@/lib/cn";
 import { formatDateTime } from "@/lib/format";
 import type { PolicyVersion } from "@/lib/policies/types";
@@ -21,7 +21,7 @@ export function PolicyVersionList({ policyId, versions, selectedVersionId }: Pol
   const descending = [...versions].sort((a, b) => b.versionNumber - a.versionNumber);
 
   return (
-    <ul className="space-y-1.5">
+    <ul className="divide-y divide-border border-y border-border">
       {descending.map((version) => {
         const isSelected = version.id === selectedVersionId;
         return (
@@ -30,28 +30,25 @@ export function PolicyVersionList({ policyId, versions, selectedVersionId }: Pol
               href={`/policies/${policyId}/versions/${version.id}`}
               aria-current={isSelected ? "true" : undefined}
               className={cn(
-                "block rounded-lg border px-3 py-2.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
-                isSelected
-                  ? "border-primary bg-surface-muted"
-                  : "border-border bg-surface hover:bg-surface-muted",
+                "flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-3 py-2.5 transition-colors",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus-ring",
+                isSelected ? "bg-surface-muted" : "hover:bg-surface-muted",
               )}
             >
-              <div className="flex items-center justify-between gap-2">
-                <span className="font-medium text-foreground">
+              <span className="flex items-center gap-3">
+                <span className="text-sm font-medium text-foreground">
                   Version {version.versionNumber}
-                  {version.isCurrent && (
-                    <span className="ml-1.5 text-xs font-normal text-foreground-muted">(current)</span>
-                  )}
                 </span>
-              </div>
-              <div className="mt-1.5 flex items-center justify-between gap-2">
-                <PolicyVersionStatusBadge status={version.status} />
-                <span className="text-xs text-foreground-muted">
-                  {version.publishedAt
-                    ? `Published ${formatDateTime(version.publishedAt)}`
-                    : `Created ${formatDateTime(version.createdAt)}`}
-                </span>
-              </div>
+                <StatusBadge kind="policyVersion" value={version.status} />
+                {version.isCurrent && (
+                  <span className="text-xs text-foreground-muted">current</span>
+                )}
+              </span>
+              <span className="text-xs tabular-nums text-foreground-muted">
+                {version.publishedAt
+                  ? `Published ${formatDateTime(version.publishedAt)}`
+                  : `Created ${formatDateTime(version.createdAt)}`}
+              </span>
             </Link>
           </li>
         );

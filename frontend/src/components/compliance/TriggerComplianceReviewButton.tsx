@@ -56,7 +56,7 @@ export function TriggerComplianceReviewButton({
 
   return (
     <div className="flex flex-col items-end gap-2">
-      <Button variant="secondary" onClick={handleClick} loading={submitting}>
+      <Button variant="primary" onClick={handleClick} loading={submitting}>
         Run compliance review
       </Button>
 

@@ -1,8 +1,8 @@
+import { StatusBadge } from "@/components/shared/StatusBadge";
 import Link from "next/link";
 
 import { cn } from "@/lib/cn";
 import { formatDateTime } from "@/lib/format";
-import { ContractVersionStatusBadge } from "./ContractVersionStatusBadge";
 import type { ContractVersion } from "@/lib/contracts/types";
 
 interface ContractVersionListProps {
@@ -17,44 +17,48 @@ interface ContractVersionListProps {
  * rationale `StatusFilterTabs` documents for Suppliers. Most recent negotiation round
  * first — the API returns them ascending by `version_number`, so this reverses that for
  * display (a reviewer almost always wants the current version, not version 1).
+ *
+ * Rendered as a flat vertical rail (a timeline-like list with a selection marker) rather
+ * than a stack of cards: it is navigation, not content.
  */
 export function ContractVersionList({ contractId, versions, selectedVersionId }: ContractVersionListProps) {
   const descending = [...versions].sort((a, b) => b.versionNumber - a.versionNumber);
   const currentVersionNumber = Math.max(...versions.map((v) => v.versionNumber));
 
   return (
-    <nav aria-label="Contract versions" className="space-y-1.5">
-      <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-foreground-muted">
+    <nav aria-label="Contract versions" className="min-w-0">
+      <h2 className="pb-2 text-[12px] font-medium uppercase tracking-wider text-foreground-muted">
         Versions
       </h2>
-      <ul className="space-y-1.5">
+      <ul className="flex gap-2 overflow-x-auto pb-1 lg:flex-col lg:gap-0 lg:overflow-visible lg:border-l lg:border-border lg:pb-0">
         {descending.map((version) => {
           const isSelected = version.id === selectedVersionId;
           const isCurrent = version.versionNumber === currentVersionNumber;
           return (
-            <li key={version.id}>
+            <li key={version.id} className="shrink-0">
               <Link
                 href={`/contracts/${contractId}?version=${version.versionNumber}`}
                 aria-current={isSelected ? "true" : undefined}
                 className={cn(
-                  "block rounded-lg border px-3 py-2.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
+                  "block rounded-md px-3 py-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
+                  "lg:-ml-px lg:rounded-none lg:rounded-r-md lg:border-l-2",
                   isSelected
-                    ? "border-primary bg-surface-muted"
-                    : "border-border bg-surface hover:bg-surface-muted",
+                    ? "bg-surface-muted lg:border-primary"
+                    : "hover:bg-surface-muted lg:border-transparent",
                 )}
               >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-medium text-foreground">
-                    Version {version.versionNumber}
-                    {isCurrent && (
-                      <span className="ml-1.5 text-xs font-normal text-foreground-muted">(current)</span>
-                    )}
-                  </span>
-                </div>
-                <div className="mt-1.5 flex items-center justify-between gap-2">
-                  <ContractVersionStatusBadge status={version.status} />
-                  <span className="text-xs text-foreground-muted">{formatDateTime(version.createdAt)}</span>
-                </div>
+                <span className="flex items-baseline gap-1.5 text-[14px] font-medium text-foreground">
+                  Version {version.versionNumber}
+                  {isCurrent && (
+                    <span className="text-xs font-normal text-foreground-muted">current</span>
+                  )}
+                </span>
+                <span className="mt-1 block">
+                  <StatusBadge kind="contractVersion" value={version.status} />
+                </span>
+                <span className="mt-1 block text-xs tabular-nums text-foreground-muted">
+                  {formatDateTime(version.createdAt)}
+                </span>
               </Link>
             </li>
           );

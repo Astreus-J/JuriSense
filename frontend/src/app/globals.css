@@ -11,11 +11,14 @@
    * AI-gradient palette. Reuses the landing page's blue-600 as --primary so
    * the marketing site and the authenticated app read as one brand. */
   --surface: #ffffff;
-  --surface-muted: #f8fafc;
+  --surface-muted: #f5f8fc;
   --surface-raised: #ffffff;
-  --border: #e2e8f0;
-  --border-strong: #cbd5e1;
-  --foreground-muted: #64748b;
+  /* Light theme: a gentle blue tint on the page canvas and neutral surfaces (cards/tables
+     stay white on top), blue-grey borders. Dark theme maps --canvas onto its own surface. */
+  --canvas: #f4f7fc;
+  --border: #dbe4f0;
+  --border-strong: #c2cfe2;
+  --foreground-muted: #5f6f89;
 
   --primary: #2563eb;
   --primary-hover: #1d4ed8;
@@ -45,10 +48,12 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-serif: var(--font-source-serif), ui-serif, Georgia, serif;
 
   --color-surface: var(--surface);
   --color-surface-muted: var(--surface-muted);
   --color-surface-raised: var(--surface-raised);
+  --color-canvas: var(--canvas);
   --color-border: var(--border);
   --color-border-strong: var(--border-strong);
   --color-foreground-muted: var(--foreground-muted);
@@ -76,14 +81,20 @@
   --color-focus-ring: var(--focus-ring);
 }
 
+/* Theme resolution (light / dark / system):
+ *  - No explicit choice (<html> has no data-theme): follow the OS via prefers-color-scheme.
+ *  - data-theme="dark" / "light" (set by the ThemeToggle + the pre-hydration script in
+ *    app/layout.tsx): wins over the OS. The dark VALUES are identical in both blocks. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
     --background: #0a0a0a;
     --foreground: #ededed;
 
     --surface: #0b0f19;
     --surface-muted: #111827;
     --surface-raised: #161e2e;
+    --canvas: #0b0f19;
     --border: #263041;
     --border-strong: #37415a;
     --foreground-muted: #94a3b8;
@@ -112,10 +123,89 @@
   }
 }
 
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --background: #0a0a0a;
+  --foreground: #ededed;
+
+  --surface: #0b0f19;
+  --surface-muted: #111827;
+  --surface-raised: #161e2e;
+  --canvas: #0b0f19;
+  --border: #263041;
+  --border-strong: #37415a;
+  --foreground-muted: #94a3b8;
+
+  --primary: #3b82f6;
+  --primary-hover: #60a5fa;
+  --primary-foreground: #0b0f19;
+
+  --danger: #f87171;
+  --danger-surface: #2a1315;
+  --danger-border: #7f1d1d;
+
+  --warning: #fbbf24;
+  --warning-surface: #2a2011;
+  --warning-border: #78350f;
+
+  --success: #4ade80;
+  --success-surface: #10241a;
+  --success-border: #14532d;
+
+  --info: #22d3ee;
+  --info-surface: #0b2530;
+  --info-border: #155e75;
+
+  --focus-ring: #60a5fa;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+/* Sidebar always uses the dark palette, even in the light theme: re-scopes the semantic tokens
+   inside its subtree to the exact dark values above, so every existing component in it (Brand,
+   NavLink, OrgSwitcher, section labels, the mobile drawer) restyles without per-component
+   overrides. In the dark theme this is a no-op. */
+.sidebar-surface {
+  color-scheme: dark;
+  --foreground: #ededed;
+  --foreground-muted: #94a3b8;
+  /* Rail background #0f172b; the active/hover item lifts one step so it still reads on it. */
+  --surface: #1b2640;
+  --surface-muted: #0f172b;
+  --surface-raised: #161e2e;
+  --border: #263041;
+  --border-strong: #37415a;
+  --primary: #3b82f6;
+  --primary-hover: #60a5fa;
+  --focus-ring: #60a5fa;
+  background: #0f172b;
+  color: var(--foreground);
+}
+
+/* Base size 17px (browser default 16px): every rem-based Tailwind size (text-xs/sm/base,
+   spacing) scales ~6% from here, so the whole UI reads larger without per-component edits. */
+html {
+  font-size: 106.25%;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  font-feature-settings: "calt", "kern";
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Headings: tighter tracking, balanced wrapping. */
+h1, h2, h3 {
+  text-wrap: balance;
+}
+
+/* Native <dialog> (ConfirmDialog): backdrop uses a neutral scrim, not a themed color. */
+dialog::backdrop {
+  background: rgb(0 0 0 / 0.45);
 }
 
 /* Smooth in-page anchor scrolling (landing nav -> #features/#pricing/#faq) for users who

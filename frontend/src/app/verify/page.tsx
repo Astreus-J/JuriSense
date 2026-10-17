@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import { Brand } from "@/components/app-shell/Brand";
 import { Button } from "@/components/ui/Button";
+import { controlClasses } from "@/components/ui/Field";
 import { VerificationResultCard } from "@/components/verify/VerificationResultCard";
 import { ApiError, verifyPublicReference } from "@/lib/evidence/backend";
 import type { PublicVerificationResult } from "@/lib/evidence/types";
@@ -35,9 +36,9 @@ export default async function VerifyPage({ searchParams }: VerifyPageProps) {
       <div className="w-full max-w-md space-y-6">
         <Brand className="justify-center" />
 
-        <div className="rounded-xl border border-border bg-surface p-6 shadow-sm">
+        <div className="rounded-lg border border-border bg-surface p-6">
           <div className="mb-6 space-y-1 text-center">
-            <h1 className="text-xl font-semibold text-foreground">Verify a decision</h1>
+            <h1 className="font-serif text-2xl font-semibold tracking-tight text-foreground">Verify a decision</h1>
             <p className="text-sm text-foreground-muted">
               Paste a Decision id or an evidence hash to independently check whether it was
               anchored.
@@ -45,8 +46,8 @@ export default async function VerifyPage({ searchParams }: VerifyPageProps) {
           </div>
 
           <form method="GET" className="flex flex-col gap-3 sm:flex-row sm:items-end">
-            <div className="flex-1 space-y-1.5">
-              <label htmlFor="ref" className="block text-sm font-medium text-foreground">
+            <div className="flex-1 space-y-1">
+              <label htmlFor="ref" className="block text-[14px] font-medium text-foreground">
                 Decision id or evidence hash
               </label>
               <input
@@ -56,7 +57,7 @@ export default async function VerifyPage({ searchParams }: VerifyPageProps) {
                 maxLength={255}
                 defaultValue={trimmedRef ?? ""}
                 placeholder="e.g. 3fa85f64-5717-4562-b3fc-2c963f66afa6"
-                className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground shadow-sm placeholder:text-foreground-muted focus:outline-none focus:ring-2 focus:ring-focus-ring focus:border-transparent"
+                className={`w-full ${controlClasses}`}
               />
             </div>
             <Button type="submit">Verify</Button>

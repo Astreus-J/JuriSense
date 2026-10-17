@@ -16,18 +16,27 @@ interface AppShellProps {
  * `getNavItemsForRole` — see `src/lib/navigation/modules.ts` for the
  * role→nav mapping and its rationale, and
  * `src/app/(app)/layout.tsx` for where `user` comes from.
+ *
+ * Accessibility: a skip link is the first focusable element, and `<main id="main"
+ * tabIndex={-1}>` is its target (programmatic focus only, so it never shows a focus ring).
  */
 export function AppShell({ user, children }: AppShellProps) {
   const navItems = getNavItemsForRole(user.role);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-surface-muted">
+    <div className="flex h-screen overflow-hidden bg-surface text-sm text-foreground">
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-50 focus:rounded-md focus:bg-primary focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-primary-foreground focus:outline-none focus:ring-2 focus:ring-focus-ring focus:ring-offset-2"
+      >
+        Skip to content
+      </a>
       <DesktopSidebar
         navItems={navItems}
         memberships={user.memberships}
         activeOrganizationId={user.organizationId}
       />
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <TopBar
           navItems={navItems}
           memberships={user.memberships}
@@ -36,8 +45,8 @@ export function AppShell({ user, children }: AppShellProps) {
           email={user.email}
           role={user.role}
         />
-        <main className="flex-1 overflow-y-auto p-4 md:p-8">
-          <div className="mx-auto max-w-5xl">{children}</div>
+        <main id="main" tabIndex={-1} className="flex-1 overflow-y-auto bg-canvas focus:outline-none">
+          <div className="mx-auto w-full max-w-6xl px-4 py-6 md:px-8 md:py-8">{children}</div>
         </main>
       </div>
     </div>

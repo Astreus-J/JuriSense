@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
+import { compactControlClasses } from "@/components/ui/Field";
 import { formatRoleLabel, ROLES } from "@/lib/auth/types";
 import type { Role } from "@/lib/auth/types";
 import type { TeamMember } from "@/lib/organization/types";
@@ -102,7 +103,7 @@ export function TeamMemberActions({ member, isSelf }: TeamMemberActionsProps) {
             value={nextRole}
             onChange={(event) => setNextRole(event.target.value as Role)}
             disabled={updatingRole}
-            className="rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-focus-ring"
+            className={compactControlClasses}
           >
             <option value="">Change role…</option>
             {ROLES.filter((role) => role !== member.role).map((role) => (
@@ -111,7 +112,7 @@ export function TeamMemberActions({ member, isSelf }: TeamMemberActionsProps) {
               </option>
             ))}
           </select>
-          <Button type="submit" variant="secondary" loading={updatingRole} disabled={!nextRole}>
+          <Button type="submit" size="sm" variant="secondary" loading={updatingRole} disabled={!nextRole}>
             Update
           </Button>
         </form>
@@ -119,10 +120,11 @@ export function TeamMemberActions({ member, isSelf }: TeamMemberActionsProps) {
         {confirmingDeactivate ? (
           <div className="flex items-center gap-2">
             <span className="text-xs text-foreground-muted">Deactivate?</span>
-            <Button variant="danger" onClick={handleDeactivate} loading={deactivating}>
+            <Button size="sm" variant="danger" onClick={handleDeactivate} loading={deactivating}>
               Confirm
             </Button>
             <Button
+              size="sm"
               variant="ghost"
               onClick={() => setConfirmingDeactivate(false)}
               disabled={deactivating}
@@ -131,7 +133,7 @@ export function TeamMemberActions({ member, isSelf }: TeamMemberActionsProps) {
             </Button>
           </div>
         ) : (
-          <Button variant="secondary" onClick={() => setConfirmingDeactivate(true)}>
+          <Button size="sm" variant="secondary" onClick={() => setConfirmingDeactivate(true)}>
             Deactivate
           </Button>
         )}

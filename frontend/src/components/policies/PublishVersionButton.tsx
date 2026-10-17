@@ -73,7 +73,7 @@ export function PublishVersionButton({ policyId, versionId }: PublishVersionButt
         </p>
         {error && <p className="font-medium text-danger">{error}</p>}
         <div className="flex items-center gap-2">
-          <Button variant="danger" onClick={handlePublish} loading={submitting}>
+          <Button variant="primary" onClick={handlePublish} loading={submitting}>
             Yes, publish
           </Button>
           <Button variant="ghost" onClick={() => setConfirming(false)} disabled={submitting}>

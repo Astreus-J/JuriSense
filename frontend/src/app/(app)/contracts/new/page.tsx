@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
 
 import { Alert } from "@/components/ui/Alert";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { UploadContractForm } from "@/components/contracts/UploadContractForm";
 import { ApiError } from "@/lib/auth/backend";
 import { readAccessToken } from "@/lib/auth/cookies";
@@ -59,16 +58,12 @@ export default async function NewContractPage({ searchParams }: NewContractPageP
     }
   }
 
+  const breadcrumbs = [{ label: "Contracts", href: "/contracts" }, { label: "Upload contract" }];
+
   if (forbidden) {
     return (
-      <div className="max-w-lg space-y-6">
-        <Link
-          href="/contracts"
-          className="inline-flex items-center gap-1 text-sm font-medium text-foreground-muted hover:text-foreground"
-        >
-          <ArrowLeft className="size-4" aria-hidden="true" />
-          Back to contracts
-        </Link>
+      <div className="max-w-lg space-y-5">
+        <PageHeader title="Upload a contract" breadcrumbs={breadcrumbs} />
         <Alert tone="danger" title="You don't have access to upload a contract.">
           Ask an administrator to grant you the &quot;contracts&quot; and &quot;suppliers&quot;
           read permissions for this organization.
@@ -78,25 +73,12 @@ export default async function NewContractPage({ searchParams }: NewContractPageP
   }
 
   return (
-    <div className="max-w-lg space-y-6">
-      <Link
-        href="/contracts"
-        className="inline-flex items-center gap-1 text-sm font-medium text-foreground-muted hover:text-foreground"
-      >
-        <ArrowLeft className="size-4" aria-hidden="true" />
-        Back to contracts
-      </Link>
-
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-          Upload a contract
-        </h1>
-        <p className="mt-1 text-sm text-foreground-muted">
-          JuriSense automatically extracts and structures the contract&apos;s key terms as
-          soon as it&apos;s uploaded — parties, value, duration, liability, and more, each
-          traceable back to its page and clause.
-        </p>
-      </div>
+    <div className="max-w-lg space-y-5">
+      <PageHeader
+        breadcrumbs={breadcrumbs}
+        title="Upload a contract"
+        description="JuriSense automatically extracts and structures the contract's key terms as soon as it's uploaded: parties, value, duration, liability and more, each traceable back to its page and clause."
+      />
 
       <UploadContractForm
         suppliers={suppliers.map((supplier) => ({ id: supplier.id, legalName: supplier.legalName }))}

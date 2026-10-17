@@ -26,7 +26,7 @@ export function StatusFilterTabs({ activeStatus }: StatusFilterTabsProps) {
   ];
 
   return (
-    <nav aria-label="Filter suppliers by status" className="flex flex-wrap gap-1 border-b border-border">
+    <nav aria-label="Filter suppliers by status" className="flex flex-wrap gap-x-1 border-b border-border">
       {tabs.map((tab) => {
         const isActive = tab.key === "all" ? !activeStatus : tab.key === activeStatus;
         return (
@@ -35,7 +35,7 @@ export function StatusFilterTabs({ activeStatus }: StatusFilterTabsProps) {
             href={tab.href}
             aria-current={isActive ? "page" : undefined}
             className={cn(
-              "-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
+              "-mb-px border-b-2 px-2.5 py-2 text-[14px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
               isActive
                 ? "border-primary text-primary"
                 : "border-transparent text-foreground-muted hover:text-foreground",

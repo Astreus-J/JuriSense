@@ -5,6 +5,7 @@ import { InviteUserForm } from "@/components/organization/InviteUserForm";
 import { OrganizationPlanPanel } from "@/components/organization/OrganizationPlanPanel";
 import { TeamTable } from "@/components/organization/TeamTable";
 import { Alert } from "@/components/ui/Alert";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { readAccessToken } from "@/lib/auth/cookies";
 import { requireSession } from "@/lib/auth/session";
 import { ApiError, getMyOrganization, listInvites, listUsers } from "@/lib/organization/backend";
@@ -57,12 +58,10 @@ export default async function OrganizationSettingsPage() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Organization</h1>
-        <p className="mt-1 max-w-2xl text-sm text-foreground-muted">
-          Your organization&apos;s plan, usage, and team.
-        </p>
-      </div>
+      <PageHeader
+        title="Organization"
+        description="Your organization's plan, usage, and team."
+      />
 
       {forbidden || !organization ? (
         <Alert tone="danger" title="You don't have access to organization settings.">
@@ -75,28 +74,28 @@ export default async function OrganizationSettingsPage() {
 
           {permissions.canManageTeam ? (
             <>
-              <section className="space-y-4">
+              <section className="space-y-3">
                 <div>
-                  <h2 className="text-lg font-semibold text-foreground">Team</h2>
-                  <p className="mt-1 text-sm text-foreground-muted">
+                  <h2 className="text-base font-semibold text-foreground">Team</h2>
+                  <p className="text-sm text-foreground-muted">
                     Everyone with access to this organization, and their role.
                   </p>
                 </div>
                 <TeamTable members={members} currentUserId={user.id} />
               </section>
 
-              <section className="space-y-4">
+              <section className="max-w-2xl space-y-3">
                 <div>
-                  <h2 className="text-lg font-semibold text-foreground">Invite someone</h2>
-                  <p className="mt-1 text-sm text-foreground-muted">
+                  <h2 className="text-base font-semibold text-foreground">Invite someone</h2>
+                  <p className="text-sm text-foreground-muted">
                     They&apos;ll receive an email with a link to set their own password.
                   </p>
                 </div>
                 <InviteUserForm />
               </section>
 
-              <section className="space-y-4">
-                <h2 className="text-lg font-semibold text-foreground">Pending invitations</h2>
+              <section className="space-y-3">
+                <h2 className="text-base font-semibold text-foreground">Pending invitations</h2>
                 <InvitationsList invitations={invitations} />
               </section>
             </>

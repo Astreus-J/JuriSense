@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
+import { controlClasses } from "@/components/ui/Field";
 import { Field } from "@/components/ui/Field";
 import { formatRoleLabel, ROLES } from "@/lib/auth/types";
 import type { Role } from "@/lib/auth/types";
@@ -123,7 +124,7 @@ export function InviteUserForm() {
           value={role}
           onChange={(event) => setRole(event.target.value as Role)}
           disabled={submitting}
-          className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-focus-ring sm:w-64"
+          className={`w-full sm:w-64 ${controlClasses}`}
         >
           {ROLES.map((candidate) => (
             <option key={candidate} value={candidate}>
