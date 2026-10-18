@@ -1,12 +1,20 @@
-# Demo video — narrated, captioned recording
+# Demo video — narrated recording
 
-`jurisense-gate-demo.mp4` (11:40, 12.2 MB, natural-voice narration, recorded 2026-10-18) is
-a real, automated recording of
+`jurisense-gate-demo.mp4` (4:13, 6.0 MB, natural-voice narration, no burned-in captions, cut
+2026-10-18) is a **highlights cut** of a real, automated recording of
 `docs/08-hackathon/demo-scenario.md`'s full 23-step walkthrough against the actual running
 product — not a mockup, not screenshots, not a scripted/staged UI. Every screen, every extracted
 field, every compliance decision, and the final blockchain verification shown in the video are
 real outputs of the real backend (including a real Gemini AI extraction and a real Constellation
 Network anchor + verification — see `docs/adr/ADR-007-blockchain-anchoring-provider.md`).
+
+The hackathon submission has a 5-minute hard cap. The full walkthrough recording runs 11:40 (most
+of that is real AI-extraction wait time baked into the raw footage, not narration), so
+`jurisense-gate-demo.mp4` keeps only the 13 of 18 segments with real demo impact — supplier
+create/check, contract upload, the real AI extraction result, the BLOCK decision, the correction,
+the REVIEW decision, approval, the Decision Passport, the anchor note, and the live blockchain
+verification — and drops pure loading/transition segments (extraction spinners, "review started"
+pages, the empty verify page before a result is typed in). See "Highlights cut" below.
 
 ## How it was made
 
@@ -27,9 +35,11 @@ Network anchor + verification — see `docs/adr/ADR-007-blockchain-anchoring-pro
    absorbs the unpredictable extra time real actions take (login, file upload, and especially real
    AI extraction latency), so the audio placed in the next step lines up with what's on screen
    rather than drifting from narration text alone.
-4. **Assembly**: `assemble.py` places each narration clip at its recorded offset (ffmpeg
-   `adelay`/`amix`), muxes it onto its video, concatenates the two videos, generates an SRT
-   (`captions.srt`) from the same segment text and offsets, and burns the captions in.
+4. **Assembly**: `assemble_natural.py` places each narration clip at its recorded offset (ffmpeg
+   `adelay`/`amix`), muxes it onto its video, and concatenates the two videos into the full,
+   11:40 walkthrough (not committed — see "Highlights cut" below for what actually ships).
+   `assemble.py` is the older equivalent for the original `espeak-ng` narration and still burns
+   in captions from an SRT; the natural-voice pipeline doesn't use captions at all.
 
 ## How to re-run it
 
@@ -58,7 +68,7 @@ print(base + f + cd(base+f, (6,5,4,3,2,9,8,7,6,5,4,3,2)))
 "
 # paste that into record.js's `const CNPJ = "...";` line, then:
 node record.js                    # produces video/*.webm + timeline.json + run-info.json
-python3 assemble_natural.py       # produces jurisense-gate-demo.mp4 + captions.srt (natural voice)
+python3 assemble_highlights.py    # produces jurisense-gate-demo.mp4 (<=5min, no captions)
 ```
 
 `record.js` is idempotent-safe to re-run (it never deletes anything), but each run needs its own
@@ -66,15 +76,32 @@ CNPJ as above, and leaves behind a harmless, permanent "CloudDocs Software Ltda.
 its own contract/decision/evidence trail) in whatever database it targets — fine for a local/dev
 demo tenant, not something to run against a real customer's database. `video/` accumulates one
 `page@<hash>.webm` pair (admin + legal context) per run and is never cleaned up automatically;
-`assemble_natural.py` hardcodes the filenames of the pair to use (`ADMIN_VIDEO`/`LEGAL_VIDEO` near
-the top), so after a re-run, update those two to the newest pair in `video/` before assembling — the
-larger/more-recently-modified file of the pair is the admin context (the long walkthrough), the
-smaller one is the legal context (the short approval+verify segment).
+both `assemble_natural.py` and `assemble_highlights.py` hardcode the filenames of the pair to use
+(`ADMIN_VIDEO`/`LEGAL_VIDEO` near the top of each), so after a re-run, update those in both scripts
+to the newest pair in `video/` before assembling — the larger/more-recently-modified file of the
+pair is the admin context (the long walkthrough), the smaller one is the legal context (the short
+approval+verify segment).
 
 `durations.json`/`audio/`/`gen_audio.js` (`espeak-ng`) are the original, robotic-voice pipeline, kept
 for reference but superseded by `durations_natural.json`/`audio_natural/`/`gen_presentation_audio.py`
-(Gemini TTS) — `assemble_natural.py`, not `assemble.py`, is what produces the committed
-`jurisense-gate-demo.mp4`.
+(Gemini TTS).
+
+## Highlights cut
+
+The hackathon submission has a 5-minute hard cap, and the full 18-segment walkthrough — even with
+natural-voice narration — runs 11:40, mostly because `timeline.json`'s offsets include real AI
+extraction wait time (the script actually waits for the real backend, up to 180s per upload), not
+just narration length. `assemble_highlights.py` is what actually produces the committed
+`jurisense-gate-demo.mp4`: it keeps a curated, ordered subset of `HIGHLIGHTS` (currently 13 of the
+18 segment ids — edit that list directly to change which moments are included), and for each one
+cuts a real-footage clip starting at that segment's exact `timeline.json` offset (the moment the
+UI actually reached that state), trimmed to that segment's natural-voice narration length plus a
+`BUFFER_S` (1.3s). Every frame is still genuinely real product footage — segments are just not
+played in real time, so idle waiting (extraction spinners, "review started" transition pages) never
+appears. No subtitles/captions are generated or burned in. Re-run it any time after
+`assemble_natural.py` or directly after `node record.js` (it reads `video/*.webm` +
+`timeline.json` + `durations_natural.json` + `audio_natural/*.wav` directly, not
+`assemble_natural.py`'s output).
 
 ## Standalone narration audio (natural voice)
 
@@ -105,7 +132,8 @@ and idempotent if any segment ever needs to be redone — it skips every
 - **Fictional, labeled as such throughout**: "Acme Tecnologia Ltda." and "CloudDocs Software
   Ltda." are the same fictional demo organizations used in `demo-scenario.md` and the generated
   contracts in `docs/08-hackathon/demo-assets/contracts/`.
-- **Synthetic**: only the narration voice (`espeak-ng`, not a human or natural-sounding TTS voice).
+- **Synthetic**: only the narration voice (Gemini TTS, a natural-sounding but still synthetic
+  voice, not a human one).
 
 ## Found and fixed while building this
 
