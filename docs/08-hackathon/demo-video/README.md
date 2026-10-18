@@ -1,6 +1,7 @@
 # Demo video — narrated, captioned recording
 
-`jurisense-gate-demo.mp4` (5:34, 6.5 MB) is a real, automated recording of
+`jurisense-gate-demo.mp4` (11:40, 12.2 MB, natural-voice narration, recorded 2026-10-18) is
+a real, automated recording of
 `docs/08-hackathon/demo-scenario.md`'s full 23-step walkthrough against the actual running
 product — not a mockup, not screenshots, not a scripted/staged UI. Every screen, every extracted
 field, every compliance decision, and the final blockchain verification shown in the video are
@@ -32,13 +33,16 @@ Network anchor + verification — see `docs/adr/ADR-007-blockchain-anchoring-pro
 
 ## How to re-run it
 
-Needs: `node` + `npm`, `ffmpeg`, `espeak-ng`, and the stack up (`docker compose up -d`) with the
-demo tenant seeded (`docker compose exec backend uv run python scripts/seed_demo.py`).
+Needs: `node` + `npm`, `ffmpeg`, and the stack up (`docker compose up -d`) with the demo tenant
+seeded (`docker compose exec backend uv run python scripts/seed_demo.py`). `node_modules/`
+(pulled by `npm install`, including a matching Chromium build via
+`npx playwright install chromium`) isn't committed, so a fresh checkout needs that step re-run
+once.
 
 ```bash
 cd docs/08-hackathon/demo-video
-npm install                       # pulls Playwright + a matching Chromium build
-node gen_audio.js                 # writes audio/*.wav + durations.json
+npm install                       # pulls Playwright
+npx playwright install chromium   # pulls a matching Chromium build (not committed)
 # record.js's CNPJ constant must be a fresh, checksum-valid value each run — decisions
 # are append-only (DB trigger), so a prior run's CloudDocs supplier/contract/decision
 # chain can never be deleted, only left in place; reusing the same CNPJ would create a
@@ -54,13 +58,23 @@ print(base + f + cd(base+f, (6,5,4,3,2,9,8,7,6,5,4,3,2)))
 "
 # paste that into record.js's `const CNPJ = "...";` line, then:
 node record.js                    # produces video/*.webm + timeline.json + run-info.json
-python3 assemble.py               # produces out/jurisense-gate-demo.mp4 + out/captions.srt
+python3 assemble_natural.py       # produces jurisense-gate-demo.mp4 + captions.srt (natural voice)
 ```
 
 `record.js` is idempotent-safe to re-run (it never deletes anything), but each run needs its own
 CNPJ as above, and leaves behind a harmless, permanent "CloudDocs Software Ltda." supplier (with
 its own contract/decision/evidence trail) in whatever database it targets — fine for a local/dev
-demo tenant, not something to run against a real customer's database.
+demo tenant, not something to run against a real customer's database. `video/` accumulates one
+`page@<hash>.webm` pair (admin + legal context) per run and is never cleaned up automatically;
+`assemble_natural.py` hardcodes the filenames of the pair to use (`ADMIN_VIDEO`/`LEGAL_VIDEO` near
+the top), so after a re-run, update those two to the newest pair in `video/` before assembling — the
+larger/more-recently-modified file of the pair is the admin context (the long walkthrough), the
+smaller one is the legal context (the short approval+verify segment).
+
+`durations.json`/`audio/`/`gen_audio.js` (`espeak-ng`) are the original, robotic-voice pipeline, kept
+for reference but superseded by `durations_natural.json`/`audio_natural/`/`gen_presentation_audio.py`
+(Gemini TTS) — `assemble_natural.py`, not `assemble.py`, is what produces the committed
+`jurisense-gate-demo.mp4`.
 
 ## Standalone narration audio (natural voice)
 
@@ -113,5 +127,16 @@ fixed in the same pass this video was built in:
 - Confirmed there is no UI path to find a Decision's id after approving a REVIEW-outcome request —
   `record.js` queries the database directly to get it, the same kind of legitimate pre-staging
   `demo-scenario.md` already documents for the blockchain anchor.
+
+Re-recording on 2026-10-18 (after merging in the login-screen redesign and other frontend work)
+surfaced two more real bugs in `record.js` itself, both fixed in the same commit:
+
+- The redesigned split-card login nests its "Show password" toggle button inside the same
+  `<label>` as the password input, so `getByLabel("Password")` started matching two elements
+  instead of one — scoped to `getByRole("textbox", { name: "Password" })` instead.
+- The Approvals page now shows a confirmation modal ("Approve this request?") before actually
+  submitting an approval — the script was clicking the row's "Approve" button and immediately
+  waiting for the API response, which now only opens the modal; fixed by clicking the modal's own
+  "Approve request" button before waiting for the response.
 
 See `docs/08-hackathon/hackathon-checklist.md` for the full status tracking of these.

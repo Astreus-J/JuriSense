@@ -30,12 +30,17 @@ const V2_PDF = "/home/santos/Astreus_dev/JuriSense/docs/08-hackathon/demo-assets
 // evidence/decisions are append-only by DB trigger (confirmed: DELETE is rejected), so
 // a prior run's CloudDocs supplier+contract+decision chain can never be cleaned up, only
 // left in place as harmless orphaned test data.
-const CNPJ = "98765432798122";
+const CNPJ = "98765432997400";
 
+// 2026-10-18: switched from the espeak-ng-driven durations.json to the real,
+// natural-voice (Gemini TTS) clip lengths in durations_natural.json, and widened the
+// buffer substantially -- by explicit request, this recording should run slower so a
+// viewer has time to actually read each screen, not just long enough for the
+// narration line to finish.
 const durations = JSON.parse(
-  fs.readFileSync(path.join(__dirname, "durations.json"), "utf8")
+  fs.readFileSync(path.join(__dirname, "durations_natural.json"), "utf8")
 );
-const BUFFER_MS = 700; // small breathing room after each narration line
+const BUFFER_MS = 2500; // generous breathing room so a viewer can read the screen, not just hear the line
 
 function segDwell(id) {
   return Math.round((durations[id] || 4) * 1000) + BUFFER_MS;
@@ -44,7 +49,10 @@ function segDwell(id) {
 async function login(page, { email, password }) {
   await page.goto(`${BASE}/login`, { waitUntil: "networkidle" });
   await page.getByLabel("Work email").fill(email);
-  await page.getByLabel("Password").fill(password);
+  // The redesigned split-card login nests a "Show password" toggle button inside the
+  // same <label> as the input, so getByLabel("Password") now matches both -- scope to
+  // the textbox role to disambiguate.
+  await page.getByRole("textbox", { name: "Password" }).fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
   await page.waitForURL(/\/dashboard/, { timeout: 15000 });
 }
@@ -250,11 +258,15 @@ async function main() {
   if (await justification.count()) {
     await justification.first().fill("Liability now capped and DPA in place; value still requires Legal sign-off per FIN-003.");
   }
+  // The frontend-improvements merge added a confirmation modal ("Approve this request?")
+  // between the row's "Approve" button and the actual API call -- the first click only
+  // opens it, a second click on "Approve request" inside the dialog submits it.
+  await row.getByRole("button", { name: "Approve" }).first().click();
   const approveResponse = legalPage.waitForResponse(
     (resp) => resp.url().includes("/api/approvals/requests/") && resp.url().includes("/approve"),
     { timeout: 15000 },
   );
-  await row.getByRole("button", { name: "Approve" }).first().click();
+  await legalPage.getByRole("button", { name: "Approve request" }).click();
   const resp = await approveResponse;
   console.log("  approve response status:", resp.status());
   await legalPage.waitForTimeout(3000);

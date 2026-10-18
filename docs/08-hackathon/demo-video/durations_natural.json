@@ -1,0 +1,20 @@
+{
+  "intro": 22.69,
+  "supplier-create": 8.73,
+  "supplier-check": 17.05,
+  "contract-upload-v1": 13.41,
+  "extraction-wait": 3.53,
+  "extraction-result": 23.77,
+  "compliance-review-v1": 4.21,
+  "compliance-result-v1": 29.41,
+  "contract-upload-v2": 12.29,
+  "extraction-wait-v2": 3.65,
+  "compliance-review-v2": 5.09,
+  "compliance-result-v2": 28.13,
+  "approval": 15.09,
+  "passport": 25.85,
+  "anchor-note": 13.93,
+  "verify-open": 8.29,
+  "verify-click": 17.77,
+  "close": 8.01
+}
