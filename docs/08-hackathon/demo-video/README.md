@@ -1,7 +1,7 @@
 # Demo video — narrated recording
 
-`jurisense-gate-demo.mp4` (4:13, 6.0 MB, natural-voice narration, no burned-in captions, cut
-2026-10-18) is a **highlights cut** of a real, automated recording of
+`jurisense-gate-demo.mp4` (4:23, natural-voice narration, no burned-in captions, cut 2026-10-18)
+is a **highlights cut** of a real, automated recording of
 `docs/08-hackathon/demo-scenario.md`'s full 23-step walkthrough against the actual running
 product — not a mockup, not screenshots, not a scripted/staged UI. Every screen, every extracted
 field, every compliance decision, and the final blockchain verification shown in the video are
@@ -10,11 +10,11 @@ Network anchor + verification — see `docs/adr/ADR-007-blockchain-anchoring-pro
 
 The hackathon submission has a 5-minute hard cap. The full walkthrough recording runs 11:40 (most
 of that is real AI-extraction wait time baked into the raw footage, not narration), so
-`jurisense-gate-demo.mp4` keeps only the 13 of 18 segments with real demo impact — supplier
+`jurisense-gate-demo.mp4` keeps only the 14 of 18 segments with real demo impact — supplier
 create/check, contract upload, the real AI extraction result, the BLOCK decision, the correction,
-the REVIEW decision, approval, the Decision Passport, the anchor note, and the live blockchain
-verification — and drops pure loading/transition segments (extraction spinners, "review started"
-pages, the empty verify page before a result is typed in). See "Highlights cut" below.
+the REVIEW decision, approval, the Decision Passport, the anchor note, opening the public verify
+page, and the live blockchain verification — and drops pure loading/transition segments
+(extraction spinners, "review started" pages). See "Highlights cut" below.
 
 ## How it was made
 
@@ -92,7 +92,7 @@ The hackathon submission has a 5-minute hard cap, and the full 18-segment walkth
 natural-voice narration — runs 11:40, mostly because `timeline.json`'s offsets include real AI
 extraction wait time (the script actually waits for the real backend, up to 180s per upload), not
 just narration length. `assemble_highlights.py` is what actually produces the committed
-`jurisense-gate-demo.mp4`: it keeps a curated, ordered subset of `HIGHLIGHTS` (currently 13 of the
+`jurisense-gate-demo.mp4`: it keeps a curated, ordered subset of `HIGHLIGHTS` (currently 14 of the
 18 segment ids — edit that list directly to change which moments are included), and for each one
 cuts a real-footage clip starting at that segment's exact `timeline.json` offset (the moment the
 UI actually reached that state), trimmed to that segment's natural-voice narration length plus a

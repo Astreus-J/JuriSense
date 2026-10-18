@@ -6,11 +6,18 @@ timeline.json offsets include real AI-extraction wait time, not just narration l
 Instead of the full walkthrough, this keeps only the segments with real demo impact --
 real AI extraction, the BLOCK decision, the correction, the REVIEW decision, approval,
 the Decision Passport, and the live blockchain verification -- and drops pure-transition/
-loading segments (extraction spinners, "review started" pages, the verify page before a
-result is typed in). Each kept segment is cut from the real recorded footage at the exact
-offset timeline.json captured (when that screen was actually reached), trimmed to its
-natural-voice narration length plus a small buffer -- so every frame is still genuinely
-real product footage, just not idle real-time waiting. No captions are burned in.
+loading segments (extraction spinners, "review started" pages). Each kept segment is cut
+from the real recorded footage at the exact offset timeline.json captured (when that
+screen was actually reached), trimmed to its natural-voice narration length plus a small
+buffer -- so every frame is still genuinely real product footage, just not idle real-time
+waiting. No captions are burned in.
+
+2026-10-18 fix: an earlier cut of this list also dropped "verify-open" (the narration that
+says "Last step, the public verification page, no login required"), which produced a real
+jump cut -- straight from the Decision Passport to the already-"Verified" result, with the
+page navigation and the blank verify form never shown. Confirmed via frame extraction and
+restored; every other dropped segment was checked the same way and found to be a clean cut
+(the narration for the kept segment after it never assumes you watched the dropped one).
 """
 import json
 import subprocess
@@ -38,9 +45,10 @@ for bucket, video in (("admin", ADMIN_VIDEO), ("legal", LEGAL_VIDEO)):
 
 # Ordered, curated set -- real pipeline once end to end (create, check, upload, real AI
 # extraction, BLOCK), then the compact fix cycle (upload v2, REVIEW), then approval,
-# passport, anchor note, live verification, close. Drops: extraction-wait,
-# extraction-wait-v2, compliance-review-v1, compliance-review-v2, verify-open (all pure
-# loading/transition states with no new information of their own).
+# passport, anchor note, opening the public verify page, live verification, close. Drops:
+# extraction-wait, extraction-wait-v2, compliance-review-v1, compliance-review-v2 (all
+# pure loading/transition states with no new information of their own). verify-open is
+# NOT dropped, unlike those -- see the module docstring.
 HIGHLIGHTS = [
     "intro",
     "supplier-create",
@@ -53,6 +61,7 @@ HIGHLIGHTS = [
     "approval",
     "passport",
     "anchor-note",
+    "verify-open",
     "verify-click",
     "close",
 ]
