@@ -127,9 +127,11 @@ export const es: Messages = {
       "Esta área está en construcción. Por ahora no necesitas configurar nada de tu parte.",
   },
   auth: {
+    tagline: "Decisiones sobre proveedores, contratos y cumplimiento, siempre respaldadas por evidencias.",
     signIn: {
-      heading: "Iniciar sesión",
-      subtext: "Decisiones sobre proveedores, contratos y cumplimiento, siempre respaldadas por evidencias.",
+      heading: "Inicie sesión en su cuenta",
+      subtext: "Ingrese su correo corporativo y su contraseña para continuar.",
+      showPassword: "Mostrar contraseña",
       email: "Correo corporativo",
       password: "Contraseña",
       submit: "Iniciar sesión",

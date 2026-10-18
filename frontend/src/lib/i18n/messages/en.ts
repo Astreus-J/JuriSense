@@ -108,9 +108,11 @@ export const en = {
       "This area is being built. Nothing needs to be configured on your side in the meantime.",
   },
   auth: {
+    tagline: "Vendor, contract, and compliance decisions — evidence-backed, every time.",
     signIn: {
-      heading: "Sign in",
-      subtext: "Vendor, contract, and compliance decisions — evidence-backed, every time.",
+      heading: "Sign in to your account",
+      subtext: "Enter your work email and password to continue.",
+      showPassword: "Show password",
       email: "Work email",
       password: "Password",
       submit: "Sign in",

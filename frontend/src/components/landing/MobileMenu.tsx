@@ -59,7 +59,7 @@ export default function MobileMenu({
         <div className="fixed inset-0 z-[60] lg:hidden" role="dialog" aria-modal="true" aria-label={content.nav.primaryNav}>
           <div className="absolute inset-0 bg-slate-950/50" onClick={() => setOpen(false)} aria-hidden="true" />
           <div
-            className="absolute inset-y-0 right-0 flex w-[88%] max-w-sm flex-col gap-6 overflow-y-auto bg-white px-6 py-5 shadow-2xl"
+            className="absolute inset-y-0 right-0 flex w-[88%] max-w-sm flex-col gap-6 overflow-y-auto bg-landing-canvas px-6 py-5 shadow-2xl"
             onClickCapture={(event) => {
               if ((event.target as HTMLElement).closest("a")) setOpen(false);
             }}

@@ -15,7 +15,7 @@ export default function HowItWorks({ content }: { content: LandingContent }) {
   const { steps, stepLabel } = content.howItWorks;
 
   return (
-    <section id="how-it-works" className="scroll-mt-20 bg-slate-50 py-20">
+    <section id="how-it-works" className="scroll-mt-20 bg-landing-band py-20">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <SectionTitle
           eyebrow={content.howItWorks.eyebrow}

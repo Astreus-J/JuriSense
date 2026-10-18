@@ -54,6 +54,9 @@
   --color-surface-muted: var(--surface-muted);
   --color-surface-raised: var(--surface-raised);
   --color-canvas: var(--canvas);
+  /* Landing page only: fixed (not theme-switched) tints matching the app's light canvas. */
+  --color-landing-canvas: #f4f7fc;
+  --color-landing-band: #ebf1fa;
   --color-border: var(--border);
   --color-border-strong: var(--border-strong);
   --color-foreground-muted: var(--foreground-muted);

@@ -20,7 +20,7 @@ export default function Header({
   ];
 
   return (
-    <header className="sticky top-0 z-50 border-b border-slate-200/80 bg-white/85 backdrop-blur-md">
+    <header className="sticky top-0 z-50 border-b border-slate-200/80 bg-landing-canvas/85 backdrop-blur-md">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
         {/* Wordmark deliberately distinguishes the platform brand ("JuriSense") from the
             product it carries ("Gate") — see docs/00-project/overview.md: "JuriSense is the
