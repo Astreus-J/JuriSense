@@ -62,7 +62,7 @@ CNPJ as above, and leaves behind a harmless, permanent "CloudDocs Software Ltda.
 its own contract/decision/evidence trail) in whatever database it targets — fine for a local/dev
 demo tenant, not something to run against a real customer's database.
 
-## Standalone narration audio (natural voice, in progress)
+## Standalone narration audio (natural voice)
 
 `gen_presentation_audio.py` generates the narration alone (no video) using Gemini's native
 TTS (`gemini-2.5-flash-preview-tts`, voice "Kore") instead of `espeak-ng` — a real, natural-
@@ -70,16 +70,18 @@ sounding voice, for use as a standalone audio track or to practice the presentat
 This corrects the note above: natural-voice TTS *is* available via the same `GEMINI_API_KEY`
 already configured for extraction (`backend/.env`), it just wasn't tried until 2026-10-17.
 
-**Status (2026-10-17): 12 of 18 segments done** — `audio_natural/00_intro.wav` through
-`11_compliance-result-v2.wav` are committed. The free-tier TTS quota on this key ran out partway
-through (confirmed real, not just pacing: waiting up to 120s mid-run never recovered it, but a
-fresh call did succeed again a couple of minutes after the run gave up — it recovers slowly). By
-explicit decision, the remaining segments (`approval` through `close`) were **not** filled in with
-the `espeak-ng` fallback — the whole presentation should be one consistent voice, so the rest
-waits for the quota to free up rather than mixing a natural and a robotic voice. Re-run
-`python3 gen_presentation_audio.py` another day to pick up where it left off (it skips any
-`audio_natural/<NN>_<id>.wav` that already exists); once all 18 exist, the same run concatenates
-them (0.6s silence between each) into `presentation-narration.wav`/`.mp3`.
+**Done: `presentation-narration.mp3`** (4:32, all 18 segments, one consistent voice throughout).
+Built across two days: 12 of 18 segments finished 2026-10-17, then the free-tier TTS quota on this
+key ran out (confirmed real, not just request pacing — waiting up to 120s mid-run never recovered
+it that day). By explicit decision, the remaining segments were not filled in with the `espeak-ng`
+fallback, so the presentation would stay one consistent voice rather than mixing a natural and a
+robotic one. The quota had reset by 2026-10-18 and the remaining 6 segments (`approval` through
+`close`) completed without a single retry. `audio_natural/*.wav` (the 18 individual segments) and
+`presentation-narration.mp3` are committed; the uncompressed intermediate
+`presentation-narration.wav` is not (same audio, just 5x the size — regenerate it locally with
+`gen_presentation_audio.py` if you need the lossless version). Re-running the script is still safe
+and idempotent if any segment ever needs to be redone — it skips every
+`audio_natural/<NN>_<id>.wav` that already exists.
 
 ## What's genuinely real vs. what's staged
 
