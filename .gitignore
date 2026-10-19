@@ -10,3 +10,16 @@ __pycache__/
 # committed project configuration, not local state.
 .claude/worktrees/
 .claude/settings.local.json
+
+# Sandbox-only DNS override for docker compose (this specific dev environment's Docker
+# embedded DNS resolver can't reach external APIs without it) -- committing it would
+# silently change every developer's `docker compose` behavior.
+docker-compose.override.yml
+
+# demo-video pipeline: regenerable/raw artifacts, not meant to be committed -- see
+# docs/08-hackathon/demo-video/README.md for how to reproduce them.
+docs/08-hackathon/demo-video/node_modules/
+docs/08-hackathon/demo-video/video/
+docs/08-hackathon/demo-video/run-info.json
+docs/08-hackathon/demo-video/timeline.json
+docs/08-hackathon/demo-video/presentation-narration.wav
