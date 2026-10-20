@@ -23,3 +23,7 @@ docs/08-hackathon/demo-video/video/
 docs/08-hackathon/demo-video/run-info.json
 docs/08-hackathon/demo-video/timeline.json
 docs/08-hackathon/demo-video/presentation-narration.wav
+
+# pitch pipeline: same regenerable-artifact rule as demo-video above.
+docs/08-hackathon/Pitch/pitch-narration.wav
+docs/08-hackathon/Pitch/slides_hires/
