@@ -91,12 +91,14 @@ Triggers:
   it.
 
 ### 11. Deployment
-Deploys to the single VPS (`docker compose pull && docker compose up -d` against the production
-compose file, or an equivalent SSH-based deploy step) after every gate above passes on `develop`
-(or the project's designated release branch) — no manual step required for a normal deploy, but
-deployment to production is not automatic on every green PR merge unless/until the team decides that
-level of continuous deployment is appropriate; until then, treat step 11 as a manually-triggered
-GitHub Actions workflow_dispatch gated on all prior steps having passed.
+Deploys to the single VPS (`docker compose -f docker-compose.prod.yml up -d --build` against the
+production compose file, or an equivalent SSH-based deploy step — see
+`docs/07-engineering/deployment-runbook.md` for the actual commands, required secrets, and
+troubleshooting) after every gate above passes on `develop` (or the project's designated release
+branch) — no manual step required for a normal deploy, but deployment to production is not automatic
+on every green PR merge unless/until the team decides that level of continuous deployment is
+appropriate; until then, treat step 11 as a manually-triggered GitHub Actions workflow_dispatch gated
+on all prior steps having passed.
 
 ## What blocks a merge vs. what blocks a deploy
 

@@ -3,7 +3,9 @@
 How JuriSense Gate actually runs, consistent with the project's established hosting philosophy:
 **a single VPS running Docker Compose, with only the AI provider APIs and the anchoring network as
 external dependencies.** This document states what's unchanged from the pre-pivot hosting decision
-and what the pivot adds — see `containers.md` for the container-level detail this builds on.
+and what the pivot adds — see `containers.md` for the container-level detail this builds on, and
+`docs/07-engineering/deployment-runbook.md` for the actual `docker-compose.prod.yml` this diagram
+describes, plus the step-by-step commands to stand it up on a VPS.
 
 **Update (2026-10-15):** PostgreSQL and object storage are no longer external dependencies.
 `ADR-001`'s and `ADR-008`'s addenda moved both to self-hosted containers on the same VPS (`pgvector/

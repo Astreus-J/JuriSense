@@ -50,9 +50,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends libmagic1 \
 RUN groupadd --system --gid 1001 appgroup \
     && useradd --system --uid 1001 --gid appgroup appuser
 
-# Apenas o venv e o código da aplicação
+# Apenas o venv e o código da aplicação. alembic.ini + alembic/ (migrações) também --
+# vivem na raiz do projeto, não dentro de app/, e são obrigatórios para
+# `alembic upgrade head` (docker-compose.prod.yml roda isso no boot do container);
+# faltando, falha com "FAILED: No 'script_location' key found in configuration"
+# (encontrado testando o deploy de produção de verdade, 2026-10-20 -- o estágio `dev`
+# nunca pegou essa lacuna porque monta o diretório inteiro como volume).
 COPY --from=builder --chown=appuser:appgroup /app/.venv /app/.venv
 COPY --from=builder --chown=appuser:appgroup /app/app /app/app
+COPY --from=builder --chown=appuser:appgroup /app/alembic.ini /app/alembic.ini
+COPY --from=builder --chown=appuser:appgroup /app/alembic /app/alembic
 
 USER appuser
 EXPOSE 8000

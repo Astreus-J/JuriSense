@@ -1,5 +1,9 @@
 # Variáveis de ambiente locais (use .env.example como modelo)
 .env
+# Production compose-level secrets (.env.production.example is the tracked template;
+# backend/.env, which holds the app-level production secrets, is already covered by the
+# plain ".env" pattern above since it matches at any depth).
+.env.production
 
 # Python
 __pycache__/

@@ -22,7 +22,7 @@ For the previous product concept (a generic legal-ERP for Brazilian law firms, d
 | [`04-architecture/`](04-architecture/) | Architecture overview, C4 diagrams (context/containers/components), data architecture, integrations, AI/blockchain/security architecture, deployment |
 | [`05-ai/`](05-ai/) | AI strategy, agent architecture, document intelligence, RAG, structured extraction schema, evaluation, guardrails, observability |
 | [`06-blockchain/`](06-blockchain/) | Why blockchain, evidence model, anchoring provider comparison, smart contract sketch, privacy boundary, public verification |
-| [`07-engineering/`](07-engineering/) | Technology stack, coding standards, repository structure, API/database standards, testing, observability, security, CI/CD, dev workflow |
+| [`07-engineering/`](07-engineering/) | Technology stack, coding standards, repository structure, API/database standards, testing, observability, security, CI/CD, dev workflow, deployment runbook |
 | [`08-hackathon/`](08-hackathon/) | Hackathon strategy, requirements, submission plan, demo script, pitch, fallback MVP |
 | [`09-planning/`](09-planning/) | Roadmap (12 phases), backlog (EPIC→FEATURE→STORY→TASK), dependency graph, implementation plan, milestones, risks, pivot migration inventory |
 | [`adr/`](adr/) | 16 Architecture Decision Records (ADR-001 through ADR-016) |

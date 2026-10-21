@@ -1,101 +1,208 @@
-# JuriSense PRODUCTION override -- layered on top of docker-compose.yml, never replacing
-# it (that file keeps working exactly as-is for local development):
-#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# JuriSense PRODUCTION environment -- single VPS, Docker Compose (docs/04-architecture/
+# deployment.md). Builds the `runner` stage of each Dockerfile (no bind-mounted source,
+# no hot reload, no dev dependencies), runs Alembic migrations once at backend startup,
+# and fronts everything with an nginx reverse proxy. Postgres/Redis/MinIO are NOT
+# published to the host -- only nginx is (80/443) -- so the only way into the stack from
+# outside the VPS is through the reverse proxy.
 #
-# Scope of THIS file (2026-10-15): production-mode builds (the `runner`/distroless stage
-# of each Dockerfile, not `dev`) and self-hosted PostgreSQL+pgvector / MinIO for
-# production (ADR-001 addendum and ADR-008 addendum, both 2026-10-15 -- no more Neon, no
-# more Cloudflare R2). Internal-only services (postgres, redis, minio) publish no host
-# ports here, per Plane #146/#147's own stated intent ("no host ports published for
-# Redis... no direct host exposure for backend/frontend/Celery").
+# Usage:
+#   cp .env.production.example .env.production   # compose-level vars (ports, images, CORS, storage/db names)
+#   cp backend/.env.production.example backend/.env   # app secrets (JWT, SMTP, AI keys, anchoring)
+#   # fill both in -- see docs/07-engineering/deployment-runbook.md
+#   docker compose -p jurisense-prod -f docker-compose.prod.yml --env-file .env.production up -d --build
 #
-# Deliberately NOT in scope of this file yet (separate, still-open Plane tickets under
-# the Production Deployment EPIC, #145-178): a reverse proxy / TLS termination (#150,
-# #151) -- so `backend`/`frontend` still publish host ports below, until that lands and
-# takes over as the only internet-reachable service; secrets-management hardening
-# (#154-156); a dedicated one-shot migration step (#166) -- run migrations manually
-# before first boot: `docker compose -f docker-compose.yml -f docker-compose.prod.yml
-# run --rm backend alembic upgrade head`; healthchecks-for-every-service sweep (#163/
-# #164); backup/restore (#167-170); VPS/network hardening (#171-173); CI validation for
-# infra changes (#174/#175); ADR-018 + operator docs (#176-178).
+# -p jurisense-prod: an explicit project name, not cosmetic. Compose otherwise names
+# containers/volumes/networks after the current directory, which is this same directory
+# for docker-compose.yml (dev) too -- found live by testing this very file in this repo's
+# own dev checkout: without -p, this stack silently shared the dev stack's Postgres/MinIO/
+# Redis volumes (same default project name, same short volume names) and failed on a
+# Postgres password mismatch instead of initializing its own database. On a freshly
+# cloned VPS with only this file ever run there, that collision can't happen -- but pass
+# -p anyway so testing this compose file anywhere a dev checkout might also exist never
+# repeats it.
 #
-# Secrets: provide via `.env.production` (gitignored, same pattern as backend/.env) --
-# `docker compose --env-file .env.production -f docker-compose.yml -f
-# docker-compose.prod.yml up -d`. No defaults are given below for real credentials
-# (POSTGRES_PASSWORD, DEV_STORAGE_SECRET_KEY's production equivalent) -- an unset value
-# surfaces as an obviously broken container rather than silently reusing a dev default.
+# TLS: this file assumes Cloudflare (or another edge proxy) terminates TLS and forwards
+# plain HTTP to the VPS, matching deployment.md's diagram -- nginx here only listens on
+# 80. If you are not fronting this with Cloudflare, see nginx/README.md for adding a
+# certbot-managed 443 server block instead.
 
 services:
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - frontend
+      - backend
+
   frontend:
     build:
+      context: ./frontend
       target: runner
-    volumes: !reset []
+    restart: unless-stopped
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
-      API_URL: ${API_URL:-http://backend:8000/api}
+      API_URL: http://backend:8000/api
+    depends_on:
+      - backend
 
   backend:
     build:
+      context: ./backend
       target: runner
-    # No `uv sync`/`--reload` (the runner image's .venv is already complete and
-    # immutable) and no inline `alembic upgrade head` -- see the one-shot migration
-    # note above; running migrations from every replica's own startup command is not
-    # the production pattern (#166).
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
-    volumes: !reset []
+    restart: unless-stopped
+    # The `runner` stage has no uv/dev tooling, just the baked venv -- alembic is a
+    # production dependency (backend/pyproject.toml), so it's already on PATH.
+    # --workers: CPU-bound extraction/compliance work runs in Celery, not request
+    # handlers, so this mainly buys concurrency for I/O-bound API requests; tune to the
+    # VPS's core count.
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4"
+    env_file:
+      - ./backend/.env
     environment:
       ENVIRONMENT: production
       DEBUG: "false"
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379/0
       STORAGE_ENDPOINT_URL: http://minio:9000
-      STORAGE_ACCESS_KEY: ${PROD_STORAGE_ACCESS_KEY}
-      STORAGE_SECRET_KEY: ${PROD_STORAGE_SECRET_KEY}
+      STORAGE_ACCESS_KEY: ${STORAGE_ACCESS_KEY}
+      STORAGE_SECRET_KEY: ${STORAGE_SECRET_KEY}
+      STORAGE_BUCKET: ${STORAGE_BUCKET}
+      CORS_ORIGINS: ${CORS_ORIGINS}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   postgres:
-    ports: !reset []
+    image: pgvector/pgvector:pg17
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   minio:
-    ports: !reset []
+    build:
+      context: ./minio
+    restart: unless-stopped
     environment:
-      MINIO_ROOT_USER: ${PROD_STORAGE_ACCESS_KEY}
-      MINIO_ROOT_PASSWORD: ${PROD_STORAGE_SECRET_KEY}
+      MINIO_ROOT_USER: ${STORAGE_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${STORAGE_SECRET_KEY}
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   minio-init:
+    build:
+      context: ./minio
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >
+        mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" &&
+        mc mb --ignore-existing local/$$STORAGE_BUCKET &&
+        mc version enable local/$$STORAGE_BUCKET
     environment:
-      MINIO_ROOT_USER: ${PROD_STORAGE_ACCESS_KEY}
-      MINIO_ROOT_PASSWORD: ${PROD_STORAGE_SECRET_KEY}
+      MINIO_ROOT_USER: ${STORAGE_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${STORAGE_SECRET_KEY}
       STORAGE_BUCKET: ${STORAGE_BUCKET}
       HOME: /tmp
-
-  redis:
-    ports: !reset []
+    depends_on:
+      minio:
+        condition: service_healthy
 
   celery-worker:
     build:
+      context: ./backend
       target: runner
+    restart: unless-stopped
     command: celery -A app.core.celery_app worker --loglevel=info
-    volumes: !reset []
+    env_file:
+      - ./backend/.env
     environment:
       ENVIRONMENT: production
       DEBUG: "false"
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379/0
       STORAGE_ENDPOINT_URL: http://minio:9000
-      STORAGE_ACCESS_KEY: ${PROD_STORAGE_ACCESS_KEY}
-      STORAGE_SECRET_KEY: ${PROD_STORAGE_SECRET_KEY}
+      STORAGE_ACCESS_KEY: ${STORAGE_ACCESS_KEY}
+      STORAGE_SECRET_KEY: ${STORAGE_SECRET_KEY}
+      STORAGE_BUCKET: ${STORAGE_BUCKET}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
 
   celery-beat:
     build:
+      context: ./backend
       target: runner
+    restart: unless-stopped
     command: celery -A app.core.celery_app beat --loglevel=info --schedule=/tmp/celerybeat-schedule
-    volumes: !reset []
+    env_file:
+      - ./backend/.env
     environment:
       ENVIRONMENT: production
       DEBUG: "false"
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379/0
       STORAGE_ENDPOINT_URL: http://minio:9000
-      STORAGE_ACCESS_KEY: ${PROD_STORAGE_ACCESS_KEY}
-      STORAGE_SECRET_KEY: ${PROD_STORAGE_SECRET_KEY}
+      STORAGE_ACCESS_KEY: ${STORAGE_ACCESS_KEY}
+      STORAGE_SECRET_KEY: ${STORAGE_SECRET_KEY}
+      STORAGE_BUCKET: ${STORAGE_BUCKET}
+    healthcheck:
+      test: ["CMD-SHELL", "grep -qa '[b]eat' /proc/[0-9]*/cmdline"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+
+volumes:
+  postgres_data:
+  minio_data:
+  redis_data:
